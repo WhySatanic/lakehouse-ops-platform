@@ -11,6 +11,7 @@ requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "WhySatanic" }]
 dependencies = [
+  "boto3>=1.35,<2",
   "httpx>=0.28,<1",
 ]
 

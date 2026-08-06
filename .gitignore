@@ -11,6 +11,7 @@ build/
 *.egg-info/
 .env
 data/
+.mcp.json
+.repowise/
 .idea/
 .vscode/
-
