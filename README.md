@@ -7,9 +7,9 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: foundation milestone. The Open-Meteo ingestion path is implemented and
-> tested. The distributed lakehouse stack is intentionally delivered in subsequent,
-> independently reviewable milestones described in the roadmap.
+> Status: early access `0.2.0`. Open-Meteo ingestion works against the local filesystem
+> and a reproducible MinIO/S3 landing zone. The distributed compute and catalog layers
+> are delivered in subsequent milestones described in the roadmap.
 
 This repository follows an **early-access, always-runnable** model. Releases stay in
 the `0.x` line while interfaces evolve, but every version has a documented working
@@ -68,6 +68,10 @@ Run the quality gate:
 uv run ruff check .
 uv run pytest
 ```
+
+For the first infrastructure-backed path, copy `.env.example` to `.env` and follow the
+[MinIO landing-zone runbook](docs/runbooks/minio-landing.md). The S3 adapter uses a
+conditional write, so concurrent ingestion attempts cannot overwrite an existing key.
 
 ## Engineering scope
 
