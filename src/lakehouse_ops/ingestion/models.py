@@ -5,7 +5,7 @@ from typing import Any
 
 
 class PayloadValidationError(ValueError):
-    """Raised when a source response violates the expected data contract."""
+    pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,4 +60,3 @@ class WeatherPayload:
                 )
 
         return cls(location=location, source_payload=payload)
-

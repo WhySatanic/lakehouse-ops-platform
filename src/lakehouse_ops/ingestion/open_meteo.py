@@ -19,7 +19,7 @@ TRANSIENT_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
 
 
 class OpenMeteoError(RuntimeError):
-    """Raised when the source cannot return a usable response."""
+    pass
 
 
 class OpenMeteoClient:
@@ -84,4 +84,3 @@ class OpenMeteoClient:
     @staticmethod
     def _is_retryable(error: Exception) -> bool:
         return isinstance(error, (httpx.TransportError, OpenMeteoError))
-

@@ -1,5 +1,7 @@
 # Lakehouse Ops Platform
 
+[![CI](https://github.com/WhySatanic/lakehouse-ops-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/WhySatanic/lakehouse-ops-platform/actions/workflows/ci.yml)
+
 A production-like reference platform for operating an Apache Iceberg lakehouse—not
 just starting containers. The project combines a reproducible local data platform
 with a Python control plane for ingestion, table health, maintenance, access policy,
