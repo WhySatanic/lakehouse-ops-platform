@@ -10,8 +10,8 @@ new expansion tracks rather than ending development.
 - [x] Repository standards, CI quality gate, architecture, and roadmap.
 - [x] Open-Meteo client with response validation, bounded retries, atomic local landing,
   idempotency, and deterministic tests.
-- [ ] MinIO landing adapter with bucket bootstrap, object metadata, retry policy, and
-  integration tests against a pinned container.
+- [x] MinIO landing adapter with bucket bootstrap, object metadata, conditional writes,
+  and tests against a pinned container.
 - [ ] PostgreSQL-backed Hive Metastore plus an automated schema/bootstrap check.
 - [ ] Spark + Iceberg writer producing bronze/silver tables from landed payloads.
 - [ ] Trino coordinator/worker profile reading the same tables through Hive Metastore.
