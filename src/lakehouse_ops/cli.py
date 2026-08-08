@@ -4,9 +4,11 @@ import argparse
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 import boto3
 
+from lakehouse_ops.doctor import DoctorReport, check_file_landing, check_s3_bucket
 from lakehouse_ops.ingestion.batch import (
     LocationManifestError,
     load_location_manifest,
@@ -36,6 +38,9 @@ def build_parser() -> argparse.ArgumentParser:
     batch.add_argument("--forecast-days", type=int, default=3)
     batch.add_argument("--max-workers", type=int, default=4)
     _add_landing_arguments(batch)
+
+    doctor = subparsers.add_parser("doctor", help="check landing backend readiness")
+    _add_landing_arguments(doctor)
     return parser
 
 
@@ -84,6 +89,16 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(report.as_dict(), sort_keys=True))
         return 1 if report.failed else 0
+    if args.command == "doctor":
+        if args.backend == "file":
+            check = check_file_landing(args.output)
+        else:
+            if not args.s3_bucket:
+                parser.error("--s3-bucket is required when --backend=s3")
+            check = check_s3_bucket(_create_s3_client(args), args.s3_bucket)
+        report = DoctorReport((check,))
+        print(json.dumps(report.as_dict(), sort_keys=True))
+        return 0 if report.healthy else 1
     return 2
 
 
@@ -99,12 +114,16 @@ def _create_landing(
         return FileLandingZone(args.output)
     if not args.s3_bucket:
         parser.error("--s3-bucket is required when --backend=s3")
-    s3_client = boto3.client(
+    s3_client = _create_s3_client(args)
+    return S3LandingZone(s3_client, bucket=args.s3_bucket, prefix=args.s3_prefix)
+
+
+def _create_s3_client(args: argparse.Namespace) -> Any:
+    return boto3.client(
         "s3",
         endpoint_url=args.s3_endpoint_url,
         region_name=args.s3_region,
     )
-    return S3LandingZone(s3_client, bucket=args.s3_bucket, prefix=args.s3_prefix)
 
 
 if __name__ == "__main__":

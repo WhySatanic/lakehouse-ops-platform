@@ -38,6 +38,10 @@ class FakeS3Client:
         self.objects[(kwargs["Bucket"], kwargs["Key"])] = kwargs["Body"]
         return {"ETag": '"test"'}
 
+    def head_bucket(self, **kwargs: Any) -> dict[str, Any]:
+        assert kwargs["Bucket"] == "lakehouse"
+        return {}
+
 
 def test_ingest_weather_command_lands_payload(
     monkeypatch: pytest.MonkeyPatch,
@@ -192,3 +196,25 @@ def test_ingest_weather_batch_rejects_invalid_manifest(
 
     assert error.value.code == 2
     assert "must contain a 'locations' array" in capsys.readouterr().err
+
+
+def test_doctor_checks_file_landing(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    exit_code = cli.main(["doctor", "--output", str(tmp_path / "landing")])
+
+    report = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert report["status"] == "ready"
+    assert report["checks"][0]["name"] == "file_landing_write"
+
+
+def test_doctor_checks_s3_bucket(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(cli.boto3, "client", lambda *_, **__: FakeS3Client())
+
+    exit_code = cli.main(["doctor", "--backend", "s3", "--s3-bucket", "lakehouse"])
+
+    report = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert report["status"] == "ready"
+    assert report["checks"][0]["target"] == "s3://lakehouse"
