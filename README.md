@@ -62,6 +62,18 @@ uv run lakeops ingest-weather \
   --output data/landing
 ```
 
+For repeatable multi-location runs, use the checked-in manifest. The command limits
+source concurrency, continues after individual failures, and emits a machine-readable
+run report:
+
+```bash
+uv run lakeops ingest-weather-batch \
+  --locations configs/locations.example.json \
+  --forecast-days 3 \
+  --max-workers 4 \
+  --output data/landing
+```
+
 Run the quality gate:
 
 ```bash

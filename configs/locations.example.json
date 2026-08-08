@@ -1,0 +1,19 @@
+{
+  "locations": [
+    {
+      "name": "moscow",
+      "latitude": 55.7558,
+      "longitude": 37.6173
+    },
+    {
+      "name": "saint-petersburg",
+      "latitude": 59.9343,
+      "longitude": 30.3351
+    },
+    {
+      "name": "kazan",
+      "latitude": 55.7961,
+      "longitude": 49.1064
+    }
+  ]
+}

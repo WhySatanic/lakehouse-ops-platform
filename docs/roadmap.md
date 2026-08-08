@@ -12,6 +12,7 @@ new expansion tracks rather than ending development.
   idempotency, and deterministic tests.
 - [x] MinIO landing adapter with bucket bootstrap, object metadata, conditional writes,
   and tests against a pinned container.
+- [x] Manifest-driven batch ingestion with bounded concurrency and partial-failure reports.
 - [ ] PostgreSQL-backed Hive Metastore plus an automated schema/bootstrap check.
 - [ ] Spark + Iceberg writer producing bronze/silver tables from landed payloads.
 - [ ] Trino coordinator/worker profile reading the same tables through Hive Metastore.
