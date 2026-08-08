@@ -26,7 +26,6 @@ class FakeOpenMeteoClient:
         return None
 
     def fetch(self, location: Location, *, forecast_days: int) -> WeatherPayload:
-        assert location == Location("moscow", 55.7558, 37.6173)
         assert forecast_days == 2
         return WeatherPayload.from_source(location, self.payload)
 
@@ -38,6 +37,10 @@ class FakeS3Client:
     def put_object(self, **kwargs: Any) -> dict[str, Any]:
         self.objects[(kwargs["Bucket"], kwargs["Key"])] = kwargs["Body"]
         return {"ETag": '"test"'}
+
+    def head_bucket(self, **kwargs: Any) -> dict[str, Any]:
+        assert kwargs["Bucket"] == "lakehouse"
+        return {}
 
 
 def test_ingest_weather_command_lands_payload(
@@ -138,3 +141,80 @@ def test_ingest_weather_command_requires_bucket_for_s3(
         )
 
     assert error.value.code == 2
+
+
+def test_ingest_weather_batch_reports_every_location(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    valid_source_payload: dict[str, Any],
+) -> None:
+    FakeOpenMeteoClient.payload = valid_source_payload
+    monkeypatch.setattr(cli, "OpenMeteoClient", FakeOpenMeteoClient)
+    manifest = tmp_path / "locations.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "locations": [
+                    {"name": "Moscow", "latitude": 55.7558, "longitude": 37.6173},
+                    {"name": "Berlin", "latitude": 52.52, "longitude": 13.405},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = cli.main(
+        [
+            "ingest-weather-batch",
+            "--locations",
+            str(manifest),
+            "--forecast-days",
+            "2",
+            "--max-workers",
+            "2",
+            "--output",
+            str(tmp_path / "landing"),
+        ]
+    )
+
+    report = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert report["total"] == 2
+    assert report["created"] == 2
+    assert [item["location"] for item in report["items"]] == ["moscow", "berlin"]
+
+
+def test_ingest_weather_batch_rejects_invalid_manifest(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    manifest = tmp_path / "locations.json"
+    manifest.write_text("{}", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as error:
+        cli.main(["ingest-weather-batch", "--locations", str(manifest)])
+
+    assert error.value.code == 2
+    assert "must contain a 'locations' array" in capsys.readouterr().err
+
+
+def test_doctor_checks_file_landing(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    exit_code = cli.main(["doctor", "--output", str(tmp_path / "landing")])
+
+    report = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert report["status"] == "ready"
+    assert report["checks"][0]["name"] == "file_landing_write"
+
+
+def test_doctor_checks_s3_bucket(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(cli.boto3, "client", lambda *_, **__: FakeS3Client())
+
+    exit_code = cli.main(["doctor", "--backend", "s3", "--s3-bucket", "lakehouse"])
+
+    report = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert report["status"] == "ready"
+    assert report["checks"][0]["target"] == "s3://lakehouse"

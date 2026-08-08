@@ -7,7 +7,7 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: early access `0.2.0`. Open-Meteo ingestion works against the local filesystem
+> Status: early access `0.3.0`. Open-Meteo ingestion works against the local filesystem
 > and a reproducible MinIO/S3 landing zone. The distributed compute and catalog layers
 > are delivered in subsequent milestones described in the roadmap.
 
@@ -62,6 +62,18 @@ uv run lakeops ingest-weather \
   --output data/landing
 ```
 
+For repeatable multi-location runs, use the checked-in manifest. The command limits
+source concurrency, continues after individual failures, and emits a machine-readable
+run report:
+
+```bash
+uv run lakeops ingest-weather-batch \
+  --locations configs/locations.example.json \
+  --forecast-days 3 \
+  --max-workers 4 \
+  --output data/landing
+```
+
 Run the quality gate:
 
 ```bash
@@ -72,6 +84,14 @@ uv run pytest
 For the first infrastructure-backed path, copy `.env.example` to `.env` and follow the
 [MinIO landing-zone runbook](docs/runbooks/minio-landing.md). The S3 adapter uses a
 conditional write, so concurrent ingestion attempts cannot overwrite an existing key.
+
+Check storage readiness before a run. The command returns a non-zero exit code and a
+JSON failure report when the directory is not writable or the S3 bucket is unavailable:
+
+```bash
+uv run lakeops doctor --output data/landing
+uv run --env-file .env lakeops doctor --backend s3
+```
 
 ## Engineering scope
 

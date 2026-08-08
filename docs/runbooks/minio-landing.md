@@ -21,6 +21,15 @@ MinIO exposes its S3 endpoint on `http://localhost:9000` and its console on
 
 ## Smoke test
 
+Verify credentials and bucket access before writing data:
+
+```bash
+uv run --env-file .env lakeops doctor --backend s3
+```
+
+The report must contain `"status": "ready"`. A failed check exits with status code 1,
+which makes the command suitable for deployment and scheduled-job preflight checks.
+
 Land a real forecast through the S3 adapter:
 
 ```bash
