@@ -28,6 +28,7 @@ def main() -> None:
     assert [check["rule"] for check in plan["checks"]] == [
         "small_data_files",
         "manifest_density",
+        "snapshot_retention",
     ]
     assert plan["actions"] == []
 

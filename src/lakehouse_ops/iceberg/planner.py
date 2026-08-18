@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 
@@ -17,6 +18,9 @@ class MaintenancePolicy:
     min_data_files: int = 4
     min_manifest_count: int = 8
     max_manifests_per_data_file: float = 2.0
+    snapshot_retention_hours: int = 168
+    min_snapshots_to_keep: int = 3
+    max_snapshots_to_expire: int = 50
 
     def __post_init__(self) -> None:
         if self.target_file_size_bytes <= 0:
@@ -29,6 +33,12 @@ class MaintenancePolicy:
             raise ValueError("min_manifest_count must be positive")
         if self.max_manifests_per_data_file <= 0:
             raise ValueError("max_manifests_per_data_file must be positive")
+        if self.snapshot_retention_hours < 0:
+            raise ValueError("snapshot_retention_hours must be non-negative")
+        if self.min_snapshots_to_keep < 2:
+            raise ValueError("min_snapshots_to_keep must be at least two")
+        if self.max_snapshots_to_expire <= 0:
+            raise ValueError("max_snapshots_to_expire must be positive")
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +87,7 @@ class IcebergMaintenancePlanner:
             checks,
             actions,
         )
+        self._check_snapshots(report, source, checks, actions)
 
         status = "maintenance_recommended" if actions else "healthy"
         if not actions and any(check["outcome"] == "deferred" for check in checks):
@@ -205,6 +216,101 @@ class IcebergMaintenancePlanner:
             )
         )
 
+    def _check_snapshots(
+        self,
+        report: dict[str, Any],
+        source: dict[str, Any],
+        checks: list[dict[str, Any]],
+        actions: list[dict[str, Any]],
+    ) -> None:
+        snapshots = _object(report, "snapshots")
+        history = snapshots.get("history")
+        references = report.get("references")
+        limits = {
+            "retention_hours": self._policy.snapshot_retention_hours,
+            "min_snapshots_to_keep": self._policy.min_snapshots_to_keep,
+            "max_snapshots_to_expire": self._policy.max_snapshots_to_expire,
+        }
+        if not isinstance(history, list) or not isinstance(references, list):
+            checks.append(
+                _check(
+                    "snapshot_retention",
+                    "deferred",
+                    {"history_available": False},
+                    limits,
+                    "Collect snapshot history and references before planning expiration.",
+                )
+            )
+            return
+        non_main_refs = [
+            ref.get("name")
+            for ref in references
+            if isinstance(ref, dict) and ref.get("name") != "main"
+        ]
+        if non_main_refs:
+            checks.append(
+                _check(
+                    "snapshot_retention",
+                    "deferred",
+                    {"non_main_references": sorted(str(name) for name in non_main_refs)},
+                    limits,
+                    "Snapshot expiration is deferred while non-main references exist.",
+                )
+            )
+            return
+        normalized = [_snapshot_entry(item) for item in history]
+        ids = [entry["snapshot_id"] for entry in normalized]
+        if len(ids) != len(set(ids)):
+            raise PlanningContractError("snapshot history contains duplicate IDs")
+        normalized.sort(key=lambda entry: entry["committed_at"])
+        protected = {
+            entry["snapshot_id"]
+            for entry in normalized[-self._policy.min_snapshots_to_keep :]
+        }
+        cutoff = _timestamp(source["collected_at"]) - timedelta(
+            hours=self._policy.snapshot_retention_hours
+        )
+        candidates = [
+            entry["snapshot_id"]
+            for entry in normalized
+            if entry["committed_at"] < cutoff and entry["snapshot_id"] not in protected
+        ]
+        observed = {
+            "snapshot_count": len(normalized),
+            "eligible_snapshot_count": len(candidates),
+            "cutoff": cutoff.isoformat(),
+        }
+        if not candidates:
+            checks.append(
+                _check(
+                    "snapshot_retention",
+                    "healthy",
+                    observed,
+                    limits,
+                    "No snapshots are eligible after applying age and minimum-count retention.",
+                )
+            )
+            return
+        selected = candidates[: self._policy.max_snapshots_to_expire]
+        reason = (
+            f"{len(candidates)} snapshots are older than {cutoff.isoformat()} after "
+            f"preserving the latest {self._policy.min_snapshots_to_keep}."
+        )
+        checks.append(_check("snapshot_retention", "recommend", observed, limits, reason))
+        actions.append(
+            _action(
+                source,
+                "expire_snapshots",
+                "retention_window",
+                reason,
+                {"snapshot_ids": selected},
+                {
+                    "max_snapshots_to_expire": self._policy.max_snapshots_to_expire,
+                    "expected_history_snapshot_ids": ids,
+                },
+            )
+        )
+
 
 def _validate_report(report: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(report, dict):
@@ -247,6 +353,29 @@ def _integer(value: dict[str, Any], key: str) -> int:
     return item
 
 
+def _snapshot_entry(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise PlanningContractError("snapshot history entries must be objects")
+    snapshot_id = value.get("snapshot_id")
+    committed_at = value.get("committed_at")
+    if not isinstance(snapshot_id, str) or not snapshot_id.isdigit():
+        raise PlanningContractError("snapshot history IDs must be decimal strings")
+    if not isinstance(committed_at, str):
+        raise PlanningContractError("snapshot committed_at must be a string")
+    return {"snapshot_id": snapshot_id, "committed_at": _timestamp(committed_at)}
+
+
+def _timestamp(value: str) -> datetime:
+    normalized = value.replace(" UTC", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as error:
+        raise PlanningContractError(f"invalid timestamp: {value}") from error
+    if parsed.tzinfo is None:
+        raise PlanningContractError("timestamps must include a timezone")
+    return parsed.astimezone(UTC)
+
+
 def _check(
     rule: str,
     outcome: str,
@@ -269,12 +398,13 @@ def _action(
     reason_code: str,
     reason: str,
     parameters: dict[str, Any],
+    additional_safety: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    bounded_resource = (
-        {"max_files_to_rewrite": 1000}
-        if action_type == "rewrite_data_files"
-        else {"max_manifests_to_rewrite": 1000}
-    )
+    bounded_resource = {
+        "rewrite_data_files": {"max_files_to_rewrite": 1000},
+        "rewrite_manifests": {"max_manifests_to_rewrite": 1000},
+        "expire_snapshots": {},
+    }[action_type]
     action = {
         "action_type": action_type,
         "reason_code": reason_code,
@@ -285,6 +415,7 @@ def _action(
             "expected_snapshot_id": source["current_snapshot_id"],
             "max_concurrent_jobs": 1,
             **bounded_resource,
+            **(additional_safety or {}),
         },
     }
     return {"action_id": _identifier("action", action | {"source": source}), **action}

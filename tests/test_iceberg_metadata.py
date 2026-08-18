@@ -17,13 +17,41 @@ class FakeExecutor:
 
     def query(self, sql: str) -> list[dict[str, Any]]:
         self.queries.append(sql)
-        if "$snapshots" in sql:
+        if "$history" in sql:
             return [
                 {
-                    "snapshot_count": "3",
                     "current_snapshot_id": "8750000000000000001",
                     "current_committed_at": "2026-08-18 13:00:00.000 UTC",
                     "current_operation": "overwrite",
+                }
+            ]
+        if "$snapshots" in sql:
+            return [
+                {
+                    "snapshot_id": "8740000000000000001",
+                    "parent_id": None,
+                    "committed_at": "2026-08-16 13:00:00.000 UTC",
+                    "operation": "append",
+                },
+                {
+                    "snapshot_id": "8740000000000000002",
+                    "parent_id": "8740000000000000001",
+                    "committed_at": "2026-08-17 13:00:00.000 UTC",
+                    "operation": "append",
+                },
+                {
+                    "snapshot_id": "8750000000000000001",
+                    "parent_id": "8740000000000000002",
+                    "committed_at": "2026-08-18 13:00:00.000 UTC",
+                    "operation": "overwrite",
+                },
+            ]
+        if "$refs" in sql:
+            return [
+                {
+                    "name": "main",
+                    "type": "BRANCH",
+                    "snapshot_id": "8750000000000000001",
                 }
             ]
         if "$files" in sql:
@@ -77,7 +105,34 @@ def test_collect_normalizes_iceberg_metadata() -> None:
             "current_id": "8750000000000000001",
             "committed_at": "2026-08-18 13:00:00.000 UTC",
             "operation": "overwrite",
+            "history": [
+                {
+                    "snapshot_id": "8740000000000000001",
+                    "parent_id": None,
+                    "committed_at": "2026-08-16 13:00:00.000 UTC",
+                    "operation": "append",
+                },
+                {
+                    "snapshot_id": "8740000000000000002",
+                    "parent_id": "8740000000000000001",
+                    "committed_at": "2026-08-17 13:00:00.000 UTC",
+                    "operation": "append",
+                },
+                {
+                    "snapshot_id": "8750000000000000001",
+                    "parent_id": "8740000000000000002",
+                    "committed_at": "2026-08-18 13:00:00.000 UTC",
+                    "operation": "overwrite",
+                },
+            ],
         },
+        "references": [
+            {
+                "name": "main",
+                "reference_type": "BRANCH",
+                "snapshot_id": "8750000000000000001",
+            }
+        ],
         "files": {
             "count": 2,
             "records": 100,
@@ -100,7 +155,7 @@ def test_collect_normalizes_iceberg_metadata() -> None:
             "total_size_bytes": 4096,
         },
     }
-    assert len(executor.queries) == 4
+    assert len(executor.queries) == 6
 
 
 def test_collect_quotes_identifiers() -> None:
@@ -108,13 +163,13 @@ def test_collect_quotes_identifiers() -> None:
 
     IcebergMetadataCollector(executor).collect("lakehouse", "ops-data", 'table"name')
 
-    assert '"lakehouse"."ops-data"."table""name$snapshots"' in executor.queries[0]
+    assert '"lakehouse"."ops-data"."table""name$history"' in executor.queries[0]
 
 
 def test_collect_rejects_table_without_snapshot() -> None:
     class EmptySnapshotExecutor(FakeExecutor):
         def query(self, sql: str) -> list[dict[str, Any]]:
-            if "$snapshots" in sql:
+            if "$history" in sql:
                 return [
                     {
                         "snapshot_count": 0,

@@ -31,7 +31,8 @@ Schema `1.0` includes:
 - `source`: metadata schema, collection time, table, and expected snapshot ID;
 - `policy`: the complete set of thresholds used for the decision;
 - `checks`: every evaluated rule with observations, thresholds, outcome, and reason;
-- `actions`: proposed `rewrite_data_files` and `rewrite_manifests` actions.
+- `actions`: proposed `rewrite_data_files`, `rewrite_manifests`, and exact
+  `expire_snapshots` actions.
 
 Every action requires dry-run execution, pins the expected snapshot, and limits
 concurrency to one job. Re-running the same report with the same policy produces the
@@ -48,8 +49,15 @@ least two manifests per data file. Override thresholds with
 `--target-file-size-bytes`, `--small-file-ratio`, `--min-data-files`,
 `--min-manifest-count`, and `--max-manifests-per-data-file`.
 
+The snapshot rule retains at least the newest three snapshots and selects at most 50
+older snapshots per execution after a seven-day window. Override these values with
+`--snapshot-retention-hours`, `--min-snapshots-to-keep`, and
+`--max-snapshots-to-expire`. A value of zero retention hours is intended only for
+isolated acceptance fixtures. If a branch or tag other than `main` exists, expiration
+is deferred for manual reference review.
+
 ## Safety boundary
 
-This release only creates plans. It does not invoke Spark procedures or mutate Iceberg
-metadata. An executor must independently verify the expected snapshot and post-
-conditions before it may report success.
+Executors independently verify the current snapshot, complete observed snapshot
+history, action-specific limits, and post-conditions. Expiration plans name every
+target snapshot ID and become stale if any live history differs at apply time.

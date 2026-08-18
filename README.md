@@ -146,12 +146,13 @@ uv run lakeops plan-iceberg-maintenance \
 The [maintenance planning runbook](docs/runbooks/iceberg-maintenance-planning.md)
 documents compaction rules, policy overrides, the plan contract, and safety boundary.
 
-The Spark executor supports snapshot-guarded `rewrite_data_files` and
-`rewrite_manifests`. Both default to dry-run and require explicit plan and snapshot
-approvals before applying a bounded rewrite. See the
+The Spark executor supports snapshot-guarded `rewrite_data_files`,
+`rewrite_manifests`, and exact-ID `expire_snapshots`. All default to dry-run and require
+explicit plan and snapshot approvals before applying a bounded action. See the
 [data-file rewrite runbook](docs/runbooks/iceberg-data-file-rewrite.md) and
-[manifest rewrite runbook](docs/runbooks/iceberg-manifest-rewrite.md) for execution and
-reconciliation evidence.
+[manifest rewrite runbook](docs/runbooks/iceberg-manifest-rewrite.md), plus the
+[snapshot expiration runbook](docs/runbooks/iceberg-snapshot-expiration.md), for
+execution and reconciliation evidence.
 
 ## Engineering scope
 
