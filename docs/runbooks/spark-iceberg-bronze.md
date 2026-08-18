@@ -4,11 +4,10 @@
 
 The opt-in `compute` profile converts immutable Open-Meteo landing documents into the
 typed `lakehouse.bronze.weather_hourly` Iceberg table. Spark registers the table in Hive
-Metastore and stores Iceberg metadata and Parquet data under `s3://lakehouse/warehouse`.
-
-The namespace directory remains on the metastore's persistent local warehouse volume,
-while the table has an explicit S3 location. This keeps object-store credentials in the
-compute layer and does not grant the metastore process direct MinIO access.
+Metastore and stores Iceberg metadata and Parquet data under `s3a://lakehouse/warehouse`.
+The metastore receives a dedicated S3A configuration because Hive validates namespace
+and table locations before committing catalog records. Spark still reads and writes
+Iceberg objects through S3FileIO against the same MinIO bucket.
 
 The first implementation deliberately runs Spark in local mode. The catalog and object
 store boundaries are the same ones a distributed Spark deployment would use.
@@ -64,7 +63,7 @@ docker compose --env-file .env --profile compute run --rm bronze-storage-check
 ```
 
 The catalog check requires one `bronze.weather_hourly` table whose location is inside the
-configured S3 warehouse. The storage check requires both Iceberg metadata JSON and
+configured S3A warehouse. The storage check requires both Iceberg metadata JSON and
 Parquet data files in MinIO.
 
 ## Failure handling

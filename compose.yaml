@@ -60,7 +60,7 @@ services:
     restart: unless-stopped
 
   hive-metastore:
-    image: lakehouse-ops/hive-metastore:4.0.0-pgjdbc-42.7.13
+    image: lakehouse-ops/hive-metastore:4.0.0-s3a-pgjdbc-42.7.13
     build:
       context: .
       dockerfile: infra/hive-metastore/Dockerfile
@@ -68,15 +68,29 @@ services:
     depends_on:
       metastore-db:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     environment:
       SERVICE_NAME: metastore
       DB_DRIVER: postgres
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       SERVICE_OPTS: >-
         -Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver
         -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://metastore-db:5432/${HMS_POSTGRES_DB:-metastore}
         -Djavax.jdo.option.ConnectionUserName=${HMS_POSTGRES_USER:-hive}
         -Djavax.jdo.option.ConnectionPassword=${HMS_POSTGRES_PASSWORD:-hive-development-only}
         -Dmetastore.try.direct.sql.ddl=false
+        -Dmetastore.warehouse.dir=s3a://${LAKEHOUSE_BUCKET:-lakehouse}/warehouse
+        -Dfs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
+        -Dfs.s3a.endpoint=http://minio:9000
+        -Dfs.s3a.endpoint.region=${AWS_DEFAULT_REGION:-us-east-1}
+        -Dfs.s3a.path.style.access=true
+        -Dfs.s3a.connection.ssl.enabled=false
+        -Dfs.s3a.access.key=${MINIO_ROOT_USER:-lakeops}
+        -Dfs.s3a.secret.key=${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+        -Dfs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider
     ports:
       - "${HIVE_METASTORE_PORT:-9083}:9083"
     volumes:
@@ -200,7 +214,7 @@ services:
     command:
       - |
         table_count="$$(psql --tuples-only --no-align --set ON_ERROR_STOP=1 --command \
-          "SELECT count(*) FROM \"TBLS\" t JOIN \"DBS\" d ON d.\"DB_ID\" = t.\"DB_ID\" JOIN \"SDS\" s ON s.\"SD_ID\" = t.\"SD_ID\" WHERE lower(d.\"NAME\") = 'bronze' AND lower(t.\"TBL_NAME\") = 'weather_hourly' AND s.\"LOCATION\" LIKE 's3://$${LAKEHOUSE_BUCKET:-lakehouse}/warehouse/%'")"
+          "SELECT count(*) FROM \"TBLS\" t JOIN \"DBS\" d ON d.\"DB_ID\" = t.\"DB_ID\" JOIN \"SDS\" s ON s.\"SD_ID\" = t.\"SD_ID\" WHERE lower(d.\"NAME\") = 'bronze' AND lower(t.\"TBL_NAME\") = 'weather_hourly' AND s.\"LOCATION\" LIKE 's3a://$${LAKEHOUSE_BUCKET:-lakehouse}/warehouse/%'")"
         test "$$table_count" = "1"
         printf '{"status":"ready","catalog_tables":%s}\n' "$$table_count"
     restart: "no"

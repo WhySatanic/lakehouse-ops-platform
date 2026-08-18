@@ -120,7 +120,7 @@ def build_session() -> SparkSession:
         .config("spark.sql.catalog.lakehouse", "org.apache.iceberg.spark.SparkCatalog")
         .config("spark.sql.catalog.lakehouse.type", "hive")
         .config("spark.sql.catalog.lakehouse.uri", metastore_uri)
-        .config("spark.sql.catalog.lakehouse.warehouse", f"s3://{bucket}/warehouse")
+        .config("spark.sql.catalog.lakehouse.warehouse", f"s3a://{bucket}/warehouse")
         .config(
             "spark.sql.catalog.lakehouse.io-impl", "org.apache.iceberg.aws.s3.S3FileIO"
         )
@@ -140,7 +140,7 @@ def write_bronze(spark: SparkSession, source: DataFrame) -> dict[str, int | str]
     bucket = required_environment("LAKEHOUSE_BUCKET")
     spark.sql(
         "CREATE NAMESPACE IF NOT EXISTS lakehouse.bronze "
-        "LOCATION 'file:///opt/hive/data/warehouse/bronze.db'"
+        f"LOCATION 's3a://{bucket}/warehouse/bronze'"
     )
     spark.sql(
         f"""
@@ -158,7 +158,7 @@ def write_bronze(spark: SparkSession, source: DataFrame) -> dict[str, int | str]
             wind_speed_10m double
         )
         USING iceberg
-        LOCATION 's3://{bucket}/warehouse/bronze/weather_hourly'
+        LOCATION 's3a://{bucket}/warehouse/bronze/weather_hourly'
         PARTITIONED BY (days(observed_at), location_name)
         TBLPROPERTIES (
             'format-version' = '2',
