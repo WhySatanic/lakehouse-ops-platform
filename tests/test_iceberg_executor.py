@@ -305,7 +305,11 @@ def test_apply_expires_exact_snapshot_batch_and_preserves_current_state() -> Non
     assert report.before.snapshot_id == report.after.snapshot_id
     assert report.before.record_count == report.after.record_count == 100
     procedure = next(sql for sql in executor.queries if "CALL" in sql)
-    assert "snapshot_ids => array(" in procedure
+    assert (
+        "snapshot_ids => ARRAY(8710000000000000001, 8720000000000000001, "
+        "8730000000000000001)" in procedure
+    )
+    assert "CAST(" not in procedure
     assert "max_concurrent_deletes => 1" in procedure
     assert "stream_results => true" in procedure
     assert "clean_expired_metadata => false" in procedure

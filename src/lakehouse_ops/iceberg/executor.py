@@ -255,10 +255,10 @@ def _rewrite_manifests_sql(table: str) -> str:
 def _expire_snapshots_sql(table: str, snapshot_ids: tuple[str, ...]) -> str:
     catalog, namespace, name = _table_parts(table)
     table_argument = f"{namespace}.{name}".replace("'", "''")
-    array = ", ".join(f"CAST({snapshot_id} AS BIGINT)" for snapshot_id in snapshot_ids)
+    snapshot_array = ", ".join(snapshot_ids)
     return (
         f"CALL {_identifier(catalog)}.system.expire_snapshots("
-        f"table => '{table_argument}', snapshot_ids => array({array}), "
+        f"table => '{table_argument}', snapshot_ids => ARRAY({snapshot_array}), "
         "max_concurrent_deletes => 1, stream_results => true, "
         "clean_expired_metadata => false)"
     )
