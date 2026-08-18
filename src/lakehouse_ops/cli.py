@@ -69,6 +69,9 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--min-data-files", type=int, default=4)
     plan.add_argument("--min-manifest-count", type=int, default=8)
     plan.add_argument("--max-manifests-per-data-file", type=float, default=2.0)
+    plan.add_argument("--snapshot-retention-hours", type=int, default=168)
+    plan.add_argument("--min-snapshots-to-keep", type=int, default=3)
+    plan.add_argument("--max-snapshots-to-expire", type=int, default=50)
     return parser
 
 
@@ -147,6 +150,9 @@ def main(argv: list[str] | None = None) -> int:
                 min_data_files=args.min_data_files,
                 min_manifest_count=args.min_manifest_count,
                 max_manifests_per_data_file=args.max_manifests_per_data_file,
+                snapshot_retention_hours=args.snapshot_retention_hours,
+                min_snapshots_to_keep=args.min_snapshots_to_keep,
+                max_snapshots_to_expire=args.max_snapshots_to_expire,
             )
             plan = IcebergMaintenancePlanner(policy).plan(report)
         except (OSError, json.JSONDecodeError, ValueError) as error:

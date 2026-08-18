@@ -1,9 +1,9 @@
 # Iceberg metadata collection
 
 `lakeops collect-iceberg-metadata` collects a bounded table-health snapshot through
-Trino. It reads the Iceberg `$snapshots`, `$files`, `$manifests`, and `$partitions`
-metadata tables and emits one normalized JSON document. The report is an observation;
-it does not change table or warehouse state.
+Trino. It reads the Iceberg `$history`, `$snapshots`, `$refs`, `$files`, `$manifests`,
+and `$partitions` metadata tables and emits one normalized JSON document. The report is
+an observation; it does not change table or warehouse state.
 
 ## Prerequisites
 
@@ -38,7 +38,8 @@ schema, and table identifiers are quoted before they are placed in SQL.
 
 | Object | Meaning |
 |---|---|
-| `snapshots` | Snapshot count and current snapshot identity, timestamp, and operation |
+| `snapshots` | Current identity plus ordered snapshot IDs, parents, timestamps, and operations |
+| `references` | Named Iceberg branches and tags with their target snapshot IDs |
 | `files` | Current data/delete file count, records, and byte-size distribution |
 | `manifests` | Current manifest count, bytes, and added/existing/deleted file entries |
 | `partitions` | Current partition count, records, files, and total bytes |
@@ -57,8 +58,8 @@ lose 64-bit integer precision.
 - Partition totals should reconcile with current file totals. A mismatch is a failed
   observation and must not be used for a maintenance decision.
 
-The collector deliberately reports facts only. The next roadmap increment will turn
-these observations into explainable recommendations with explicit thresholds.
+The collector deliberately reports facts only. The planner uses history and references
+to create exact, bounded snapshot-expiration recommendations.
 
 ## Upgrade from 0.7.0
 
@@ -68,7 +69,8 @@ output should pin `schema_version` before relying on individual fields.
 
 ## Current limits
 
-Collection is scoped to one table per invocation and reports aggregates for the current
-snapshot. It does not retain history, calculate query latency, or execute maintenance.
+Collection is scoped to one table per invocation and includes its complete active
+snapshot list. Very long histories increase report size and should be expired in bounded
+batches. The collector does not calculate query latency or execute maintenance.
 Authentication follows the current local Trino profile and is not yet an authorization
 boundary.

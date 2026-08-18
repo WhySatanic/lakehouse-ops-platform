@@ -202,6 +202,54 @@ jobs:
         run: >-
           uv run python tests/integration/check_maintenance_execution.py
           artifacts/maintenance-dry-run.json artifacts/maintenance-report.json
+      - name: Collect post-compaction metadata
+        run: |
+          mv artifacts/maintenance-report.json artifacts/data-file-report.json
+          touch artifacts/maintenance-report.json
+          chmod 0666 artifacts/maintenance-report.json
+          uv run lakeops collect-iceberg-metadata \
+            --server http://localhost:8080 \
+            --catalog lakehouse --schema ops --table maintenance_fixture \
+            > artifacts/expiration-metadata.json
+      - name: Plan exact snapshot expiration
+        run: >-
+          uv run lakeops plan-iceberg-maintenance
+          --input artifacts/expiration-metadata.json
+          --snapshot-retention-hours 0
+          --min-snapshots-to-keep 2
+          --max-snapshots-to-expire 50
+          > artifacts/expiration-plan.json
+      - name: Verify snapshot expiration plan
+        run: >-
+          uv run python tests/integration/check_expiration_plan.py
+          artifacts/expiration-plan.json
+      - name: Select approved snapshot expiration
+        run: |
+          echo "MAINTENANCE_PLAN_PATH=/opt/lakehouse/artifacts/expiration-plan.json" >> "$GITHUB_ENV"
+          echo "MAINTENANCE_ACTION_ID=$(uv run python -c 'import json; p=json.load(open("artifacts/expiration-plan.json")); print(next(a["action_id"] for a in p["actions"] if a["action_type"] == "expire_snapshots"))')" >> "$GITHUB_ENV"
+          echo "MAINTENANCE_APPROVED_PLAN_ID=$(uv run python -c 'import json; print(json.load(open("artifacts/expiration-plan.json"))["plan_id"])')" >> "$GITHUB_ENV"
+          echo "MAINTENANCE_APPROVED_SNAPSHOT_ID=$(uv run python -c 'import json; print(json.load(open("artifacts/expiration-plan.json"))["source"]["current_snapshot_id"])')" >> "$GITHUB_ENV"
+      - name: Dry-run snapshot expiration
+        run: |
+          docker compose --profile catalog --profile compute run --rm spark-maintenance
+          mv artifacts/maintenance-report.json artifacts/snapshot-expiration-dry-run.json
+          touch artifacts/maintenance-report.json
+          chmod 0666 artifacts/maintenance-report.json
+      - name: Execute snapshot expiration
+        env:
+          MAINTENANCE_APPLY: "true"
+        run: |
+          docker compose --profile catalog --profile compute run --rm spark-maintenance
+          mv artifacts/maintenance-report.json artifacts/snapshot-expiration-report.json
+      - name: Verify snapshot expiration reconciliation
+        run: >-
+          uv run python tests/integration/check_snapshot_expiration.py
+          artifacts/snapshot-expiration-dry-run.json
+          artifacts/snapshot-expiration-report.json
+      - name: Verify retained and expired time travel
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          spark-snapshot-retention-check
       - name: Show service logs
         if: failure()
         run: >-

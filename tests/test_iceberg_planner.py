@@ -18,7 +18,30 @@ def metadata_report() -> dict[str, Any]:
         "status": "ready",
         "collected_at": "2026-08-18T13:30:00+00:00",
         "table": "lakehouse.silver.weather_hourly",
-        "snapshots": {"current_id": "8750000000000000001"},
+        "snapshots": {
+            "current_id": "8750000000000000001",
+            "history": [
+                {
+                    "snapshot_id": "8730000000000000001",
+                    "committed_at": "2026-08-16T13:00:00+00:00",
+                },
+                {
+                    "snapshot_id": "8740000000000000001",
+                    "committed_at": "2026-08-17T13:00:00+00:00",
+                },
+                {
+                    "snapshot_id": "8750000000000000001",
+                    "committed_at": "2026-08-18T13:00:00+00:00",
+                },
+            ],
+        },
+        "references": [
+            {
+                "name": "main",
+                "reference_type": "BRANCH",
+                "snapshot_id": "8750000000000000001",
+            }
+        ],
         "files": {
             "count": 4,
             "total_size_bytes": 4 * 128 * 1024 * 1024,
@@ -35,7 +58,11 @@ def test_healthy_table_has_no_actions() -> None:
     assert plan["status"] == "healthy"
     assert plan["table"] == "lakehouse.silver.weather_hourly"
     assert plan["actions"] == ()
-    assert [check["outcome"] for check in plan["checks"]] == ["healthy", "healthy"]
+    assert [check["outcome"] for check in plan["checks"]] == [
+        "healthy",
+        "healthy",
+        "healthy",
+    ]
     assert plan["source"]["current_snapshot_id"] == "8750000000000000001"
 
 
@@ -90,6 +117,47 @@ def test_delete_files_defer_size_based_compaction() -> None:
     assert plan["actions"] == ()
 
 
+def test_old_snapshots_recommend_exact_expiration_batch() -> None:
+    report = metadata_report()
+    report["snapshots"]["history"] = [
+        {
+            "snapshot_id": str(snapshot_id),
+            "committed_at": f"2026-08-{day:02d}T13:00:00+00:00",
+        }
+        for snapshot_id, day in zip(range(101, 106), (10, 11, 12, 17, 18), strict=True)
+    ]
+    report["snapshots"]["current_id"] = "105"
+    report["references"][0]["snapshot_id"] = "105"
+    policy = MaintenancePolicy(snapshot_retention_hours=24, min_snapshots_to_keep=2)
+
+    plan = IcebergMaintenancePlanner(policy).plan(report).as_dict()
+    action = next(
+        action for action in plan["actions"] if action["action_type"] == "expire_snapshots"
+    )
+
+    assert action["parameters"]["snapshot_ids"] == ["101", "102", "103"]
+    assert action["safety_bounds"]["max_snapshots_to_expire"] == 50
+    assert action["safety_bounds"]["expected_history_snapshot_ids"] == [
+        "101",
+        "102",
+        "103",
+        "104",
+        "105",
+    ]
+
+
+def test_non_main_reference_defers_snapshot_expiration() -> None:
+    report = metadata_report()
+    report["references"].append(
+        {"name": "audit", "reference_type": "TAG", "snapshot_id": "8730000000000000001"}
+    )
+
+    plan = IcebergMaintenancePlanner().plan(report).as_dict()
+
+    assert plan["checks"][2]["outcome"] == "deferred"
+    assert all(action["action_type"] != "expire_snapshots" for action in plan["actions"])
+
+
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [
@@ -117,6 +185,9 @@ def test_invalid_metadata_contract_is_rejected(
         {"min_data_files": 0},
         {"min_manifest_count": 0},
         {"max_manifests_per_data_file": 0},
+        {"snapshot_retention_hours": -1},
+        {"min_snapshots_to_keep": 1},
+        {"max_snapshots_to_expire": 0},
     ],
 )
 def test_invalid_policy_is_rejected(kwargs: dict[str, Any]) -> None:

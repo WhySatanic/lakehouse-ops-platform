@@ -335,7 +335,18 @@ def test_plan_iceberg_maintenance_command(
                 "status": "ready",
                 "collected_at": "2026-08-18T13:30:00+00:00",
                 "table": "lakehouse.silver.events",
-                "snapshots": {"current_id": "42"},
+                "snapshots": {
+                    "current_id": "42",
+                    "history": [
+                        {
+                            "snapshot_id": "42",
+                            "committed_at": "2026-08-18T13:00:00+00:00",
+                        }
+                    ],
+                },
+                "references": [
+                    {"name": "main", "reference_type": "BRANCH", "snapshot_id": "42"}
+                ],
                 "files": {
                     "count": 4,
                     "total_size_bytes": 4 * 128 * 1024 * 1024,

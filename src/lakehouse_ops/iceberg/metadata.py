@@ -15,11 +15,27 @@ class MetadataContractError(RuntimeError):
 
 
 @dataclass(frozen=True, slots=True)
+class SnapshotEntry:
+    snapshot_id: str
+    parent_id: str | None
+    committed_at: str
+    operation: str
+
+
+@dataclass(frozen=True, slots=True)
 class SnapshotSummary:
     count: int
     current_id: str
     committed_at: str
     operation: str
+    history: tuple[SnapshotEntry, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SnapshotReference:
+    name: str
+    reference_type: str
+    snapshot_id: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,12 +72,16 @@ class IcebergMetadataReport:
     collected_at: str
     table: str
     snapshots: SnapshotSummary
+    references: tuple[SnapshotReference, ...]
     files: FileSummary
     manifests: ManifestSummary
     partitions: PartitionSummary
 
     def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        report = asdict(self)
+        report["snapshots"]["history"] = list(report["snapshots"]["history"])
+        report["references"] = list(report["references"])
+        return report
 
 
 class IcebergMetadataCollector:
@@ -75,17 +95,34 @@ class IcebergMetadataCollector:
         self._clock = clock or (lambda: datetime.now(UTC))
 
     def collect(self, catalog: str, schema: str, table: str) -> IcebergMetadataReport:
-        snapshots = _single_row(
+        current = _single_row(
             self._executor.query(
                 f"""
-                SELECT count(*) AS snapshot_count,
-                       max_by(snapshot_id, committed_at) AS current_snapshot_id,
-                       max(committed_at) AS current_committed_at,
-                       max_by(operation, committed_at) AS current_operation
-                FROM {_metadata_table(catalog, schema, table, "snapshots")}
+                SELECT h.snapshot_id AS current_snapshot_id,
+                       s.committed_at AS current_committed_at,
+                       s.operation AS current_operation
+                FROM {_metadata_table(catalog, schema, table, "history")} h
+                JOIN {_metadata_table(catalog, schema, table, "snapshots")} s
+                  ON h.snapshot_id = s.snapshot_id
+                ORDER BY h.made_current_at DESC
+                LIMIT 1
                 """
             ),
-            "snapshots",
+            "current snapshot",
+        )
+        snapshots = self._executor.query(
+            f"""
+            SELECT snapshot_id, parent_id, committed_at, operation
+            FROM {_metadata_table(catalog, schema, table, "snapshots")}
+            ORDER BY committed_at
+            """
+        )
+        references = self._executor.query(
+            f"""
+            SELECT name, type, snapshot_id
+            FROM {_metadata_table(catalog, schema, table, "refs")}
+            ORDER BY name
+            """
         )
         files = _single_row(
             self._executor.query(
@@ -127,11 +164,13 @@ class IcebergMetadataCollector:
             "partitions",
         )
 
-        snapshot_id = snapshots.get("current_snapshot_id")
-        committed_at = snapshots.get("current_committed_at")
-        operation = snapshots.get("current_operation")
+        snapshot_id = current.get("current_snapshot_id")
+        committed_at = current.get("current_committed_at")
+        operation = current.get("current_operation")
         if snapshot_id is None or committed_at is None or operation is None:
             raise MetadataContractError("Iceberg table has no current snapshot")
+        if not snapshots:
+            raise MetadataContractError("Iceberg table has no snapshot history")
 
         return IcebergMetadataReport(
             schema_version="1.0",
@@ -139,10 +178,29 @@ class IcebergMetadataCollector:
             collected_at=self._clock().astimezone(UTC).isoformat(),
             table=".".join((catalog, schema, table)),
             snapshots=SnapshotSummary(
-                count=_integer(snapshots, "snapshot_count"),
+                count=len(snapshots),
                 current_id=str(snapshot_id),
                 committed_at=str(committed_at),
                 operation=str(operation),
+                history=tuple(
+                    SnapshotEntry(
+                        snapshot_id=str(row["snapshot_id"]),
+                        parent_id=(
+                            None if row.get("parent_id") is None else str(row["parent_id"])
+                        ),
+                        committed_at=str(row["committed_at"]),
+                        operation=str(row["operation"]),
+                    )
+                    for row in snapshots
+                ),
+            ),
+            references=tuple(
+                SnapshotReference(
+                    name=str(row["name"]),
+                    reference_type=str(row["type"]),
+                    snapshot_id=str(row["snapshot_id"]),
+                )
+                for row in references
             ),
             files=FileSummary(
                 count=_integer(files, "file_count"),

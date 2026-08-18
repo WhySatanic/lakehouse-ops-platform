@@ -14,6 +14,13 @@ from lakehouse_ops.iceberg.planner import IcebergMaintenancePlanner, Maintenance
 class FakeSqlExecutor:
     def __init__(self, *, snapshot_id: str = "8750000000000000001") -> None:
         self.snapshot_id = snapshot_id
+        self.snapshot_ids = [
+            snapshot_id,
+            "8740000000000000001",
+            "8730000000000000001",
+            "8720000000000000001",
+            "8710000000000000001",
+        ]
         self.file_count = 10
         self.record_count = 100
         self.manifest_count = 4
@@ -21,8 +28,10 @@ class FakeSqlExecutor:
 
     def query(self, sql: str) -> list[dict[str, Any]]:
         self.queries.append(sql)
-        if ".snapshots" in sql:
+        if ".history" in sql:
             return [{"snapshot_id": self.snapshot_id}]
+        if ".snapshots" in sql:
+            return [{"snapshot_id": snapshot_id} for snapshot_id in self.snapshot_ids]
         if ".data_files" in sql:
             return [
                 {
@@ -34,6 +43,7 @@ class FakeSqlExecutor:
             return [{"manifest_count": self.manifest_count}]
         if "rewrite_data_files" in sql:
             self.snapshot_id = "8750000000000000002"
+            self.snapshot_ids.insert(0, self.snapshot_id)
             self.file_count = 1
             return [
                 {
@@ -45,11 +55,24 @@ class FakeSqlExecutor:
             ]
         if "rewrite_manifests" in sql:
             self.snapshot_id = "8750000000000000002"
+            self.snapshot_ids.insert(0, self.snapshot_id)
             self.manifest_count = 1
             return [
                 {
                     "rewritten_manifests_count": 4,
                     "added_manifests_count": 1,
+                }
+            ]
+        if "expire_snapshots" in sql:
+            self.snapshot_ids = self.snapshot_ids[:2]
+            return [
+                {
+                    "deleted_data_files_count": 0,
+                    "deleted_position_delete_files_count": 0,
+                    "deleted_equality_delete_files_count": 0,
+                    "deleted_manifest_files_count": 3,
+                    "deleted_manifest_lists_count": 3,
+                    "deleted_statistics_files_count": 0,
                 }
             ]
         raise AssertionError(sql)
@@ -91,6 +114,45 @@ def manifest_plan() -> dict[str, Any]:
         min_manifest_count=2,
         max_manifests_per_data_file=0.5,
     )
+    return IcebergMaintenancePlanner(policy).plan(report).as_dict()
+
+
+def expiration_plan() -> dict[str, Any]:
+    snapshot_ids = [
+        "8710000000000000001",
+        "8720000000000000001",
+        "8730000000000000001",
+        "8740000000000000001",
+        "8750000000000000001",
+    ]
+    report = {
+        "schema_version": "1.0",
+        "status": "ready",
+        "collected_at": "2026-08-18T13:30:00+00:00",
+        "table": "lakehouse.silver.weather_hourly",
+        "snapshots": {
+            "current_id": snapshot_ids[-1],
+            "history": [
+                {
+                    "snapshot_id": snapshot_id,
+                    "committed_at": f"2026-08-{day:02d}T13:00:00+00:00",
+                }
+                for snapshot_id, day in zip(
+                    snapshot_ids, (10, 11, 12, 17, 18), strict=True
+                )
+            ],
+        },
+        "references": [
+            {"name": "main", "reference_type": "BRANCH", "snapshot_id": snapshot_ids[-1]}
+        ],
+        "files": {
+            "count": 10,
+            "total_size_bytes": 10 * 128 * 1024 * 1024,
+            "delete_file_count": 0,
+        },
+        "manifests": {"count": 4},
+    }
+    policy = MaintenancePolicy(snapshot_retention_hours=24, min_snapshots_to_keep=2)
     return IcebergMaintenancePlanner(policy).plan(report).as_dict()
 
 
@@ -211,6 +273,86 @@ def test_manifest_rewrite_rejects_state_above_safety_bound() -> None:
     executor = FakeSqlExecutor()
 
     with pytest.raises(ExecutionContractError, match="manifest count exceeds"):
+        SparkMaintenanceExecutor(executor).run(
+            plan,
+            action["action_id"],
+            apply=True,
+            approved_plan_id=plan["plan_id"],
+            approved_snapshot_id=plan["source"]["current_snapshot_id"],
+        )
+
+    assert all("CALL" not in sql for sql in executor.queries)
+
+
+def test_apply_expires_exact_snapshot_batch_and_preserves_current_state() -> None:
+    plan = expiration_plan()
+    action = next(
+        action for action in plan["actions"] if action["action_type"] == "expire_snapshots"
+    )
+    executor = FakeSqlExecutor()
+
+    report = SparkMaintenanceExecutor(executor).run(
+        plan,
+        action["action_id"],
+        apply=True,
+        approved_plan_id=plan["plan_id"],
+        approved_snapshot_id=plan["source"]["current_snapshot_id"],
+    )
+
+    assert report.status == "succeeded"
+    assert report.before.snapshot_count == 5
+    assert report.after.snapshot_count == 2
+    assert report.before.snapshot_id == report.after.snapshot_id
+    assert report.before.record_count == report.after.record_count == 100
+    procedure = next(sql for sql in executor.queries if "CALL" in sql)
+    assert (
+        "snapshot_ids => ARRAY(8710000000000000001, 8720000000000000001, "
+        "8730000000000000001)" in procedure
+    )
+    assert "CAST(" not in procedure
+    assert "max_concurrent_deletes => 1" in procedure
+    assert "stream_results => true" in procedure
+    assert "clean_expired_metadata => false" in procedure
+
+
+def test_expiration_rejects_changed_snapshot_history_before_procedure() -> None:
+    plan = expiration_plan()
+    action = next(
+        action for action in plan["actions"] if action["action_type"] == "expire_snapshots"
+    )
+    executor = FakeSqlExecutor()
+    executor.snapshot_ids.insert(1, "8745000000000000001")
+
+    with pytest.raises(ExecutionContractError, match="snapshot history"):
+        SparkMaintenanceExecutor(executor).run(
+            plan,
+            action["action_id"],
+            apply=True,
+            approved_plan_id=plan["plan_id"],
+            approved_snapshot_id=plan["source"]["current_snapshot_id"],
+        )
+
+    assert all("CALL" not in sql for sql in executor.queries)
+
+
+@pytest.mark.parametrize(
+    ("target_id", "message"),
+    [
+        ("8750000000000000001", "current snapshot cannot be expired"),
+        ("9990000000000000001", "expiration target is absent"),
+    ],
+)
+def test_expiration_rejects_unsafe_target_ids(
+    target_id: str, message: str
+) -> None:
+    plan = expiration_plan()
+    action = next(
+        action for action in plan["actions"] if action["action_type"] == "expire_snapshots"
+    )
+    action["parameters"]["snapshot_ids"] = [target_id]
+    executor = FakeSqlExecutor()
+
+    with pytest.raises(ExecutionContractError, match=message):
         SparkMaintenanceExecutor(executor).run(
             plan,
             action["action_id"],

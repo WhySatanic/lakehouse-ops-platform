@@ -15,6 +15,8 @@ class ExecutionContractError(ValueError):
 @dataclass(frozen=True, slots=True)
 class TableState:
     snapshot_id: str
+    snapshot_count: int
+    snapshot_ids: tuple[str, ...]
     data_file_count: int
     record_count: int
     manifest_count: int
@@ -75,7 +77,7 @@ class SparkMaintenanceExecutor:
             raise ExecutionContractError(f"{action_type} must return exactly one row")
         result = _procedure_result(action_type, procedure_rows[0])
         after = self._state(table)
-        status = _reconcile(action_type, before, after, result)
+        status = _reconcile(action_type, action, before, after, result)
         return _report(status, plan_id, action, table, True, before, after, result)
 
     def _execute(
@@ -95,15 +97,37 @@ class SparkMaintenanceExecutor:
             return self._executor.query(
                 _rewrite_data_files_sql(table, target_size, max_files)
             )
-        max_manifests = _positive_bound(safety, "max_manifests_to_rewrite")
-        if before.manifest_count > max_manifests:
-            raise ExecutionContractError("manifest count exceeds the rewrite safety bound")
-        return self._executor.query(_rewrite_manifests_sql(table))
+        if action_type == "rewrite_manifests":
+            max_manifests = _positive_bound(safety, "max_manifests_to_rewrite")
+            if before.manifest_count > max_manifests:
+                raise ExecutionContractError(
+                    "manifest count exceeds the rewrite safety bound"
+                )
+            return self._executor.query(_rewrite_manifests_sql(table))
+        parameters = _object(action, "parameters")
+        snapshot_ids = _string_array(parameters, "snapshot_ids")
+        expected_history = _string_array(safety, "expected_history_snapshot_ids")
+        max_snapshots = _positive_bound(safety, "max_snapshots_to_expire")
+        if not snapshot_ids or len(snapshot_ids) > max_snapshots:
+            raise ExecutionContractError("snapshot expiration batch exceeds safety bound")
+        if len(snapshot_ids) != len(set(snapshot_ids)):
+            raise ExecutionContractError("snapshot expiration IDs must be unique")
+        if set(before.snapshot_ids) != set(expected_history):
+            raise ExecutionContractError("snapshot history does not match the approved plan")
+        if before.snapshot_id in snapshot_ids:
+            raise ExecutionContractError("current snapshot cannot be expired")
+        if not set(snapshot_ids).issubset(before.snapshot_ids):
+            raise ExecutionContractError("expiration target is absent from live history")
+        return self._executor.query(_expire_snapshots_sql(table, snapshot_ids))
 
     def _state(self, table: str) -> TableState:
+        current = self._executor.query(
+            f"SELECT snapshot_id FROM {_metadata_table(table, 'history')} "
+            "ORDER BY made_current_at DESC LIMIT 1"
+        )
         snapshots = self._executor.query(
             f"SELECT snapshot_id FROM {_metadata_table(table, 'snapshots')} "
-            "ORDER BY committed_at DESC LIMIT 1"
+            "ORDER BY committed_at DESC"
         )
         files = self._executor.query(
             f"SELECT count(*) AS data_file_count, "
@@ -114,10 +138,16 @@ class SparkMaintenanceExecutor:
             f"SELECT count(*) AS manifest_count "
             f"FROM {_metadata_table(table, 'manifests')}"
         )
-        if len(snapshots) != 1 or len(files) != 1 or len(manifests) != 1:
-            raise ExecutionContractError("table state queries must return one row")
+        if len(current) != 1 or not snapshots or len(files) != 1 or len(manifests) != 1:
+            raise ExecutionContractError("table state queries returned an invalid shape")
+        snapshot_ids = tuple(str(row["snapshot_id"]) for row in snapshots)
+        current_snapshot_id = str(current[0]["snapshot_id"])
+        if current_snapshot_id not in snapshot_ids:
+            raise ExecutionContractError("current snapshot is absent from snapshot history")
         return TableState(
-            snapshot_id=str(snapshots[0]["snapshot_id"]),
+            snapshot_id=current_snapshot_id,
+            snapshot_count=len(snapshot_ids),
+            snapshot_ids=snapshot_ids,
             data_file_count=_integer(files[0], "data_file_count"),
             record_count=_integer(files[0], "record_count"),
             manifest_count=_integer(manifests[0], "manifest_count"),
@@ -142,19 +172,38 @@ def _select_action(
     if len(matches) != 1:
         raise ExecutionContractError("action ID must select exactly one action")
     action = matches[0]
-    if action.get("action_type") not in {"rewrite_data_files", "rewrite_manifests"}:
+    if action.get("action_type") not in {
+        "rewrite_data_files",
+        "rewrite_manifests",
+        "expire_snapshots",
+    }:
         raise ExecutionContractError("unsupported action type")
     return plan_id, table, action
 
 
 def _reconcile(
     action_type: str,
+    action: dict[str, Any],
     before: TableState,
     after: TableState,
     result: dict[str, int],
 ) -> str:
     if before.record_count != after.record_count:
         return "reconciliation_failed"
+    if action_type == "expire_snapshots":
+        target_ids = _string_array(_object(action, "parameters"), "snapshot_ids")
+        expected = set(before.snapshot_ids) - set(target_ids)
+        if after.snapshot_id != before.snapshot_id:
+            return "reconciliation_failed"
+        if before.data_file_count != after.data_file_count:
+            return "reconciliation_failed"
+        if before.manifest_count != after.manifest_count:
+            return "reconciliation_failed"
+        if set(after.snapshot_ids) != expected:
+            return "reconciliation_failed"
+        if after.snapshot_count >= before.snapshot_count:
+            return "reconciliation_failed"
+        return "succeeded"
     if action_type == "rewrite_manifests":
         if before.data_file_count != after.data_file_count:
             return "reconciliation_failed"
@@ -203,18 +252,40 @@ def _rewrite_manifests_sql(table: str) -> str:
     )
 
 
+def _expire_snapshots_sql(table: str, snapshot_ids: tuple[str, ...]) -> str:
+    catalog, namespace, name = _table_parts(table)
+    table_argument = f"{namespace}.{name}".replace("'", "''")
+    snapshot_array = ", ".join(snapshot_ids)
+    return (
+        f"CALL {_identifier(catalog)}.system.expire_snapshots("
+        f"table => '{table_argument}', snapshot_ids => ARRAY({snapshot_array}), "
+        "max_concurrent_deletes => 1, stream_results => true, "
+        "clean_expired_metadata => false)"
+    )
+
+
 def _procedure_result(action_type: str, row: dict[str, Any]) -> dict[str, int]:
-    keys = (
-        ("rewritten_manifests_count", "added_manifests_count")
-        if action_type == "rewrite_manifests"
-        else (
+    keys_by_action = {
+        "rewrite_manifests": (
+            "rewritten_manifests_count",
+            "added_manifests_count",
+        ),
+        "rewrite_data_files": (
             "rewritten_data_files_count",
             "added_data_files_count",
             "rewritten_bytes_count",
             "failed_data_files_count",
-        )
-    )
-    return {key: _integer(row, key) for key in keys}
+        ),
+        "expire_snapshots": (
+            "deleted_data_files_count",
+            "deleted_position_delete_files_count",
+            "deleted_equality_delete_files_count",
+            "deleted_manifest_files_count",
+            "deleted_manifest_lists_count",
+            "deleted_statistics_files_count",
+        ),
+    }
+    return {key: _integer(row, key) for key in keys_by_action[action_type]}
 
 
 def _positive_bound(safety: dict[str, Any], key: str) -> int:
@@ -258,6 +329,15 @@ def _integer(value: dict[str, Any], key: str) -> int:
     if isinstance(item, bool) or not isinstance(item, int) or item < 0:
         raise ExecutionContractError(f"{key} must be a non-negative integer")
     return item
+
+
+def _string_array(value: dict[str, Any], key: str) -> tuple[str, ...]:
+    items = value.get(key)
+    if not isinstance(items, (list, tuple)):
+        raise ExecutionContractError(f"{key} must be an array")
+    if any(not isinstance(item, str) or not item.isdigit() for item in items):
+        raise ExecutionContractError(f"{key} must contain decimal snapshot IDs")
+    return tuple(items)
 
 
 def _report(

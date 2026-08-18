@@ -28,6 +28,15 @@ def main() -> None:
     assert snapshots["count"] > 0
     assert snapshots["current_id"].isdigit()
     assert snapshots["operation"] in {"append", "delete", "overwrite", "replace"}
+    assert len(snapshots["history"]) == snapshots["count"]
+    assert snapshots["history"][-1]["snapshot_id"] == snapshots["current_id"]
+    assert report["references"] == [
+        {
+            "name": "main",
+            "reference_type": "BRANCH",
+            "snapshot_id": snapshots["current_id"],
+        }
+    ]
 
     files = report["files"]
     assert files["count"] > 0
