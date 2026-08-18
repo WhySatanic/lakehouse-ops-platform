@@ -10,6 +10,7 @@ ADD https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.6/hadoop-aws
     /opt/hive/lib/hadoop-aws-3.3.6.jar
 ADD https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.367/aws-java-sdk-bundle-1.12.367.jar \
     /opt/hive/lib/aws-java-sdk-bundle-1.12.367.jar
+COPY infra/hive-metastore/core-site.xml /opt/hadoop/etc/hadoop/core-site.xml
 RUN printf '%s  %s\n' \
       d5e162564701848b0921b80aedef9e64435333cc /opt/hive/lib/hadoop-aws-3.3.6.jar \
       929e3d336686f926253907a0efaa417ad378d820 /opt/hive/lib/aws-java-sdk-bundle-1.12.367.jar \
@@ -17,5 +18,6 @@ RUN printf '%s  %s\n' \
     && chmod 0444 \
       /opt/hive/lib/postgres.jar \
       /opt/hive/lib/hadoop-aws-3.3.6.jar \
-      /opt/hive/lib/aws-java-sdk-bundle-1.12.367.jar
+      /opt/hive/lib/aws-java-sdk-bundle-1.12.367.jar \
+    && chmod 0444 /opt/hadoop/etc/hadoop/core-site.xml
 USER hive

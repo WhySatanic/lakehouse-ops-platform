@@ -41,7 +41,7 @@ used by Iceberg HiveCatalog, including `get_table`; the incompatibility is track
 [Apache Iceberg issue #12878](https://github.com/apache/iceberg/issues/12878).
 
 The S3A client version matches Hive 4.0.0's Hadoop 3.3.6 dependency. MinIO development
-credentials are passed only through environment and Hadoop properties; production
+credentials are resolved from environment by the image's `core-site.xml`; production
 deployments must replace them with scoped credentials from a secret manager.
 
 ## Stop

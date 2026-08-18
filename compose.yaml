@@ -83,14 +83,6 @@ services:
         -Djavax.jdo.option.ConnectionPassword=${HMS_POSTGRES_PASSWORD:-hive-development-only}
         -Dmetastore.try.direct.sql.ddl=false
         -Dmetastore.warehouse.dir=s3a://${LAKEHOUSE_BUCKET:-lakehouse}/warehouse
-        -Dfs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
-        -Dfs.s3a.endpoint=http://minio:9000
-        -Dfs.s3a.endpoint.region=${AWS_DEFAULT_REGION:-us-east-1}
-        -Dfs.s3a.path.style.access=true
-        -Dfs.s3a.connection.ssl.enabled=false
-        -Dfs.s3a.access.key=${MINIO_ROOT_USER:-lakeops}
-        -Dfs.s3a.secret.key=${MINIO_ROOT_PASSWORD:-lakeops-development-only}
-        -Dfs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider
     ports:
       - "${HIVE_METASTORE_PORT:-9083}:9083"
     volumes:
