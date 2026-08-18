@@ -154,7 +154,7 @@ services:
       - |
         mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
         mc mirror --overwrite "local/$${LAKEHOUSE_BUCKET}/landing" /input
-        object_count="$$(find /input -type f -name '*.json' | wc -l | tr -d ' ')"
+        object_count="$$(mc find "local/$${LAKEHOUSE_BUCKET}/landing" --name '*.json' | wc -l | tr -d ' ')"
         test "$$object_count" -gt 0
         printf '{"status":"ready","landing_objects":%s}\n' "$$object_count"
     restart: "no"
