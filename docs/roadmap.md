@@ -39,6 +39,8 @@ writes an Iceberg table with Spark, and validates it through Trino.
 - [ ] Time-travel, rollback, schema evolution, and partition evolution scenarios.
   - [x] Exact-snapshot time travel and rollback with Spark and Trino evidence.
   - [ ] Schema and partition evolution with compatibility evidence.
+    - [x] Nullable-column add and field rename with historical-schema evidence.
+    - [ ] Partition-spec evolution with mixed-layout evidence.
 - [ ] Failure injection for interrupted writes and post-condition reconciliation.
 
 Exit criterion: maintenance produces a measured reduction in file count/query latency,

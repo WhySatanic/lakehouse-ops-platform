@@ -109,6 +109,18 @@ jobs:
           echo "RECOVERY_ABANDONED_SNAPSHOT_ID=$(uv run python -c 'import json; print(json.load(open("artifacts/snapshot-rollback-report.json"))["abandoned_snapshot"]["snapshot_id"])')" >> "$GITHUB_ENV"
       - name: Verify rollback and time travel through Trino
         run: docker compose --profile query run --rm trino-snapshot-rollback-check
+      - name: Exercise schema evolution
+        run: |
+          touch artifacts/schema-evolution-report.json
+          chmod 0666 artifacts/schema-evolution-report.json
+          docker compose --profile catalog --profile compute run --rm spark-schema-evolution-drill
+      - name: Verify schema evolution evidence
+        run: |
+          uv run python tests/integration/check_schema_evolution.py artifacts/schema-evolution-report.json
+          echo "SCHEMA_INITIAL_SNAPSHOT_ID=$(uv run python -c 'import json; print(json.load(open("artifacts/schema-evolution-report.json"))["initial"]["snapshot_id"])')" >> "$GITHUB_ENV"
+          echo "SCHEMA_EVOLVED_SNAPSHOT_ID=$(uv run python -c 'import json; print(json.load(open("artifacts/schema-evolution-report.json"))["after_add"]["snapshot_id"])')" >> "$GITHUB_ENV"
+      - name: Verify schema compatibility through Trino
+        run: docker compose --profile query run --rm trino-schema-evolution-check
       - name: Collect Iceberg metadata through Trino
         run: >-
           uv run lakeops collect-iceberg-metadata
