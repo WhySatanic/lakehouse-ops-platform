@@ -272,6 +272,8 @@ jobs:
         run: |
           echo "MAINTENANCE_PLAN_PATH=/opt/lakehouse/artifacts/orphan-plan.json" >> "$GITHUB_ENV"
           echo "MAINTENANCE_ACTION_ID=$(uv run python -c 'import json; p=json.load(open("artifacts/orphan-plan.json")); print(next(a["action_id"] for a in p["actions"] if a["action_type"] == "inspect_orphan_files"))')" >> "$GITHUB_ENV"
+          touch artifacts/maintenance-report.json
+          chmod 0666 artifacts/maintenance-report.json
       - name: Inspect orphan files without deletion
         run: |
           docker compose --profile catalog --profile compute run --rm spark-maintenance
