@@ -17,6 +17,8 @@ new expansion tracks rather than ending development.
 - [x] Filesystem landing integrity audit with recovery-oriented failure reports.
 - [x] PostgreSQL-backed Hive Metastore plus an automated schema/bootstrap check.
 - [ ] Spark + Iceberg writer producing bronze/silver tables from landed payloads.
+  - [x] Idempotent bronze writer registered in Hive Metastore with S3 post-condition checks.
+  - [ ] Validated and deduplicated silver transformation.
 - [ ] Trino coordinator/worker profile reading the same tables through Hive Metastore.
 
 Exit criterion: one command starts the core stack and an end-to-end test lands a payload,

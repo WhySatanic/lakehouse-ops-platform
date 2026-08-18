@@ -27,22 +27,46 @@ jobs:
       - name: Test
         run: uv run pytest
 
-  catalog-integration:
+  lakehouse-integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - name: Validate Compose configuration
-        run: docker compose --profile catalog config --quiet
-      - name: Start Hive Metastore
+        run: |
+          docker compose --profile catalog config --quiet
+          docker compose --profile compute config --quiet
+      - name: Build catalog and compute images
         run: >-
-          docker compose --profile catalog up -d --build --wait
-          metastore-db hive-metastore
+          docker compose --profile catalog --profile compute build
+          hive-metastore spark-bronze
+      - name: Start core services
+        run: >-
+          docker compose --profile catalog --profile compute up -d --wait
+          minio metastore-db hive-metastore
+      - name: Initialize storage
+        run: docker compose run --rm minio-init
       - name: Verify metastore schema
         run: docker compose --profile catalog run --rm metastore-schema-check
+      - name: Land deterministic fixture
+        run: docker compose --profile compute run --rm landing-fixture
+      - name: Sync bronze input
+        run: docker compose --profile compute run --rm bronze-input-sync
+      - name: Write Iceberg bronze table
+        run: docker compose --profile catalog --profile compute run --rm spark-bronze
+      - name: Verify idempotent replay
+        run: docker compose --profile catalog --profile compute run --rm spark-bronze
+      - name: Verify catalog registration
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          bronze-catalog-check
+      - name: Verify Iceberg objects
+        run: docker compose --profile compute run --rm bronze-storage-check
       - name: Show service logs
         if: failure()
-        run: docker compose --profile catalog logs metastore-db hive-metastore
-      - name: Stop catalog profile
+        run: >-
+          docker compose --profile catalog --profile compute logs
+          minio metastore-db hive-metastore
+      - name: Stop integration profile
         if: always()
-        run: docker compose --profile catalog down --volumes
+        run: docker compose --profile catalog --profile compute down --volumes

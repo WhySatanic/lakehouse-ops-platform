@@ -40,7 +40,7 @@ services:
 
   metastore-db:
     image: postgres:17.10-alpine3.23
-    profiles: ["catalog"]
+    profiles: ["catalog", "compute"]
     environment:
       POSTGRES_DB: ${HMS_POSTGRES_DB:-metastore}
       POSTGRES_USER: ${HMS_POSTGRES_USER:-hive}
@@ -60,23 +60,29 @@ services:
     restart: unless-stopped
 
   hive-metastore:
-    image: lakehouse-ops/hive-metastore:4.0.1-pgjdbc-42.7.13
+    image: lakehouse-ops/hive-metastore:4.0.0-s3a-pgjdbc-42.7.13
     build:
       context: .
       dockerfile: infra/hive-metastore/Dockerfile
-    profiles: ["catalog"]
+    profiles: ["catalog", "compute"]
     depends_on:
       metastore-db:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     environment:
       SERVICE_NAME: metastore
       DB_DRIVER: postgres
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       SERVICE_OPTS: >-
         -Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver
         -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://metastore-db:5432/${HMS_POSTGRES_DB:-metastore}
         -Djavax.jdo.option.ConnectionUserName=${HMS_POSTGRES_USER:-hive}
         -Djavax.jdo.option.ConnectionPassword=${HMS_POSTGRES_PASSWORD:-hive-development-only}
         -Dmetastore.try.direct.sql.ddl=false
+        -Dmetastore.warehouse.dir=s3a://${LAKEHOUSE_BUCKET:-lakehouse}/warehouse
     ports:
       - "${HIVE_METASTORE_PORT:-9083}:9083"
     volumes:
@@ -117,7 +123,118 @@ services:
           "$$schema_version" "$$table_count"
     restart: "no"
 
+  landing-fixture:
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    profiles: ["compute"]
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lakeops}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
+    volumes:
+      - ./tests/fixtures/open_meteo_landing.json:/fixtures/open_meteo_landing.json:ro
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc cp /fixtures/open_meteo_landing.json \
+          "local/$${LAKEHOUSE_BUCKET}/landing/source=open_meteo/ingest_date=2026-08-06/location=moscow/d11e9a60acb9c55a4dee581bdccb9ecf992328f50db03042d8df4ba1301defa6.json"
+    restart: "no"
+
+  bronze-input-sync:
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    profiles: ["compute"]
+    depends_on:
+      landing-fixture:
+        condition: service_completed_successfully
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lakeops}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
+    volumes:
+      - bronze-input:/input
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc mirror --overwrite "local/$${LAKEHOUSE_BUCKET}/landing" /input
+        object_count="$$(mc find "local/$${LAKEHOUSE_BUCKET}/landing" --name '*.json' | wc -l | tr -d ' ')"
+        test "$$object_count" -gt 0
+        printf '{"status":"ready","landing_objects":%s}\n' "$$object_count"
+    restart: "no"
+
+  spark-bronze:
+    image: lakehouse-ops/spark-iceberg:3.5.9-1.11.0
+    build:
+      context: .
+      dockerfile: infra/spark/Dockerfile
+    profiles: ["compute"]
+    depends_on:
+      bronze-input-sync:
+        condition: service_completed_successfully
+      hive-metastore:
+        condition: service_healthy
+    environment:
+      LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
+      LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      HIVE_METASTORE_URI: thrift://hive-metastore:9083
+      BRONZE_INPUT_ROOT: /opt/lakehouse/input
+      SPARK_MASTER: local[2]
+    volumes:
+      - ./jobs/spark/bronze_weather.py:/opt/lakehouse/jobs/bronze_weather.py:ro
+      - bronze-input:/opt/lakehouse/input:ro
+    command: ["/opt/spark/bin/spark-submit", "/opt/lakehouse/jobs/bronze_weather.py"]
+    restart: "no"
+
+  bronze-catalog-check:
+    image: postgres:17.10-alpine3.23
+    profiles: ["compute"]
+    depends_on:
+      spark-bronze:
+        condition: service_completed_successfully
+    environment:
+      PGHOST: metastore-db
+      PGDATABASE: ${HMS_POSTGRES_DB:-metastore}
+      PGUSER: ${HMS_POSTGRES_USER:-hive}
+      PGPASSWORD: ${HMS_POSTGRES_PASSWORD:-hive-development-only}
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        table_count="$$(psql --tuples-only --no-align --set ON_ERROR_STOP=1 --command \
+          "SELECT count(*) FROM \"TBLS\" t JOIN \"DBS\" d ON d.\"DB_ID\" = t.\"DB_ID\" JOIN \"SDS\" s ON s.\"SD_ID\" = t.\"SD_ID\" WHERE lower(d.\"NAME\") = 'bronze' AND lower(t.\"TBL_NAME\") = 'weather_hourly' AND s.\"LOCATION\" LIKE 's3a://$${LAKEHOUSE_BUCKET:-lakehouse}/warehouse/%'")"
+        test "$$table_count" = "1"
+        printf '{"status":"ready","catalog_tables":%s}\n' "$$table_count"
+    restart: "no"
+
+  bronze-storage-check:
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    profiles: ["compute"]
+    depends_on:
+      spark-bronze:
+        condition: service_completed_successfully
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lakeops}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        metadata_files="$$(mc find "local/$${LAKEHOUSE_BUCKET}/warehouse" --name '*.metadata.json' | wc -l | tr -d ' ')"
+        data_files="$$(mc find "local/$${LAKEHOUSE_BUCKET}/warehouse" --name '*.parquet' | wc -l | tr -d ' ')"
+        test "$$metadata_files" -gt 0
+        test "$$data_files" -gt 0
+        printf '{"status":"ready","metadata_files":%s,"data_files":%s}\n' \
+          "$$metadata_files" "$$data_files"
+    restart: "no"
+
 volumes:
   minio-data:
   metastore-db-data:
   warehouse-data:
+  bronze-input:
