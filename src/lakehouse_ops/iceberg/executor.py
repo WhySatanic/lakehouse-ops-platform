@@ -165,7 +165,8 @@ class SparkMaintenanceExecutor:
             )
             if verified != candidates:
                 raise ExecutionContractError(
-                    "approved candidate set is no longer entirely orphaned"
+                    "approved candidate set is no longer entirely orphaned: "
+                    f"approved={candidates!r}, current={verified!r}"
                 )
             deleted = _orphan_files(
                 self._executor.query(
@@ -457,7 +458,7 @@ def _create_candidate_view_sql(
     return (
         f"CREATE OR REPLACE TEMP VIEW {_identifier(view)} AS "
         "SELECT file_path, "
-        f"{_timestamp_literal(older_than)} - INTERVAL 1 MICROSECOND AS last_modified "
+        f"{_timestamp_literal(older_than)} - INTERVAL 1 SECOND AS last_modified "
         f"FROM VALUES {rows} AS candidates(file_path)"
     )
 

@@ -498,6 +498,8 @@ def test_orphan_removal_deletes_only_the_approved_candidate_set() -> None:
     }
     assert executor.orphan_files == []
     calls = [sql for sql in executor.queries if "remove_orphan_files" in sql]
+    view = next(sql for sql in executor.queries if sql.startswith("CREATE OR REPLACE"))
+    assert "- INTERVAL 1 SECOND AS last_modified" in view
     assert "file_list_view => 'lakehouse_ops_orphans_bb716dc042e82997'" in calls[-1]
     assert "dry_run => true" in calls[-2]
     assert "dry_run => false" in calls[-1]

@@ -73,7 +73,9 @@ The executor rejects a changed plan, snapshot, table state, report, candidate co
 candidate digest. It creates a temporary Iceberg `file_list_view` containing only the
 approved paths and runs a second dry-run against current table metadata. Deletion starts
 only if every approved path is still orphaned. Prefix mismatch handling remains
-fail-closed and deletion concurrency is one.
+fail-closed. The procedure requests one delete worker, but Iceberg S3FileIO uses bulk
+deletes and ignores that setting; the candidate-count bound therefore remains the
+effective batch-size control for S3.
 
 The execution report must have `status: succeeded`, `applied: true`, identical table
 state before and after, and matching `orphan_file_count` and
