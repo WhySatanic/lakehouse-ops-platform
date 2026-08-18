@@ -60,7 +60,7 @@ services:
     restart: unless-stopped
 
   hive-metastore:
-    image: lakehouse-ops/hive-metastore:4.0.1-pgjdbc-42.7.13
+    image: lakehouse-ops/hive-metastore:4.0.0-pgjdbc-42.7.13
     build:
       context: .
       dockerfile: infra/hive-metastore/Dockerfile

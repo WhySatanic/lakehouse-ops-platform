@@ -31,9 +31,13 @@ docker compose --env-file .env --profile catalog logs hive-metastore
 docker compose --env-file .env --profile catalog logs metastore-db
 ```
 
-The metastore image is built from Apache Hive 4.0.1 and adds pgJDBC 42.7.13 with a
+The metastore image is built from Apache Hive 4.0.0 and adds pgJDBC 42.7.13 with a
 pinned SHA-256. The database and warehouse use named volumes so normal restarts retain
 their state.
+
+Hive 4.0.0 is pinned intentionally. Hive 4.0.1 removed deprecated Thrift methods still
+used by Iceberg HiveCatalog, including `get_table`; the incompatibility is tracked in
+[Apache Iceberg issue #12878](https://github.com/apache/iceberg/issues/12878).
 
 ## Stop
 
