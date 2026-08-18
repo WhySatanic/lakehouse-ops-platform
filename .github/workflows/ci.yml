@@ -39,7 +39,7 @@ jobs:
       - name: Build catalog and compute images
         run: >-
           docker compose --profile catalog --profile compute build
-          hive-metastore spark-bronze
+          hive-metastore spark-bronze spark-silver
       - name: Start core services
         run: >-
           docker compose --profile catalog --profile compute up -d --wait
@@ -62,6 +62,26 @@ jobs:
           bronze-catalog-check
       - name: Verify Iceberg objects
         run: docker compose --profile compute run --rm bronze-storage-check
+      - name: Land silver acceptance cases
+        run: docker compose --profile compute run --rm silver-landing-fixture
+      - name: Refresh bronze input
+        run: docker compose --profile compute run --rm bronze-input-sync
+      - name: Add silver acceptance rows to bronze
+        run: docker compose --profile catalog --profile compute run --rm spark-bronze
+      - name: Build validated silver tables
+        run: docker compose --profile catalog --profile compute run --rm spark-silver
+      - name: Verify idempotent silver replay
+        run: docker compose --profile catalog --profile compute run --rm spark-silver
+      - name: Verify silver data contract
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          silver-contract-check
+      - name: Verify silver catalog registration
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          silver-catalog-check
+      - name: Verify silver Iceberg objects
+        run: docker compose --profile compute run --rm silver-storage-check
       - name: Show service logs
         if: failure()
         run: >-
