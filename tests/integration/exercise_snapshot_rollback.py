@@ -21,9 +21,7 @@ def table_rows(spark, *, snapshot_id: int | None = None) -> list[list[object]]:
 
 
 def write_report(path: Path, report: dict[str, object]) -> None:
-    temporary = path.with_suffix(f"{path.suffix}.tmp")
-    temporary.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    temporary.replace(path)
+    path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def main() -> None:
