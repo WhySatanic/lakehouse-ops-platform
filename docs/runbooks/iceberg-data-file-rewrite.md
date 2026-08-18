@@ -1,8 +1,9 @@
 # Iceberg data-file rewrite
 
-The Spark maintenance job consumes plan schema `1.0` and currently supports only
+The Spark maintenance job consumes plan schema `1.0` and supports
 `rewrite_data_files`. It checks the live snapshot before any procedure call and records
-file count, row count, snapshot, and procedure output before and after execution.
+file count, manifest count, row count, snapshot, and procedure output before and after
+execution.
 
 ## Prepare the plan
 

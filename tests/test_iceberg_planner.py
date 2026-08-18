@@ -70,6 +70,12 @@ def test_dense_manifests_recommend_manifest_rewrite() -> None:
     assert [action["action_type"] for action in plan["actions"]] == [
         "rewrite_manifests"
     ]
+    assert plan["actions"][0]["safety_bounds"] == {
+        "dry_run_required": True,
+        "expected_snapshot_id": "8750000000000000001",
+        "max_concurrent_jobs": 1,
+        "max_manifests_to_rewrite": 1000,
+    }
     assert plan["checks"][1]["outcome"] == "recommend"
 
 

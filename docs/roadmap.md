@@ -31,7 +31,8 @@ writes an Iceberg table with Spark, and validates it through Trino.
 - [ ] Safe Spark executors for `rewrite_data_files`, `rewrite_manifests`,
   `expire_snapshots`, and orphan-file removal.
   - [x] Snapshot-guarded `rewrite_data_files` with dry-run and reconciliation evidence.
-  - [ ] `rewrite_manifests`, snapshot expiration, and orphan-file removal.
+  - [x] Bounded `rewrite_manifests` with dry-run and reconciliation evidence.
+  - [ ] Snapshot expiration and orphan-file removal.
 - [ ] Time-travel, rollback, schema evolution, and partition evolution scenarios.
 - [ ] Failure injection for interrupted writes and post-condition reconciliation.
 

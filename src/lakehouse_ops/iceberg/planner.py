@@ -270,6 +270,11 @@ def _action(
     reason: str,
     parameters: dict[str, Any],
 ) -> dict[str, Any]:
+    bounded_resource = (
+        {"max_files_to_rewrite": 1000}
+        if action_type == "rewrite_data_files"
+        else {"max_manifests_to_rewrite": 1000}
+    )
     action = {
         "action_type": action_type,
         "reason_code": reason_code,
@@ -279,7 +284,7 @@ def _action(
             "dry_run_required": True,
             "expected_snapshot_id": source["current_snapshot_id"],
             "max_concurrent_jobs": 1,
-            "max_files_to_rewrite": 1000,
+            **bounded_resource,
         },
     }
     return {"action_id": _identifier("action", action | {"source": source}), **action}

@@ -8,7 +8,7 @@ from lakehouse_ops.iceberg.executor import (
     ExecutionContractError,
     SparkMaintenanceExecutor,
 )
-from lakehouse_ops.iceberg.planner import IcebergMaintenancePlanner
+from lakehouse_ops.iceberg.planner import IcebergMaintenancePlanner, MaintenancePolicy
 
 
 class FakeSqlExecutor:
@@ -16,6 +16,7 @@ class FakeSqlExecutor:
         self.snapshot_id = snapshot_id
         self.file_count = 10
         self.record_count = 100
+        self.manifest_count = 4
         self.queries: list[str] = []
 
     def query(self, sql: str) -> list[dict[str, Any]]:
@@ -29,6 +30,8 @@ class FakeSqlExecutor:
                     "record_count": self.record_count,
                 }
             ]
+        if ".manifests" in sql:
+            return [{"manifest_count": self.manifest_count}]
         if "rewrite_data_files" in sql:
             self.snapshot_id = "8750000000000000002"
             self.file_count = 1
@@ -38,6 +41,15 @@ class FakeSqlExecutor:
                     "added_data_files_count": 1,
                     "rewritten_bytes_count": 104857600,
                     "failed_data_files_count": 0,
+                }
+            ]
+        if "rewrite_manifests" in sql:
+            self.snapshot_id = "8750000000000000002"
+            self.manifest_count = 1
+            return [
+                {
+                    "rewritten_manifests_count": 4,
+                    "added_manifests_count": 1,
                 }
             ]
         raise AssertionError(sql)
@@ -58,6 +70,28 @@ def maintenance_plan() -> dict[str, Any]:
         "manifests": {"count": 2},
     }
     return IcebergMaintenancePlanner().plan(report).as_dict()
+
+
+def manifest_plan() -> dict[str, Any]:
+    report = {
+        "schema_version": "1.0",
+        "status": "ready",
+        "collected_at": "2026-08-18T13:30:00+00:00",
+        "table": "lakehouse.silver.weather_hourly",
+        "snapshots": {"current_id": "8750000000000000001"},
+        "files": {
+            "count": 4,
+            "total_size_bytes": 4 * 128 * 1024 * 1024,
+            "delete_file_count": 0,
+        },
+        "manifests": {"count": 4},
+    }
+    policy = MaintenancePolicy(
+        min_data_files=100,
+        min_manifest_count=2,
+        max_manifests_per_data_file=0.5,
+    )
+    return IcebergMaintenancePlanner(policy).plan(report).as_dict()
 
 
 def test_dry_run_checks_snapshot_without_calling_procedure() -> None:
@@ -141,3 +175,48 @@ def test_record_count_change_fails_reconciliation() -> None:
     )
 
     assert report.status == "reconciliation_failed"
+
+
+def test_apply_rewrites_manifests_and_preserves_table_contents() -> None:
+    plan = manifest_plan()
+    action = next(
+        action for action in plan["actions"] if action["action_type"] == "rewrite_manifests"
+    )
+    executor = FakeSqlExecutor()
+
+    report = SparkMaintenanceExecutor(executor).run(
+        plan,
+        action["action_id"],
+        apply=True,
+        approved_plan_id=plan["plan_id"],
+        approved_snapshot_id=plan["source"]["current_snapshot_id"],
+    )
+
+    assert report.status == "succeeded"
+    assert report.before.manifest_count == 4
+    assert report.after.manifest_count == 1
+    assert report.before.data_file_count == report.after.data_file_count == 10
+    assert report.before.record_count == report.after.record_count == 100
+    procedure = next(sql for sql in executor.queries if "CALL" in sql)
+    assert "rewrite_manifests" in procedure
+    assert "use_caching => false" in procedure
+
+
+def test_manifest_rewrite_rejects_state_above_safety_bound() -> None:
+    plan = manifest_plan()
+    action = next(
+        action for action in plan["actions"] if action["action_type"] == "rewrite_manifests"
+    )
+    action["safety_bounds"]["max_manifests_to_rewrite"] = 3
+    executor = FakeSqlExecutor()
+
+    with pytest.raises(ExecutionContractError, match="manifest count exceeds"):
+        SparkMaintenanceExecutor(executor).run(
+            plan,
+            action["action_id"],
+            apply=True,
+            approved_plan_id=plan["plan_id"],
+            approved_snapshot_id=plan["source"]["current_snapshot_id"],
+        )
+
+    assert all("CALL" not in sql for sql in executor.queries)

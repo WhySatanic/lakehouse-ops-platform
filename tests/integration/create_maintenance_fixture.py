@@ -37,10 +37,24 @@ def main() -> None:
         files = spark.sql(
             "SELECT count(*) AS count FROM lakehouse.ops.maintenance_fixture.data_files"
         ).first()["count"]
+        manifests = spark.sql(
+            "SELECT count(*) AS count FROM lakehouse.ops.maintenance_fixture.manifests"
+        ).first()["count"]
         rows = spark.table("lakehouse.ops.maintenance_fixture").count()
-        if files != 4 or rows != 4:
-            raise RuntimeError(f"unexpected fixture state: files={files}, rows={rows}")
-        print(json.dumps({"status": "ready", "files": files, "rows": rows}))
+        if files != 4 or manifests != 4 or rows != 4:
+            raise RuntimeError(
+                f"unexpected fixture state: files={files}, manifests={manifests}, rows={rows}"
+            )
+        print(
+            json.dumps(
+                {
+                    "status": "ready",
+                    "files": files,
+                    "manifests": manifests,
+                    "rows": rows,
+                }
+            )
+        )
     finally:
         spark.stop()
 
