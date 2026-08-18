@@ -7,7 +7,7 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: early access `0.14.0`. Open-Meteo ingestion works against the local filesystem
+> Status: early access `0.15.0`. Open-Meteo ingestion works against the local filesystem
 > and MinIO. The opt-in platform profiles include PostgreSQL-backed Hive Metastore and a
 > Spark writer for S3-backed Iceberg bronze and validated silver tables. A Trino 483
 > coordinator/worker profile reads the same tables through Hive Metastore. The control
@@ -160,6 +160,12 @@ deterministic candidate-set ID. Applying it requires the unchanged inspection re
 and exact plan, snapshot, and candidate-set approvals; Iceberg revalidates only those
 paths before deletion and reconciles table state afterward. See the
 [orphan inventory runbook](docs/runbooks/iceberg-orphan-inventory.md).
+
+The snapshot recovery drill creates an isolated two-version Iceberg table, verifies an
+exact historical read, rolls current state back to the approved ancestor, and proves the
+abandoned snapshot remains queryable from Spark and Trino. See the
+[snapshot rollback runbook](docs/runbooks/iceberg-snapshot-rollback.md) for the evidence
+contract and recovery boundary.
 
 ## Engineering scope
 
