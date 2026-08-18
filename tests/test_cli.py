@@ -366,6 +366,29 @@ def test_plan_iceberg_maintenance_command(
     assert plan["table"] == "lakehouse.silver.events"
     assert plan["actions"] == []
 
+    exit_code = cli.main(
+        [
+            "plan-iceberg-maintenance",
+            "--input",
+            str(report_path),
+            "--enable-orphan-inspection",
+            "--orphan-retention-hours",
+            "96",
+            "--max-orphan-files",
+            "25",
+        ]
+    )
+
+    plan = json.loads(capsys.readouterr().out)
+    orphan_action = next(
+        action
+        for action in plan["actions"]
+        if action["action_type"] == "inspect_orphan_files"
+    )
+    assert exit_code == 0
+    assert orphan_action["parameters"]["older_than"] == "2026-08-14T13:30:00+00:00"
+    assert orphan_action["safety_bounds"]["max_orphan_files"] == 25
+
 
 def test_plan_iceberg_maintenance_rejects_invalid_json(
     capsys: pytest.CaptureFixture[str], tmp_path: Path

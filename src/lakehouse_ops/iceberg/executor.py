@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 
@@ -34,6 +37,8 @@ class MaintenanceExecutionReport:
     before: TableState
     after: TableState
     procedure_result: dict[str, int]
+    candidate_set_id: str | None
+    candidate_files: tuple[str, ...]
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -53,6 +58,7 @@ class SparkMaintenanceExecutor:
         approved_snapshot_id: str | None = None,
     ) -> MaintenanceExecutionReport:
         plan_id, table, action = _select_action(plan, action_id)
+        action_type = _string(action, "action_type")
         safety = _object(action, "safety_bounds")
         expected_snapshot = _string(safety, "expected_snapshot_id")
         if safety.get("dry_run_required") is not True:
@@ -64,6 +70,32 @@ class SparkMaintenanceExecutor:
             raise ExecutionContractError(
                 "current snapshot does not match the plan safety bound"
             )
+        if action_type == "inspect_orphan_files":
+            if apply:
+                raise ExecutionContractError(
+                    "orphan inspection cannot be applied as a deletion"
+                )
+            parameters = _object(action, "parameters")
+            older_than = _string(parameters, "older_than")
+            rows = self._executor.query(_inspect_orphan_files_sql(table, older_than))
+            candidates = _orphan_files(rows)
+            max_candidates = _positive_bound(safety, "max_orphan_files")
+            if len(candidates) > max_candidates:
+                raise ExecutionContractError(
+                    "orphan inventory exceeds the review safety bound"
+                )
+            return _report(
+                "inspection_complete",
+                plan_id,
+                action,
+                table,
+                False,
+                before,
+                before,
+                {"orphan_file_count": len(candidates)},
+                candidate_set_id=_candidate_set_id(table, older_than, candidates),
+                candidate_files=candidates,
+            )
         if not apply:
             return _report("dry_run", plan_id, action, table, False, before, before, {})
         if approved_plan_id != plan_id:
@@ -71,7 +103,6 @@ class SparkMaintenanceExecutor:
         if approved_snapshot_id != expected_snapshot:
             raise ExecutionContractError("approved snapshot ID does not match")
 
-        action_type = _string(action, "action_type")
         procedure_rows = self._execute(action_type, table, action, safety, before)
         if len(procedure_rows) != 1:
             raise ExecutionContractError(f"{action_type} must return exactly one row")
@@ -104,6 +135,8 @@ class SparkMaintenanceExecutor:
                     "manifest count exceeds the rewrite safety bound"
                 )
             return self._executor.query(_rewrite_manifests_sql(table))
+        if action_type != "expire_snapshots":
+            raise ExecutionContractError("unsupported action type")
         parameters = _object(action, "parameters")
         snapshot_ids = _string_array(parameters, "snapshot_ids")
         expected_history = _string_array(safety, "expected_history_snapshot_ids")
@@ -176,6 +209,7 @@ def _select_action(
         "rewrite_data_files",
         "rewrite_manifests",
         "expire_snapshots",
+        "inspect_orphan_files",
     }:
         raise ExecutionContractError("unsupported action type")
     return plan_id, table, action
@@ -264,6 +298,17 @@ def _expire_snapshots_sql(table: str, snapshot_ids: tuple[str, ...]) -> str:
     )
 
 
+def _inspect_orphan_files_sql(table: str, older_than: str) -> str:
+    catalog, namespace, name = _table_parts(table)
+    table_argument = f"{namespace}.{name}".replace("'", "''")
+    return (
+        f"CALL {_identifier(catalog)}.system.remove_orphan_files("
+        f"table => '{table_argument}', older_than => {_timestamp_literal(older_than)}, "
+        "dry_run => true, stream_results => false, "
+        "prefix_mismatch_mode => 'ERROR')"
+    )
+
+
 def _procedure_result(action_type: str, row: dict[str, Any]) -> dict[str, int]:
     keys_by_action = {
         "rewrite_manifests": (
@@ -293,6 +338,42 @@ def _positive_bound(safety: dict[str, Any], key: str) -> int:
     if value <= 0:
         raise ExecutionContractError(f"{key} must be positive")
     return value
+
+
+def _orphan_files(rows: list[dict[str, Any]]) -> tuple[str, ...]:
+    candidates: list[str] = []
+    for row in rows:
+        location = row.get("orphan_file_location")
+        if not isinstance(location, str) or not location or "\x00" in location:
+            raise ExecutionContractError(
+                "orphan inventory returned an invalid file location"
+            )
+        candidates.append(location)
+    if len(candidates) != len(set(candidates)):
+        raise ExecutionContractError("orphan inventory returned duplicate locations")
+    return tuple(sorted(candidates))
+
+
+def _candidate_set_id(
+    table: str, older_than: str, candidates: tuple[str, ...]
+) -> str:
+    value = json.dumps(
+        {"table": table, "older_than": older_than, "files": candidates},
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return "orphans-" + hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+
+
+def _timestamp_literal(value: str) -> str:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise ExecutionContractError("older_than must be an ISO timestamp") from error
+    if parsed.tzinfo is None:
+        raise ExecutionContractError("older_than must include a timezone")
+    utc = parsed.astimezone(UTC).replace(tzinfo=None)
+    return f"TIMESTAMP '{utc.isoformat(sep=' ', timespec='microseconds')}'"
 
 
 def _metadata_table(table: str, suffix: str) -> str:
@@ -349,6 +430,9 @@ def _report(
     before: TableState,
     after: TableState,
     procedure_result: dict[str, int],
+    *,
+    candidate_set_id: str | None = None,
+    candidate_files: tuple[str, ...] = (),
 ) -> MaintenanceExecutionReport:
     return MaintenanceExecutionReport(
         schema_version="1.0",
@@ -361,4 +445,6 @@ def _report(
         before=before,
         after=after,
         procedure_result=procedure_result,
+        candidate_set_id=candidate_set_id,
+        candidate_files=candidate_files,
     )

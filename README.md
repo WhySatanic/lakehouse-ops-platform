@@ -154,6 +154,11 @@ explicit plan and snapshot approvals before applying a bounded action. See the
 [snapshot expiration runbook](docs/runbooks/iceberg-snapshot-expiration.md), for
 execution and reconciliation evidence.
 
+Orphan-file discovery is available as a separate opt-in, non-deleting action. It uses
+Iceberg's dry-run procedure, enforces a minimum 72-hour age window and a candidate-count
+bound, and emits a deterministic candidate-set ID for review. See the
+[orphan inventory runbook](docs/runbooks/iceberg-orphan-inventory.md).
+
 ## Engineering scope
 
 | Capability | Evidence planned in this repository |

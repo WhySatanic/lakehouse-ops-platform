@@ -72,6 +72,9 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--snapshot-retention-hours", type=int, default=168)
     plan.add_argument("--min-snapshots-to-keep", type=int, default=3)
     plan.add_argument("--max-snapshots-to-expire", type=int, default=50)
+    plan.add_argument("--enable-orphan-inspection", action="store_true")
+    plan.add_argument("--orphan-retention-hours", type=int, default=168)
+    plan.add_argument("--max-orphan-files", type=int, default=1000)
     return parser
 
 
@@ -153,6 +156,9 @@ def main(argv: list[str] | None = None) -> int:
                 snapshot_retention_hours=args.snapshot_retention_hours,
                 min_snapshots_to_keep=args.min_snapshots_to_keep,
                 max_snapshots_to_expire=args.max_snapshots_to_expire,
+                orphan_inspection_enabled=args.enable_orphan_inspection,
+                orphan_retention_hours=args.orphan_retention_hours,
+                max_orphan_files=args.max_orphan_files,
             )
             plan = IcebergMaintenancePlanner(policy).plan(report)
         except (OSError, json.JSONDecodeError, ValueError) as error:

@@ -24,6 +24,10 @@ class FakeSqlExecutor:
         self.file_count = 10
         self.record_count = 100
         self.manifest_count = 4
+        self.orphan_files = [
+            "s3a://lakehouse/warehouse/silver.db/weather_hourly/data/zombie-b.parquet",
+            "s3a://lakehouse/warehouse/silver.db/weather_hourly/data/zombie-a.parquet",
+        ]
         self.queries: list[str] = []
 
     def query(self, sql: str) -> list[dict[str, Any]]:
@@ -74,6 +78,10 @@ class FakeSqlExecutor:
                     "deleted_manifest_lists_count": 3,
                     "deleted_statistics_files_count": 0,
                 }
+            ]
+        if "remove_orphan_files" in sql:
+            return [
+                {"orphan_file_location": location} for location in self.orphan_files
             ]
         raise AssertionError(sql)
 
@@ -153,6 +161,43 @@ def expiration_plan() -> dict[str, Any]:
         "manifests": {"count": 4},
     }
     policy = MaintenancePolicy(snapshot_retention_hours=24, min_snapshots_to_keep=2)
+    return IcebergMaintenancePlanner(policy).plan(report).as_dict()
+
+
+def orphan_inspection_plan(*, max_orphan_files: int = 1000) -> dict[str, Any]:
+    report = {
+        "schema_version": "1.0",
+        "status": "ready",
+        "collected_at": "2026-08-18T13:30:00+00:00",
+        "table": "lakehouse.silver.weather_hourly",
+        "snapshots": {
+            "current_id": "8750000000000000001",
+            "history": [
+                {
+                    "snapshot_id": "8750000000000000001",
+                    "committed_at": "2026-08-18T13:00:00+00:00",
+                }
+            ],
+        },
+        "references": [
+            {
+                "name": "main",
+                "reference_type": "BRANCH",
+                "snapshot_id": "8750000000000000001",
+            }
+        ],
+        "files": {
+            "count": 10,
+            "total_size_bytes": 10 * 128 * 1024 * 1024,
+            "delete_file_count": 0,
+        },
+        "manifests": {"count": 4},
+    }
+    policy = MaintenancePolicy(
+        orphan_inspection_enabled=True,
+        orphan_retention_hours=168,
+        max_orphan_files=max_orphan_files,
+    )
     return IcebergMaintenancePlanner(policy).plan(report).as_dict()
 
 
@@ -362,3 +407,49 @@ def test_expiration_rejects_unsafe_target_ids(
         )
 
     assert all("CALL" not in sql for sql in executor.queries)
+
+
+def test_orphan_inspection_returns_sorted_review_evidence() -> None:
+    plan = orphan_inspection_plan()
+    action = next(
+        action
+        for action in plan["actions"]
+        if action["action_type"] == "inspect_orphan_files"
+    )
+    executor = FakeSqlExecutor()
+
+    report = SparkMaintenanceExecutor(executor).run(plan, action["action_id"])
+
+    assert report.status == "inspection_complete"
+    assert report.applied is False
+    assert report.before == report.after
+    assert report.procedure_result == {"orphan_file_count": 2}
+    assert report.candidate_set_id == "orphans-bb716dc042e82997"
+    assert report.candidate_files == tuple(sorted(executor.orphan_files))
+    procedure = next(sql for sql in executor.queries if "CALL" in sql)
+    assert "remove_orphan_files" in procedure
+    assert "older_than => TIMESTAMP '2026-08-11 13:30:00.000000'" in procedure
+    assert "dry_run => true" in procedure
+    assert "stream_results => false" in procedure
+    assert "prefix_mismatch_mode => 'ERROR'" in procedure
+
+
+def test_orphan_inspection_rejects_apply_and_oversized_inventory() -> None:
+    plan = orphan_inspection_plan(max_orphan_files=1)
+    action = next(
+        action
+        for action in plan["actions"]
+        if action["action_type"] == "inspect_orphan_files"
+    )
+
+    with pytest.raises(ExecutionContractError, match="cannot be applied"):
+        SparkMaintenanceExecutor(FakeSqlExecutor()).run(
+            plan,
+            action["action_id"],
+            apply=True,
+            approved_plan_id=plan["plan_id"],
+            approved_snapshot_id=plan["source"]["current_snapshot_id"],
+        )
+
+    with pytest.raises(ExecutionContractError, match="exceeds the review"):
+        SparkMaintenanceExecutor(FakeSqlExecutor()).run(plan, action["action_id"])

@@ -34,6 +34,8 @@ writes an Iceberg table with Spark, and validates it through Trino.
   - [x] Bounded `rewrite_manifests` with dry-run and reconciliation evidence.
   - [x] Exact-ID snapshot expiration with retained time-travel evidence.
   - [ ] Orphan-file removal.
+    - [x] Bounded, non-deleting orphan inventory with deterministic review evidence.
+    - [ ] Exact candidate-set approval, deletion, and post-deletion reconciliation.
 - [ ] Time-travel, rollback, schema evolution, and partition evolution scenarios.
 - [ ] Failure injection for interrupted writes and post-condition reconciliation.
 
