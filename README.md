@@ -7,7 +7,7 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: early access `0.3.1`. Open-Meteo ingestion works against the local filesystem
+> Status: early access `0.4.0`. Open-Meteo ingestion works against the local filesystem
 > and a reproducible MinIO/S3 landing zone. The distributed compute and catalog layers
 > are delivered in subsequent milestones described in the roadmap.
 
@@ -103,6 +103,10 @@ uv run lakeops audit-landing --output data/landing
 
 See the [landing integrity runbook](docs/runbooks/landing-integrity.md) for failure
 handling and the checksum trust boundary.
+
+The opt-in `catalog` profile runs Apache Hive Metastore with a persistent PostgreSQL
+backend and a repeatable schema check. Follow the
+[Hive Metastore runbook](docs/runbooks/hive-metastore.md) to start and verify it.
 
 ## Engineering scope
 
