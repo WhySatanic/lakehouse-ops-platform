@@ -56,6 +56,7 @@ def test_small_files_recommend_data_file_rewrite() -> None:
         "dry_run_required": True,
         "expected_snapshot_id": "8750000000000000001",
         "max_concurrent_jobs": 1,
+        "max_files_to_rewrite": 1000,
     }
     assert action["action_id"].startswith("action-")
 

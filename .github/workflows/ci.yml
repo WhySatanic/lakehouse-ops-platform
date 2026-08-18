@@ -116,6 +116,49 @@ jobs:
         run: >-
           uv run python tests/integration/check_iceberg_maintenance_plan.py
           iceberg-maintenance-plan.json
+      - name: Create fragmented maintenance fixture
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          spark-maintenance-fixture
+      - name: Collect maintenance fixture metadata
+        run: |
+          mkdir -p artifacts
+          touch artifacts/maintenance-report.json
+          chmod 0666 artifacts/maintenance-report.json
+          uv run lakeops collect-iceberg-metadata \
+            --server http://localhost:8080 \
+            --catalog lakehouse --schema ops --table maintenance_fixture \
+            > artifacts/maintenance-metadata.json
+      - name: Plan data-file rewrite
+        run: >-
+          uv run lakeops plan-iceberg-maintenance
+          --input artifacts/maintenance-metadata.json
+          > artifacts/maintenance-plan.json
+      - name: Verify data-file rewrite plan
+        run: >-
+          uv run python tests/integration/check_rewrite_data_files_plan.py
+          artifacts/maintenance-plan.json
+      - name: Select approved maintenance action
+        run: |
+          echo "MAINTENANCE_ACTION_ID=$(uv run python -c 'import json; p=json.load(open("artifacts/maintenance-plan.json")); print(next(a["action_id"] for a in p["actions"] if a["action_type"] == "rewrite_data_files"))')" >> "$GITHUB_ENV"
+          echo "MAINTENANCE_APPROVED_PLAN_ID=$(uv run python -c 'import json; print(json.load(open("artifacts/maintenance-plan.json"))["plan_id"])')" >> "$GITHUB_ENV"
+          echo "MAINTENANCE_APPROVED_SNAPSHOT_ID=$(uv run python -c 'import json; print(json.load(open("artifacts/maintenance-plan.json"))["source"]["current_snapshot_id"])')" >> "$GITHUB_ENV"
+      - name: Dry-run data-file rewrite
+        run: |
+          docker compose --profile catalog --profile compute run --rm spark-maintenance
+          mv artifacts/maintenance-report.json artifacts/maintenance-dry-run.json
+          touch artifacts/maintenance-report.json
+          chmod 0666 artifacts/maintenance-report.json
+      - name: Execute data-file rewrite
+        env:
+          MAINTENANCE_APPLY: "true"
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          spark-maintenance
+      - name: Verify maintenance reconciliation
+        run: >-
+          uv run python tests/integration/check_maintenance_execution.py
+          artifacts/maintenance-dry-run.json artifacts/maintenance-report.json
       - name: Show service logs
         if: failure()
         run: >-
