@@ -218,3 +218,46 @@ def test_doctor_checks_s3_bucket(
     assert exit_code == 0
     assert report["status"] == "ready"
     assert report["checks"][0]["target"] == "s3://lakehouse"
+
+
+def test_audit_landing_command_reports_integrity(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    valid_source_payload: dict[str, Any],
+) -> None:
+    FakeOpenMeteoClient.payload = valid_source_payload
+    monkeypatch.setattr(cli, "OpenMeteoClient", FakeOpenMeteoClient)
+    cli.main(
+        [
+            "ingest-weather",
+            "--name",
+            "Moscow",
+            "--latitude",
+            "55.7558",
+            "--longitude",
+            "37.6173",
+            "--forecast-days",
+            "2",
+            "--output",
+            str(tmp_path),
+        ]
+    )
+    capsys.readouterr()
+
+    exit_code = cli.main(["audit-landing", "--output", str(tmp_path)])
+
+    report = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert report["status"] == "healthy"
+    assert report["valid"] == 1
+
+
+def test_audit_landing_command_fails_for_empty_root(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    exit_code = cli.main(["audit-landing", "--output", str(tmp_path)])
+
+    report = json.loads(capsys.readouterr().out)
+    assert exit_code == 1
+    assert report["status"] == "failed"
