@@ -36,6 +36,7 @@ jobs:
         run: |
           docker compose --profile catalog config --quiet
           docker compose --profile compute config --quiet
+          docker compose --profile query config --quiet
       - name: Build catalog and compute images
         run: >-
           docker compose --profile catalog --profile compute build
@@ -82,11 +83,19 @@ jobs:
           silver-catalog-check
       - name: Verify silver Iceberg objects
         run: docker compose --profile compute run --rm silver-storage-check
+      - name: Start Trino coordinator and worker
+        run: >-
+          docker compose --profile query up -d --wait
+          trino-coordinator trino-worker
+      - name: Query Iceberg tables through Trino
+        run: docker compose --profile query run --rm trino-query-check
       - name: Show service logs
         if: failure()
         run: >-
-          docker compose --profile catalog --profile compute logs
-          minio metastore-db hive-metastore
+          docker compose --profile catalog --profile compute --profile query logs
+          minio metastore-db hive-metastore trino-coordinator trino-worker
       - name: Stop integration profile
         if: always()
-        run: docker compose --profile catalog --profile compute down --volumes
+        run: >-
+          docker compose --profile catalog --profile compute --profile query
+          down --volumes
