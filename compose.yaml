@@ -273,7 +273,7 @@ services:
       HIVE_METASTORE_URI: thrift://hive-metastore:9083
       SPARK_MASTER: local[2]
       PYTHONPATH: /opt/lakehouse/src:/opt/lakehouse/jobs
-      MAINTENANCE_PLAN_PATH: /opt/lakehouse/artifacts/maintenance-plan.json
+      MAINTENANCE_PLAN_PATH: ${MAINTENANCE_PLAN_PATH:-/opt/lakehouse/artifacts/maintenance-plan.json}
       MAINTENANCE_REPORT_PATH: /opt/lakehouse/artifacts/maintenance-report.json
       MAINTENANCE_ACTION_ID: ${MAINTENANCE_ACTION_ID:-unset}
       MAINTENANCE_APPLY: ${MAINTENANCE_APPLY:-false}

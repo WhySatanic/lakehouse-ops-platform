@@ -129,6 +129,48 @@ jobs:
             --server http://localhost:8080 \
             --catalog lakehouse --schema ops --table maintenance_fixture \
             > artifacts/maintenance-metadata.json
+      - name: Plan manifest rewrite
+        run: >-
+          uv run lakeops plan-iceberg-maintenance
+          --input artifacts/maintenance-metadata.json
+          --min-data-files 100
+          --min-manifest-count 2
+          --max-manifests-per-data-file 0.5
+          > artifacts/manifest-plan.json
+      - name: Verify manifest rewrite plan
+        run: >-
+          uv run python tests/integration/check_rewrite_manifests_plan.py
+          artifacts/manifest-plan.json
+      - name: Select approved manifest action
+        run: |
+          echo "MAINTENANCE_PLAN_PATH=/opt/lakehouse/artifacts/manifest-plan.json" >> "$GITHUB_ENV"
+          echo "MAINTENANCE_ACTION_ID=$(uv run python -c 'import json; p=json.load(open("artifacts/manifest-plan.json")); print(next(a["action_id"] for a in p["actions"] if a["action_type"] == "rewrite_manifests"))')" >> "$GITHUB_ENV"
+          echo "MAINTENANCE_APPROVED_PLAN_ID=$(uv run python -c 'import json; print(json.load(open("artifacts/manifest-plan.json"))["plan_id"])')" >> "$GITHUB_ENV"
+          echo "MAINTENANCE_APPROVED_SNAPSHOT_ID=$(uv run python -c 'import json; print(json.load(open("artifacts/manifest-plan.json"))["source"]["current_snapshot_id"])')" >> "$GITHUB_ENV"
+      - name: Dry-run manifest rewrite
+        run: |
+          docker compose --profile catalog --profile compute run --rm spark-maintenance
+          mv artifacts/maintenance-report.json artifacts/manifest-dry-run.json
+          touch artifacts/maintenance-report.json
+          chmod 0666 artifacts/maintenance-report.json
+      - name: Execute manifest rewrite
+        env:
+          MAINTENANCE_APPLY: "true"
+        run: |
+          docker compose --profile catalog --profile compute run --rm spark-maintenance
+          mv artifacts/maintenance-report.json artifacts/manifest-report.json
+          touch artifacts/maintenance-report.json
+          chmod 0666 artifacts/maintenance-report.json
+      - name: Verify manifest rewrite reconciliation
+        run: >-
+          uv run python tests/integration/check_manifest_execution.py
+          artifacts/manifest-dry-run.json artifacts/manifest-report.json
+      - name: Refresh maintenance fixture metadata
+        run: >-
+          uv run lakeops collect-iceberg-metadata
+          --server http://localhost:8080
+          --catalog lakehouse --schema ops --table maintenance_fixture
+          > artifacts/maintenance-metadata.json
       - name: Plan data-file rewrite
         run: >-
           uv run lakeops plan-iceberg-maintenance
@@ -140,6 +182,7 @@ jobs:
           artifacts/maintenance-plan.json
       - name: Select approved maintenance action
         run: |
+          echo "MAINTENANCE_PLAN_PATH=/opt/lakehouse/artifacts/maintenance-plan.json" >> "$GITHUB_ENV"
           echo "MAINTENANCE_ACTION_ID=$(uv run python -c 'import json; p=json.load(open("artifacts/maintenance-plan.json")); print(next(a["action_id"] for a in p["actions"] if a["action_type"] == "rewrite_data_files"))')" >> "$GITHUB_ENV"
           echo "MAINTENANCE_APPROVED_PLAN_ID=$(uv run python -c 'import json; print(json.load(open("artifacts/maintenance-plan.json"))["plan_id"])')" >> "$GITHUB_ENV"
           echo "MAINTENANCE_APPROVED_SNAPSHOT_ID=$(uv run python -c 'import json; print(json.load(open("artifacts/maintenance-plan.json"))["source"]["current_snapshot_id"])')" >> "$GITHUB_ENV"
