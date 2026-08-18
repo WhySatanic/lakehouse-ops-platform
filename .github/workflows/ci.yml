@@ -107,6 +107,15 @@ jobs:
         run: >-
           uv run python tests/integration/check_iceberg_metadata_report.py
           iceberg-metadata-report.json
+      - name: Plan Iceberg maintenance
+        run: >-
+          uv run lakeops plan-iceberg-maintenance
+          --input iceberg-metadata-report.json
+          > iceberg-maintenance-plan.json
+      - name: Verify Iceberg maintenance plan
+        run: >-
+          uv run python tests/integration/check_iceberg_maintenance_plan.py
+          iceberg-maintenance-plan.json
       - name: Show service logs
         if: failure()
         run: >-
