@@ -31,8 +31,8 @@ Schema `1.0` includes:
 - `source`: metadata schema, collection time, table, and expected snapshot ID;
 - `policy`: the complete set of thresholds used for the decision;
 - `checks`: every evaluated rule with observations, thresholds, outcome, and reason;
-- `actions`: proposed `rewrite_data_files`, `rewrite_manifests`, and exact
-  `expire_snapshots` actions.
+- `actions`: proposed `rewrite_data_files`, `rewrite_manifests`, exact
+  `expire_snapshots`, and opt-in `inspect_orphan_files` actions.
 
 Every action requires dry-run execution, pins the expected snapshot, and limits
 concurrency to one job. Re-running the same report with the same policy produces the
@@ -55,6 +55,11 @@ older snapshots per execution after a seven-day window. Override these values wi
 `--max-snapshots-to-expire`. A value of zero retention hours is intended only for
 isolated acceptance fixtures. If a branch or tag other than `main` exists, expiration
 is deferred for manual reference review.
+
+Orphan inspection is disabled by default. Enable it with
+`--enable-orphan-inspection`; the default age window is seven days and cannot be set
+below 72 hours. `--max-orphan-files` limits the candidate set accepted into a report.
+Inspection is deliberately separate from deletion.
 
 ## Safety boundary
 

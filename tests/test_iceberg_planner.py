@@ -158,6 +158,26 @@ def test_non_main_reference_defers_snapshot_expiration() -> None:
     assert all(action["action_type"] != "expire_snapshots" for action in plan["actions"])
 
 
+def test_opt_in_orphan_inspection_uses_bounded_age_window() -> None:
+    policy = MaintenancePolicy(
+        orphan_inspection_enabled=True,
+        orphan_retention_hours=96,
+        max_orphan_files=25,
+    )
+
+    plan = IcebergMaintenancePlanner(policy).plan(metadata_report()).as_dict()
+    action = next(
+        action
+        for action in plan["actions"]
+        if action["action_type"] == "inspect_orphan_files"
+    )
+
+    assert action["parameters"] == {"older_than": "2026-08-14T13:30:00+00:00"}
+    assert action["safety_bounds"]["max_orphan_files"] == 25
+    assert plan["checks"][-1]["rule"] == "orphan_file_inventory"
+    assert plan["checks"][-1]["outcome"] == "inspect"
+
+
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [
@@ -188,6 +208,8 @@ def test_invalid_metadata_contract_is_rejected(
         {"snapshot_retention_hours": -1},
         {"min_snapshots_to_keep": 1},
         {"max_snapshots_to_expire": 0},
+        {"orphan_retention_hours": 71},
+        {"max_orphan_files": 0},
     ],
 )
 def test_invalid_policy_is_rejected(kwargs: dict[str, Any]) -> None:

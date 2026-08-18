@@ -21,6 +21,9 @@ class MaintenancePolicy:
     snapshot_retention_hours: int = 168
     min_snapshots_to_keep: int = 3
     max_snapshots_to_expire: int = 50
+    orphan_inspection_enabled: bool = False
+    orphan_retention_hours: int = 168
+    max_orphan_files: int = 1000
 
     def __post_init__(self) -> None:
         if self.target_file_size_bytes <= 0:
@@ -39,6 +42,10 @@ class MaintenancePolicy:
             raise ValueError("min_snapshots_to_keep must be at least two")
         if self.max_snapshots_to_expire <= 0:
             raise ValueError("max_snapshots_to_expire must be positive")
+        if self.orphan_retention_hours < 72:
+            raise ValueError("orphan_retention_hours must be at least 72")
+        if self.max_orphan_files <= 0:
+            raise ValueError("max_orphan_files must be positive")
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +95,8 @@ class IcebergMaintenancePlanner:
             actions,
         )
         self._check_snapshots(report, source, checks, actions)
+        if self._policy.orphan_inspection_enabled:
+            self._check_orphan_files(source, checks, actions)
 
         status = "maintenance_recommended" if actions else "healthy"
         if not actions and any(check["outcome"] == "deferred" for check in checks):
@@ -311,6 +320,43 @@ class IcebergMaintenancePlanner:
             )
         )
 
+    def _check_orphan_files(
+        self,
+        source: dict[str, Any],
+        checks: list[dict[str, Any]],
+        actions: list[dict[str, Any]],
+    ) -> None:
+        cutoff = _timestamp(source["collected_at"]) - timedelta(
+            hours=self._policy.orphan_retention_hours
+        )
+        limits = {
+            "retention_hours": self._policy.orphan_retention_hours,
+            "max_orphan_files": self._policy.max_orphan_files,
+        }
+        reason = (
+            "Inspect unreferenced files older than "
+            f"{cutoff.isoformat()} before approving any deletion."
+        )
+        checks.append(
+            _check(
+                "orphan_file_inventory",
+                "inspect",
+                {"cutoff": cutoff.isoformat()},
+                limits,
+                reason,
+            )
+        )
+        actions.append(
+            _action(
+                source,
+                "inspect_orphan_files",
+                "scheduled_inventory",
+                reason,
+                {"older_than": cutoff.isoformat()},
+                {"max_orphan_files": self._policy.max_orphan_files},
+            )
+        )
+
 
 def _validate_report(report: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(report, dict):
@@ -404,6 +450,7 @@ def _action(
         "rewrite_data_files": {"max_files_to_rewrite": 1000},
         "rewrite_manifests": {"max_manifests_to_rewrite": 1000},
         "expire_snapshots": {},
+        "inspect_orphan_files": {},
     }[action_type]
     action = {
         "action_type": action_type,
