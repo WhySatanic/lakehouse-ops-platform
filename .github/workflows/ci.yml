@@ -33,7 +33,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate Compose configuration
-        run: docker compose --profile catalog --profile compute config --quiet
+        run: |
+          docker compose --profile catalog config --quiet
+          docker compose --profile compute config --quiet
       - name: Build catalog and compute images
         run: >-
           docker compose --profile catalog --profile compute build

@@ -40,7 +40,7 @@ services:
 
   metastore-db:
     image: postgres:17.10-alpine3.23
-    profiles: ["catalog"]
+    profiles: ["catalog", "compute"]
     environment:
       POSTGRES_DB: ${HMS_POSTGRES_DB:-metastore}
       POSTGRES_USER: ${HMS_POSTGRES_USER:-hive}
@@ -64,7 +64,7 @@ services:
     build:
       context: .
       dockerfile: infra/hive-metastore/Dockerfile
-    profiles: ["catalog"]
+    profiles: ["catalog", "compute"]
     depends_on:
       metastore-db:
         condition: service_healthy
