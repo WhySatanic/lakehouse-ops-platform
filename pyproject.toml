@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lakehouse-ops-platform"
-version = "0.10.0"
+version = "0.11.0"
 description = "A production-like control plane and reference platform for operating an Apache Iceberg lakehouse."
 readme = "README.md"
 requires-python = ">=3.12"
