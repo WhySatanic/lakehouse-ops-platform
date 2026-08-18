@@ -137,9 +137,13 @@ def build_session() -> SparkSession:
 
 
 def write_bronze(spark: SparkSession, source: DataFrame) -> dict[str, int | str]:
-    spark.sql("CREATE NAMESPACE IF NOT EXISTS lakehouse.bronze")
+    bucket = required_environment("LAKEHOUSE_BUCKET")
     spark.sql(
-        """
+        "CREATE NAMESPACE IF NOT EXISTS lakehouse.bronze "
+        "LOCATION 'file:///opt/hive/data/warehouse/bronze.db'"
+    )
+    spark.sql(
+        f"""
         CREATE TABLE IF NOT EXISTS lakehouse.bronze.weather_hourly (
             object_checksum string,
             source string,
@@ -154,6 +158,7 @@ def write_bronze(spark: SparkSession, source: DataFrame) -> dict[str, int | str]
             wind_speed_10m double
         )
         USING iceberg
+        LOCATION 's3://{bucket}/warehouse/bronze/weather_hourly'
         PARTITIONED BY (days(observed_at), location_name)
         TBLPROPERTIES (
             'format-version' = '2',

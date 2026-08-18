@@ -6,6 +6,10 @@ The opt-in `compute` profile converts immutable Open-Meteo landing documents int
 typed `lakehouse.bronze.weather_hourly` Iceberg table. Spark registers the table in Hive
 Metastore and stores Iceberg metadata and Parquet data under `s3://lakehouse/warehouse`.
 
+The namespace directory remains on the metastore's persistent local warehouse volume,
+while the table has an explicit S3 location. This keeps object-store credentials in the
+compute layer and does not grant the metastore process direct MinIO access.
+
 The first implementation deliberately runs Spark in local mode. The catalog and object
 store boundaries are the same ones a distributed Spark deployment would use.
 
