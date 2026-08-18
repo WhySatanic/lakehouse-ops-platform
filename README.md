@@ -134,6 +134,17 @@ uv run lakeops collect-iceberg-metadata \
 The [Iceberg metadata runbook](docs/runbooks/iceberg-metadata.md) documents the report
 contract and how to interpret file, manifest, partition, and snapshot statistics.
 
+Create a deterministic, explainable maintenance plan from that report without changing
+the table:
+
+```bash
+uv run lakeops plan-iceberg-maintenance \
+  --input weather-hourly-metadata.json
+```
+
+The [maintenance planning runbook](docs/runbooks/iceberg-maintenance-planning.md)
+documents compaction rules, policy overrides, the plan contract, and safety boundary.
+
 ## Engineering scope
 
 | Capability | Evidence planned in this repository |

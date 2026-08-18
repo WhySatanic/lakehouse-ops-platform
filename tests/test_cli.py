@@ -322,3 +322,48 @@ def test_collect_iceberg_metadata_command(
         "schema": "ops",
         "table": "events",
     }
+
+
+def test_plan_iceberg_maintenance_command(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    report_path = tmp_path / "metadata.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "status": "ready",
+                "collected_at": "2026-08-18T13:30:00+00:00",
+                "table": "lakehouse.silver.events",
+                "snapshots": {"current_id": "42"},
+                "files": {
+                    "count": 4,
+                    "total_size_bytes": 4 * 128 * 1024 * 1024,
+                    "delete_file_count": 0,
+                },
+                "manifests": {"count": 1},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = cli.main(["plan-iceberg-maintenance", "--input", str(report_path)])
+
+    plan = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert plan["status"] == "healthy"
+    assert plan["table"] == "lakehouse.silver.events"
+    assert plan["actions"] == []
+
+
+def test_plan_iceberg_maintenance_rejects_invalid_json(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    report_path = tmp_path / "metadata.json"
+    report_path.write_text("not json", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as error:
+        cli.main(["plan-iceberg-maintenance", "--input", str(report_path)])
+
+    assert error.value.code == 2
+    assert "Expecting value" in capsys.readouterr().err

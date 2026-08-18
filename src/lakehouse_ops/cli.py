@@ -10,6 +10,7 @@ import boto3
 
 from lakehouse_ops.doctor import DoctorReport, check_file_landing, check_s3_bucket
 from lakehouse_ops.iceberg.metadata import IcebergMetadataCollector
+from lakehouse_ops.iceberg.planner import IcebergMaintenancePlanner, MaintenancePolicy
 from lakehouse_ops.ingestion.audit import audit_file_landing
 from lakehouse_ops.ingestion.batch import (
     LocationManifestError,
@@ -58,6 +59,16 @@ def build_parser() -> argparse.ArgumentParser:
     metadata.add_argument("--catalog", default="lakehouse")
     metadata.add_argument("--schema", default="silver")
     metadata.add_argument("--table", default="weather_hourly")
+
+    plan = subparsers.add_parser(
+        "plan-iceberg-maintenance", help="create an explainable Iceberg maintenance plan"
+    )
+    plan.add_argument("--input", required=True, type=Path)
+    plan.add_argument("--target-file-size-bytes", type=int, default=128 * 1024 * 1024)
+    plan.add_argument("--small-file-ratio", type=float, default=0.5)
+    plan.add_argument("--min-data-files", type=int, default=4)
+    plan.add_argument("--min-manifest-count", type=int, default=8)
+    plan.add_argument("--max-manifests-per-data-file", type=float, default=2.0)
     return parser
 
 
@@ -126,6 +137,21 @@ def main(argv: list[str] | None = None) -> int:
                 args.catalog, args.schema, args.table
             )
         print(json.dumps(report.as_dict(), sort_keys=True))
+        return 0
+    if args.command == "plan-iceberg-maintenance":
+        try:
+            report = json.loads(args.input.read_text(encoding="utf-8"))
+            policy = MaintenancePolicy(
+                target_file_size_bytes=args.target_file_size_bytes,
+                small_file_ratio=args.small_file_ratio,
+                min_data_files=args.min_data_files,
+                min_manifest_count=args.min_manifest_count,
+                max_manifests_per_data_file=args.max_manifests_per_data_file,
+            )
+            plan = IcebergMaintenancePlanner(policy).plan(report)
+        except (OSError, json.JSONDecodeError, ValueError) as error:
+            parser.error(str(error))
+        print(json.dumps(plan.as_dict(), sort_keys=True))
         return 0
     return 2
 
