@@ -37,6 +37,8 @@ writes an Iceberg table with Spark, and validates it through Trino.
     - [x] Bounded, non-deleting orphan inventory with deterministic review evidence.
     - [x] Exact candidate-set approval, deletion, and post-deletion reconciliation.
 - [ ] Time-travel, rollback, schema evolution, and partition evolution scenarios.
+  - [x] Exact-snapshot time travel and rollback with Spark and Trino evidence.
+  - [ ] Schema and partition evolution with compatibility evidence.
 - [ ] Failure injection for interrupted writes and post-condition reconciliation.
 
 Exit criterion: maintenance produces a measured reduction in file count/query latency,

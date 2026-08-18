@@ -97,6 +97,18 @@ jobs:
           trino-coordinator trino-worker
       - name: Query Iceberg tables through Trino
         run: docker compose --profile query run --rm trino-query-check
+      - name: Exercise snapshot time travel and rollback
+        run: |
+          mkdir -p artifacts
+          touch artifacts/snapshot-rollback-report.json
+          chmod 0666 artifacts/snapshot-rollback-report.json
+          docker compose --profile catalog --profile compute run --rm spark-snapshot-rollback-drill
+      - name: Verify snapshot rollback evidence
+        run: |
+          uv run python tests/integration/check_snapshot_rollback.py artifacts/snapshot-rollback-report.json
+          echo "RECOVERY_ABANDONED_SNAPSHOT_ID=$(uv run python -c 'import json; print(json.load(open("artifacts/snapshot-rollback-report.json"))["abandoned_snapshot"]["snapshot_id"])')" >> "$GITHUB_ENV"
+      - name: Verify rollback and time travel through Trino
+        run: docker compose --profile query run --rm trino-snapshot-rollback-check
       - name: Collect Iceberg metadata through Trino
         run: >-
           uv run lakeops collect-iceberg-metadata

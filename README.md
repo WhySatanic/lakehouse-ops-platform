@@ -161,6 +161,12 @@ and exact plan, snapshot, and candidate-set approvals; Iceberg revalidates only 
 paths before deletion and reconciles table state afterward. See the
 [orphan inventory runbook](docs/runbooks/iceberg-orphan-inventory.md).
 
+The snapshot recovery drill creates an isolated two-version Iceberg table, verifies an
+exact historical read, rolls current state back to the approved ancestor, and proves the
+abandoned snapshot remains queryable from Spark and Trino. See the
+[snapshot rollback runbook](docs/runbooks/iceberg-snapshot-rollback.md) for the evidence
+contract and recovery boundary.
+
 ## Engineering scope
 
 | Capability | Evidence planned in this repository |
