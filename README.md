@@ -7,7 +7,7 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: early access `0.4.0`. Open-Meteo ingestion works against the local filesystem
+> Status: early access `0.5.0`. Open-Meteo ingestion works against the local filesystem
 > and MinIO. The opt-in platform profiles include PostgreSQL-backed Hive Metastore and a
 > Spark writer for an S3-backed Iceberg bronze table. Trino is the next core milestone.
 

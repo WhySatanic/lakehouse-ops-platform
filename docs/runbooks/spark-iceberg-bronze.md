@@ -66,6 +66,18 @@ The catalog check requires one `bronze.weather_hourly` table whose location is i
 configured S3A warehouse. The storage check requires both Iceberg metadata JSON and
 Parquet data files in MinIO.
 
+## Upgrade from 0.4.0
+
+Back up PostgreSQL before replacing the catalog image, and do not remove the named
+volumes. Version 0.5.0 pins Hive Metastore from 4.0.1 to 4.0.0 for Iceberg HiveCatalog
+compatibility and adds the S3A client required to validate MinIO table locations.
+
+After updating the checkout, rebuild `hive-metastore` and `spark-bronze`, start the core
+services, and run the metastore schema check before submitting Spark. Existing landing
+objects are unchanged; the new bronze table is created only when the compute profile is
+run. Reusing a catalog already modified outside the documented 0.4.0 path has not been
+tested, so retain the database backup until the schema and table checks both pass.
+
 ## Failure handling
 
 1. If input sync reports no objects, verify that the landing prefix is
