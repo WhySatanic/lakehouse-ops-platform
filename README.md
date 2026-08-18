@@ -104,6 +104,10 @@ uv run lakeops audit-landing --output data/landing
 See the [landing integrity runbook](docs/runbooks/landing-integrity.md) for failure
 handling and the checksum trust boundary.
 
+The opt-in `catalog` profile runs Apache Hive Metastore with a persistent PostgreSQL
+backend and a repeatable schema check. Follow the
+[Hive Metastore runbook](docs/runbooks/hive-metastore.md) to start and verify it.
+
 ## Engineering scope
 
 | Capability | Evidence planned in this repository |

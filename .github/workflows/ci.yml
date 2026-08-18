@@ -27,3 +27,22 @@ jobs:
       - name: Test
         run: uv run pytest
 
+  catalog-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose configuration
+        run: docker compose --profile catalog config --quiet
+      - name: Start Hive Metastore
+        run: >-
+          docker compose --profile catalog up -d --build --wait
+          metastore-db hive-metastore
+      - name: Verify metastore schema
+        run: docker compose --profile catalog run --rm metastore-schema-check
+      - name: Show service logs
+        if: failure()
+        run: docker compose --profile catalog logs metastore-db hive-metastore
+      - name: Stop catalog profile
+        if: always()
+        run: docker compose --profile catalog down --volumes

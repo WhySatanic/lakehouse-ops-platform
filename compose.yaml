@@ -38,5 +38,86 @@ services:
         mc anonymous set none "local/$${LAKEHOUSE_BUCKET}"
     restart: "no"
 
+  metastore-db:
+    image: postgres:17.10-alpine3.23
+    profiles: ["catalog"]
+    environment:
+      POSTGRES_DB: ${HMS_POSTGRES_DB:-metastore}
+      POSTGRES_USER: ${HMS_POSTGRES_USER:-hive}
+      POSTGRES_PASSWORD: ${HMS_POSTGRES_PASSWORD:-hive-development-only}
+    volumes:
+      - metastore-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
+
+  hive-metastore:
+    image: lakehouse-ops/hive-metastore:4.0.1-pgjdbc-42.7.13
+    build:
+      context: .
+      dockerfile: infra/hive-metastore/Dockerfile
+    profiles: ["catalog"]
+    depends_on:
+      metastore-db:
+        condition: service_healthy
+    environment:
+      SERVICE_NAME: metastore
+      DB_DRIVER: postgres
+      SERVICE_OPTS: >-
+        -Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver
+        -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://metastore-db:5432/${HMS_POSTGRES_DB:-metastore}
+        -Djavax.jdo.option.ConnectionUserName=${HMS_POSTGRES_USER:-hive}
+        -Djavax.jdo.option.ConnectionPassword=${HMS_POSTGRES_PASSWORD:-hive-development-only}
+        -Dmetastore.try.direct.sql.ddl=false
+    ports:
+      - "${HIVE_METASTORE_PORT:-9083}:9083"
+    volumes:
+      - warehouse-data:/opt/hive/data/warehouse
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9083'",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 20s
+    restart: unless-stopped
+
+  metastore-schema-check:
+    image: postgres:17.10-alpine3.23
+    profiles: ["catalog"]
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+    environment:
+      PGHOST: metastore-db
+      PGDATABASE: ${HMS_POSTGRES_DB:-metastore}
+      PGUSER: ${HMS_POSTGRES_USER:-hive}
+      PGPASSWORD: ${HMS_POSTGRES_PASSWORD:-hive-development-only}
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        table_count="$$(psql --tuples-only --no-align --set ON_ERROR_STOP=1 --command \
+          "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('VERSION', 'DBS', 'TBLS', 'SDS', 'SERDES')")"
+        test "$$table_count" = "5"
+        schema_version="$$(psql --tuples-only --no-align --set ON_ERROR_STOP=1 --command \
+          'SELECT "SCHEMA_VERSION" FROM "VERSION" LIMIT 1')"
+        test -n "$$schema_version"
+        printf '{"status":"ready","schema_version":"%s","required_tables":%s}\n' \
+          "$$schema_version" "$$table_count"
+    restart: "no"
+
 volumes:
   minio-data:
+  metastore-db-data:
+  warehouse-data:
