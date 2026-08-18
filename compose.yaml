@@ -346,6 +346,33 @@ services:
       ]
     restart: "no"
 
+  spark-schema-evolution-drill:
+    image: lakehouse-ops/spark-iceberg:3.5.9-1.11.0
+    profiles: ["compute"]
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+    environment:
+      LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
+      LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      HIVE_METASTORE_URI: thrift://hive-metastore:9083
+      SPARK_MASTER: local[2]
+      PYTHONPATH: /opt/lakehouse/jobs
+      SCHEMA_EVOLUTION_REPORT_PATH: /opt/lakehouse/artifacts/schema-evolution-report.json
+    volumes:
+      - ./jobs/spark:/opt/lakehouse/jobs:ro
+      - ./tests/integration/exercise_schema_evolution.py:/opt/lakehouse/tests/exercise_schema_evolution.py:ro
+      - ./artifacts:/opt/lakehouse/artifacts
+    command:
+      [
+        "/opt/spark/bin/spark-submit",
+        "/opt/lakehouse/tests/exercise_schema_evolution.py",
+      ]
+    restart: "no"
+
   bronze-catalog-check:
     image: postgres:17.10-alpine3.23
     profiles: ["compute"]
@@ -529,6 +556,23 @@ services:
     volumes:
       - ./tests/integration/check_snapshot_rollback_trino.sh:/checks/check_snapshot_rollback_trino.sh:ro
     entrypoint: ["/bin/bash", "/checks/check_snapshot_rollback_trino.sh"]
+    restart: "no"
+
+  trino-schema-evolution-check:
+    image: trinodb/trino:483
+    profiles: ["query"]
+    depends_on:
+      trino-coordinator:
+        condition: service_healthy
+      trino-worker:
+        condition: service_healthy
+    environment:
+      TRINO_SERVER: http://trino-coordinator:8080
+      SCHEMA_INITIAL_SNAPSHOT_ID: ${SCHEMA_INITIAL_SNAPSHOT_ID:-unset}
+      SCHEMA_EVOLVED_SNAPSHOT_ID: ${SCHEMA_EVOLVED_SNAPSHOT_ID:-unset}
+    volumes:
+      - ./tests/integration/check_schema_evolution_trino.sh:/checks/check_schema_evolution_trino.sh:ro
+    entrypoint: ["/bin/bash", "/checks/check_schema_evolution_trino.sh"]
     restart: "no"
 
 volumes:

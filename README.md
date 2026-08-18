@@ -167,6 +167,11 @@ abandoned snapshot remains queryable from Spark and Trino. See the
 [snapshot rollback runbook](docs/runbooks/iceberg-snapshot-rollback.md) for the evidence
 contract and recovery boundary.
 
+The schema evolution drill adds an optional field, renames an existing field without a
+data rewrite, and verifies current plus historical snapshot schemas from Spark and Trino.
+See the [schema evolution runbook](docs/runbooks/iceberg-schema-evolution.md) for the
+compatibility evidence and Hive Metastore boundary.
+
 ## Engineering scope
 
 | Capability | Evidence planned in this repository |
