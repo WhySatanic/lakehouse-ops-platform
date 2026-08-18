@@ -80,9 +80,16 @@ class FakeSqlExecutor:
                 }
             ]
         if "remove_orphan_files" in sql:
-            return [
+            result = [
                 {"orphan_file_location": location} for location in self.orphan_files
             ]
+            if "dry_run => false" in sql:
+                self.orphan_files = []
+            return result
+        if sql.startswith("CREATE OR REPLACE TEMP VIEW"):
+            return []
+        if sql.startswith("DROP VIEW IF EXISTS"):
+            return []
         raise AssertionError(sql)
 
 
@@ -435,22 +442,145 @@ def test_orphan_inspection_returns_sorted_review_evidence() -> None:
     assert "prefix_mismatch_mode => 'ERROR'" in procedure
 
 
-def test_orphan_inspection_rejects_apply_and_oversized_inventory() -> None:
+def test_orphan_removal_requires_exact_candidate_approval() -> None:
+    plan = orphan_inspection_plan()
+    action = next(
+        action
+        for action in plan["actions"]
+        if action["action_type"] == "inspect_orphan_files"
+    )
+    executor = FakeSqlExecutor()
+    inspection = SparkMaintenanceExecutor(executor).run(
+        plan, action["action_id"]
+    ).as_dict()
+
+    with pytest.raises(ExecutionContractError, match="candidate set ID"):
+        SparkMaintenanceExecutor(executor).run(
+            plan,
+            action["action_id"],
+            apply=True,
+            approved_plan_id=plan["plan_id"],
+            approved_snapshot_id=plan["source"]["current_snapshot_id"],
+            approved_candidate_set_id="orphans-wrong",
+            candidate_report=inspection,
+        )
+
+
+def test_orphan_removal_deletes_only_the_approved_candidate_set() -> None:
+    plan = orphan_inspection_plan()
+    action = next(
+        action
+        for action in plan["actions"]
+        if action["action_type"] == "inspect_orphan_files"
+    )
+    executor = FakeSqlExecutor()
+    inspection = SparkMaintenanceExecutor(executor).run(
+        plan, action["action_id"]
+    ).as_dict()
+
+    report = SparkMaintenanceExecutor(executor).run(
+        plan,
+        action["action_id"],
+        apply=True,
+        approved_plan_id=plan["plan_id"],
+        approved_snapshot_id=plan["source"]["current_snapshot_id"],
+        approved_candidate_set_id=inspection["candidate_set_id"],
+        candidate_report=inspection,
+    )
+
+    assert report.status == "succeeded"
+    assert report.applied is True
+    assert report.before == report.after
+    assert report.candidate_files == tuple(sorted(inspection["candidate_files"]))
+    assert report.procedure_result == {
+        "orphan_file_count": 2,
+        "deleted_orphan_file_count": 2,
+    }
+    assert executor.orphan_files == []
+    calls = [sql for sql in executor.queries if "remove_orphan_files" in sql]
+    view = next(sql for sql in executor.queries if sql.startswith("CREATE OR REPLACE"))
+    assert "- INTERVAL 1 SECOND AS last_modified" in view
+    assert "file_list_view => 'lakehouse_ops_orphans_bb716dc042e82997'" in calls[-1]
+    assert "dry_run => true" in calls[-2]
+    assert "dry_run => false" in calls[-1]
+    assert "max_concurrent_deletes => 1" in calls[-1]
+
+
+def test_orphan_removal_rejects_changed_table_or_candidate_state() -> None:
+    plan = orphan_inspection_plan()
+    action = next(
+        action
+        for action in plan["actions"]
+        if action["action_type"] == "inspect_orphan_files"
+    )
+    executor = FakeSqlExecutor()
+    inspection = SparkMaintenanceExecutor(executor).run(
+        plan, action["action_id"]
+    ).as_dict()
+    executor.record_count += 1
+
+    with pytest.raises(ExecutionContractError, match="table state changed"):
+        SparkMaintenanceExecutor(executor).run(
+            plan,
+            action["action_id"],
+            apply=True,
+            approved_plan_id=plan["plan_id"],
+            approved_snapshot_id=plan["source"]["current_snapshot_id"],
+            approved_candidate_set_id=inspection["candidate_set_id"],
+            candidate_report=inspection,
+        )
+
+    executor.record_count -= 1
+    executor.orphan_files.pop()
+    with pytest.raises(ExecutionContractError, match="no longer entirely orphaned"):
+        SparkMaintenanceExecutor(executor).run(
+            plan,
+            action["action_id"],
+            apply=True,
+            approved_plan_id=plan["plan_id"],
+            approved_snapshot_id=plan["source"]["current_snapshot_id"],
+            approved_candidate_set_id=inspection["candidate_set_id"],
+            candidate_report=inspection,
+        )
+
+
+def test_orphan_removal_is_noop_for_an_approved_empty_set() -> None:
+    plan = orphan_inspection_plan()
+    action = next(
+        action
+        for action in plan["actions"]
+        if action["action_type"] == "inspect_orphan_files"
+    )
+    executor = FakeSqlExecutor()
+    executor.orphan_files = []
+    inspection = SparkMaintenanceExecutor(executor).run(
+        plan, action["action_id"]
+    ).as_dict()
+
+    report = SparkMaintenanceExecutor(executor).run(
+        plan,
+        action["action_id"],
+        apply=True,
+        approved_plan_id=plan["plan_id"],
+        approved_snapshot_id=plan["source"]["current_snapshot_id"],
+        approved_candidate_set_id=inspection["candidate_set_id"],
+        candidate_report=inspection,
+    )
+
+    assert report.status == "noop"
+    assert report.applied is False
+    assert report.before == report.after
+    assert report.procedure_result["deleted_orphan_file_count"] == 0
+    assert all("dry_run => false" not in sql for sql in executor.queries)
+
+
+def test_orphan_inspection_rejects_oversized_inventory() -> None:
     plan = orphan_inspection_plan(max_orphan_files=1)
     action = next(
         action
         for action in plan["actions"]
         if action["action_type"] == "inspect_orphan_files"
     )
-
-    with pytest.raises(ExecutionContractError, match="cannot be applied"):
-        SparkMaintenanceExecutor(FakeSqlExecutor()).run(
-            plan,
-            action["action_id"],
-            apply=True,
-            approved_plan_id=plan["plan_id"],
-            approved_snapshot_id=plan["source"]["current_snapshot_id"],
-        )
 
     with pytest.raises(ExecutionContractError, match="exceeds the review"):
         SparkMaintenanceExecutor(FakeSqlExecutor()).run(plan, action["action_id"])

@@ -56,6 +56,8 @@ class SparkMaintenanceExecutor:
         apply: bool = False,
         approved_plan_id: str | None = None,
         approved_snapshot_id: str | None = None,
+        approved_candidate_set_id: str | None = None,
+        candidate_report: dict[str, Any] | None = None,
     ) -> MaintenanceExecutionReport:
         plan_id, table, action = _select_action(plan, action_id)
         action_type = _string(action, "action_type")
@@ -71,12 +73,28 @@ class SparkMaintenanceExecutor:
                 "current snapshot does not match the plan safety bound"
             )
         if action_type == "inspect_orphan_files":
-            if apply:
-                raise ExecutionContractError(
-                    "orphan inspection cannot be applied as a deletion"
-                )
             parameters = _object(action, "parameters")
             older_than = _string(parameters, "older_than")
+            if apply:
+                _verify_approvals(
+                    plan_id,
+                    expected_snapshot,
+                    approved_plan_id,
+                    approved_snapshot_id,
+                )
+                candidates = _approved_orphan_candidates(
+                    candidate_report,
+                    plan_id,
+                    action,
+                    table,
+                    older_than,
+                    before,
+                    approved_candidate_set_id,
+                    _positive_bound(safety, "max_orphan_files"),
+                )
+                return self._remove_orphan_files(
+                    plan_id, action, table, older_than, before, candidates
+                )
             rows = self._executor.query(_inspect_orphan_files_sql(table, older_than))
             candidates = _orphan_files(rows)
             max_candidates = _positive_bound(safety, "max_orphan_files")
@@ -98,10 +116,12 @@ class SparkMaintenanceExecutor:
             )
         if not apply:
             return _report("dry_run", plan_id, action, table, False, before, before, {})
-        if approved_plan_id != plan_id:
-            raise ExecutionContractError("approved plan ID does not match")
-        if approved_snapshot_id != expected_snapshot:
-            raise ExecutionContractError("approved snapshot ID does not match")
+        _verify_approvals(
+            plan_id,
+            expected_snapshot,
+            approved_plan_id,
+            approved_snapshot_id,
+        )
 
         procedure_rows = self._execute(action_type, table, action, safety, before)
         if len(procedure_rows) != 1:
@@ -110,6 +130,71 @@ class SparkMaintenanceExecutor:
         after = self._state(table)
         status = _reconcile(action_type, action, before, after, result)
         return _report(status, plan_id, action, table, True, before, after, result)
+
+    def _remove_orphan_files(
+        self,
+        plan_id: str,
+        action: dict[str, Any],
+        table: str,
+        older_than: str,
+        before: TableState,
+        candidates: tuple[str, ...],
+    ) -> MaintenanceExecutionReport:
+        candidate_set_id = _candidate_set_id(table, older_than, candidates)
+        if not candidates:
+            return _report(
+                "noop",
+                plan_id,
+                action,
+                table,
+                False,
+                before,
+                before,
+                {"orphan_file_count": 0, "deleted_orphan_file_count": 0},
+                candidate_set_id=candidate_set_id,
+            )
+        view = f"lakehouse_ops_{candidate_set_id.replace('-', '_')}"
+        self._executor.query(_create_candidate_view_sql(view, older_than, candidates))
+        try:
+            verified = _orphan_files(
+                self._executor.query(
+                    _remove_approved_orphans_sql(
+                        table, older_than, view, dry_run=True
+                    )
+                )
+            )
+            if verified != candidates:
+                raise ExecutionContractError(
+                    "approved candidate set is no longer entirely orphaned: "
+                    f"approved={candidates!r}, current={verified!r}"
+                )
+            deleted = _orphan_files(
+                self._executor.query(
+                    _remove_approved_orphans_sql(
+                        table, older_than, view, dry_run=False
+                    )
+                )
+            )
+        finally:
+            self._executor.query(f"DROP VIEW IF EXISTS {_identifier(view)}")
+        after = self._state(table)
+        reconciled = deleted == candidates and after == before
+        status = "succeeded" if reconciled else "reconciliation_failed"
+        return _report(
+            status,
+            plan_id,
+            action,
+            table,
+            True,
+            before,
+            after,
+            {
+                "orphan_file_count": len(candidates),
+                "deleted_orphan_file_count": len(deleted),
+            },
+            candidate_set_id=candidate_set_id,
+            candidate_files=candidates,
+        )
 
     def _execute(
         self,
@@ -215,6 +300,63 @@ def _select_action(
     return plan_id, table, action
 
 
+def _verify_approvals(
+    plan_id: str,
+    expected_snapshot: str,
+    approved_plan_id: str | None,
+    approved_snapshot_id: str | None,
+) -> None:
+    if approved_plan_id != plan_id:
+        raise ExecutionContractError("approved plan ID does not match")
+    if approved_snapshot_id != expected_snapshot:
+        raise ExecutionContractError("approved snapshot ID does not match")
+
+
+def _approved_orphan_candidates(
+    report: dict[str, Any] | None,
+    plan_id: str,
+    action: dict[str, Any],
+    table: str,
+    older_than: str,
+    current_state: TableState,
+    approved_candidate_set_id: str | None,
+    max_candidates: int,
+) -> tuple[str, ...]:
+    if not isinstance(report, dict) or report.get("schema_version") != "1.0":
+        raise ExecutionContractError("approved candidate report is required")
+    expected = {
+        "status": "inspection_complete",
+        "plan_id": plan_id,
+        "action_id": _string(action, "action_id"),
+        "action_type": "inspect_orphan_files",
+        "table": table,
+        "applied": False,
+    }
+    if any(report.get(key) != value for key, value in expected.items()):
+        raise ExecutionContractError("candidate report does not match the selected action")
+    before = _table_state(_object(report, "before"))
+    after = _table_state(_object(report, "after"))
+    if before != after or before != current_state:
+        raise ExecutionContractError("table state changed since orphan inspection")
+    files = report.get("candidate_files")
+    if not isinstance(files, (list, tuple)):
+        raise ExecutionContractError("candidate_files must be an array")
+    candidates = _orphan_files(
+        [{"orphan_file_location": location} for location in files]
+    )
+    if len(candidates) > max_candidates:
+        raise ExecutionContractError("approved candidate set exceeds the safety bound")
+    result = _object(report, "procedure_result")
+    if _integer(result, "orphan_file_count") != len(candidates):
+        raise ExecutionContractError("candidate report count does not match its files")
+    expected_set_id = _candidate_set_id(table, older_than, candidates)
+    if report.get("candidate_set_id") != expected_set_id:
+        raise ExecutionContractError("candidate report digest does not match its files")
+    if approved_candidate_set_id != expected_set_id:
+        raise ExecutionContractError("approved candidate set ID does not match")
+    return candidates
+
+
 def _reconcile(
     action_type: str,
     action: dict[str, Any],
@@ -309,6 +451,32 @@ def _inspect_orphan_files_sql(table: str, older_than: str) -> str:
     )
 
 
+def _create_candidate_view_sql(
+    view: str, older_than: str, candidates: tuple[str, ...]
+) -> str:
+    rows = ", ".join(f"('{_sql_string(path)}')" for path in candidates)
+    return (
+        f"CREATE OR REPLACE TEMP VIEW {_identifier(view)} AS "
+        "SELECT file_path, "
+        f"{_timestamp_literal(older_than)} - INTERVAL 1 SECOND AS last_modified "
+        f"FROM VALUES {rows} AS candidates(file_path)"
+    )
+
+
+def _remove_approved_orphans_sql(
+    table: str, older_than: str, view: str, *, dry_run: bool
+) -> str:
+    catalog, namespace, name = _table_parts(table)
+    table_argument = f"{namespace}.{name}".replace("'", "''")
+    return (
+        f"CALL {_identifier(catalog)}.system.remove_orphan_files("
+        f"table => '{table_argument}', older_than => {_timestamp_literal(older_than)}, "
+        f"dry_run => {str(dry_run).lower()}, max_concurrent_deletes => 1, "
+        f"stream_results => false, file_list_view => '{view}', "
+        "prefix_mismatch_mode => 'ERROR')"
+    )
+
+
 def _procedure_result(action_type: str, row: dict[str, Any]) -> dict[str, int]:
     keys_by_action = {
         "rewrite_manifests": (
@@ -354,6 +522,21 @@ def _orphan_files(rows: list[dict[str, Any]]) -> tuple[str, ...]:
     return tuple(sorted(candidates))
 
 
+def _table_state(value: dict[str, Any]) -> TableState:
+    snapshot_ids = _string_array(value, "snapshot_ids")
+    state = TableState(
+        snapshot_id=_string(value, "snapshot_id"),
+        snapshot_count=_integer(value, "snapshot_count"),
+        snapshot_ids=snapshot_ids,
+        data_file_count=_integer(value, "data_file_count"),
+        record_count=_integer(value, "record_count"),
+        manifest_count=_integer(value, "manifest_count"),
+    )
+    if state.snapshot_count != len(snapshot_ids) or state.snapshot_id not in snapshot_ids:
+        raise ExecutionContractError("candidate report contains an invalid table state")
+    return state
+
+
 def _candidate_set_id(
     table: str, older_than: str, candidates: tuple[str, ...]
 ) -> str:
@@ -389,6 +572,10 @@ def _table_parts(table: str) -> tuple[str, str, str]:
 
 def _identifier(value: str) -> str:
     return f"`{value.replace('`', '``')}`"
+
+
+def _sql_string(value: str) -> str:
+    return value.replace("'", "''")
 
 
 def _object(value: dict[str, Any], key: str) -> dict[str, Any]:

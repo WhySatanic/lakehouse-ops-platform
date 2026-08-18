@@ -24,6 +24,12 @@ def main() -> None:
     action_id = required_environment("MAINTENANCE_ACTION_ID")
     apply = os.environ.get("MAINTENANCE_APPLY", "false").lower() == "true"
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    candidate_report_path = os.environ.get("MAINTENANCE_CANDIDATE_REPORT_PATH")
+    candidate_report = (
+        json.loads(Path(candidate_report_path).read_text(encoding="utf-8"))
+        if candidate_report_path
+        else None
+    )
     spark = build_session("lakehouse-ops-iceberg-maintenance")
     spark.sparkContext.setLogLevel("WARN")
     try:
@@ -33,6 +39,10 @@ def main() -> None:
             apply=apply,
             approved_plan_id=os.environ.get("MAINTENANCE_APPROVED_PLAN_ID"),
             approved_snapshot_id=os.environ.get("MAINTENANCE_APPROVED_SNAPSHOT_ID"),
+            approved_candidate_set_id=os.environ.get(
+                "MAINTENANCE_APPROVED_CANDIDATE_SET_ID"
+            ),
+            candidate_report=candidate_report,
         )
         report_path.write_text(
             json.dumps(report.as_dict(), sort_keys=True) + "\n", encoding="utf-8"

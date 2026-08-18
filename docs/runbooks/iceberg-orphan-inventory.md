@@ -40,7 +40,7 @@ The executor verifies that the current snapshot still matches the plan and calls
 Iceberg `remove_orphan_files` with `dry_run => true`. Prefix mismatches use `ERROR`, so
 scheme or authority ambiguity stops the inspection instead of classifying a file as
 deletable. Object listing uses Iceberg S3FileIO prefix operations rather than Hadoop
-S3A. Applying this action is rejected because this release cannot delete files.
+S3A.
 
 ## Review evidence
 
@@ -54,13 +54,45 @@ The execution report contains:
 Store the plan and report together. If the candidate count exceeds the plan's safety
 bound, inspection fails without producing an approval set.
 
-## Current boundary
+## Remove the approved set
 
-This capability inventories files but never removes them. It collects complete dry-run
-results on the Spark driver, so operators must use a conservative candidate bound and
-split very large tables operationally. A later increment must require exact
-candidate-set approval, delete only that set, and reconcile object-store state before
-the roadmap's orphan-removal item can be closed.
+Review every path in the inspection report. Set all four approvals and point the job at
+the unchanged report:
+
+```bash
+export MAINTENANCE_APPLY=true
+export MAINTENANCE_APPROVED_PLAN_ID=plan-...
+export MAINTENANCE_APPROVED_SNAPSHOT_ID=...
+export MAINTENANCE_APPROVED_CANDIDATE_SET_ID=orphans-...
+export MAINTENANCE_CANDIDATE_REPORT_PATH=/opt/lakehouse/artifacts/orphan-inspection-report.json
+
+docker compose --profile catalog --profile compute run --rm spark-maintenance
+```
+
+The executor rejects a changed plan, snapshot, table state, report, candidate count, or
+candidate digest. It creates a temporary Iceberg `file_list_view` containing only the
+approved paths and runs a second dry-run against current table metadata. Deletion starts
+only if every approved path is still orphaned. Prefix mismatch handling remains
+fail-closed. The procedure requests one delete worker, but Iceberg S3FileIO uses bulk
+deletes and ignores that setting; the candidate-count bound therefore remains the
+effective batch-size control for S3.
+
+The execution report must have `status: succeeded`, `applied: true`, identical table
+state before and after, and matching `orphan_file_count` and
+`deleted_orphan_file_count`. Independently verify that every approved object is absent
+from S3 before accepting the operation; the integration gate performs this check with
+`HeadObject`.
+
+## Recovery boundary
+
+Object deletion is irreversible. Keep the original inspection report and execution
+report as audit evidence. If reconciliation fails, stop maintenance on the table,
+compare the approved paths with object-store audit logs, and restore missing objects
+from an independently managed backup. The platform does not yet automate that restore.
+
+Inspection and exact-list results are collected on the Spark driver, so operators must
+use a conservative candidate bound and split very large tables operationally. An empty
+approved set returns `noop` without invoking deletion.
 
 The procedure behavior follows the
 [Apache Iceberg Spark procedure contract](https://iceberg.apache.org/docs/latest/spark-procedures/#remove_orphan_files).
