@@ -69,3 +69,9 @@ acceptance check. Table data and metastore state remain in their existing volume
 This profile is a local query-path proof, not a production deployment. It has one
 worker, no TLS or user authentication, no resource groups, and no centralized policy
 engine. The Iceberg catalog is read-only; Spark remains the table writer.
+
+## Upgrade from 0.6.0
+
+No data or metastore migration is required. Copy `TRINO_HTTP_PORT` from the updated
+`.env.example` if port 8080 is unavailable, then start the new opt-in `query` profile.
+Existing catalog and warehouse volumes are reused without modification.
