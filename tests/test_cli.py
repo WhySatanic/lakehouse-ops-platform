@@ -261,3 +261,64 @@ def test_audit_landing_command_fails_for_empty_root(
     report = json.loads(capsys.readouterr().out)
     assert exit_code == 1
     assert report["status"] == "failed"
+
+
+def test_collect_iceberg_metadata_command(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    observed: dict[str, Any] = {}
+
+    class FakeTrinoClient:
+        def __init__(self, server: str, *, user: str) -> None:
+            observed.update(server=server, user=user)
+
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+    class FakeReport:
+        def as_dict(self) -> dict[str, str]:
+            return {"status": "ready", "schema_version": "1.0"}
+
+    class FakeCollector:
+        def __init__(self, client: FakeTrinoClient) -> None:
+            observed["client"] = client
+
+        def collect(self, catalog: str, schema: str, table: str) -> FakeReport:
+            observed.update(catalog=catalog, schema=schema, table=table)
+            return FakeReport()
+
+    monkeypatch.setattr(cli, "TrinoClient", FakeTrinoClient)
+    monkeypatch.setattr(cli, "IcebergMetadataCollector", FakeCollector)
+
+    exit_code = cli.main(
+        [
+            "collect-iceberg-metadata",
+            "--server",
+            "http://trino.test:8080",
+            "--user",
+            "operator",
+            "--catalog",
+            "iceberg",
+            "--schema",
+            "ops",
+            "--table",
+            "events",
+        ]
+    )
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "schema_version": "1.0",
+        "status": "ready",
+    }
+    assert observed == {
+        "server": "http://trino.test:8080",
+        "user": "operator",
+        "client": observed["client"],
+        "catalog": "iceberg",
+        "schema": "ops",
+        "table": "events",
+    }
