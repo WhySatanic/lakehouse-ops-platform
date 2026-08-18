@@ -122,6 +122,18 @@ Iceberg catalog backed by the same Hive Metastore and MinIO warehouse. Follow th
 [Trino Iceberg query runbook](docs/runbooks/trino-iceberg-query.md) to start the cluster,
 query the bronze and silver tables, and run the fixture acceptance check.
 
+The control plane can collect a versioned table-health snapshot from Trino's Iceberg
+metadata tables:
+
+```bash
+uv run lakeops collect-iceberg-metadata \
+  --server http://localhost:8080 \
+  --catalog lakehouse --schema silver --table weather_hourly
+```
+
+The [Iceberg metadata runbook](docs/runbooks/iceberg-metadata.md) documents the report
+contract and how to interpret file, manifest, partition, and snapshot statistics.
+
 ## Engineering scope
 
 | Capability | Evidence planned in this repository |

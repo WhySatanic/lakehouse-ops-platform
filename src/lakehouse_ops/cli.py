@@ -9,6 +9,7 @@ from typing import Any
 import boto3
 
 from lakehouse_ops.doctor import DoctorReport, check_file_landing, check_s3_bucket
+from lakehouse_ops.iceberg.metadata import IcebergMetadataCollector
 from lakehouse_ops.ingestion.audit import audit_file_landing
 from lakehouse_ops.ingestion.batch import (
     LocationManifestError,
@@ -19,6 +20,7 @@ from lakehouse_ops.ingestion.landing import FileLandingZone
 from lakehouse_ops.ingestion.models import Location, WeatherPayload
 from lakehouse_ops.ingestion.open_meteo import OpenMeteoClient
 from lakehouse_ops.ingestion.s3_landing import S3LandingZone
+from lakehouse_ops.trino import TrinoClient
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -45,6 +47,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     audit = subparsers.add_parser("audit-landing", help="verify landed file integrity")
     audit.add_argument("--output", type=Path, default=Path("data/landing"))
+
+    metadata = subparsers.add_parser(
+        "collect-iceberg-metadata", help="collect an Iceberg table health snapshot"
+    )
+    metadata.add_argument(
+        "--server", default=os.getenv("TRINO_SERVER", "http://localhost:8080")
+    )
+    metadata.add_argument("--user", default="lakehouse-ops")
+    metadata.add_argument("--catalog", default="lakehouse")
+    metadata.add_argument("--schema", default="silver")
+    metadata.add_argument("--table", default="weather_hourly")
     return parser
 
 
@@ -107,6 +120,13 @@ def main(argv: list[str] | None = None) -> int:
         report = audit_file_landing(args.output)
         print(json.dumps(report.as_dict(), sort_keys=True))
         return 0 if report.healthy else 1
+    if args.command == "collect-iceberg-metadata":
+        with TrinoClient(args.server, user=args.user) as client:
+            report = IcebergMetadataCollector(client).collect(
+                args.catalog, args.schema, args.table
+            )
+        print(json.dumps(report.as_dict(), sort_keys=True))
+        return 0
     return 2
 
 

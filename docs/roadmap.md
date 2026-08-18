@@ -26,7 +26,7 @@ writes an Iceberg table with Spark, and validates it through Trino.
 
 ## Phase 2 — Iceberg operations
 
-- [ ] Metadata collector for snapshots, files, manifests, and partition statistics.
+- [x] Metadata collector for snapshots, files, manifests, and partition statistics.
 - [ ] Rule-based table-health planner with explainable compaction decisions.
 - [ ] Safe Spark executors for `rewrite_data_files`, `rewrite_manifests`,
   `expire_snapshots`, and orphan-file removal.

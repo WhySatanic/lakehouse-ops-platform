@@ -89,6 +89,16 @@ jobs:
           trino-coordinator trino-worker
       - name: Query Iceberg tables through Trino
         run: docker compose --profile query run --rm trino-query-check
+      - name: Collect Iceberg metadata through Trino
+        run: >-
+          uv run lakeops collect-iceberg-metadata
+          --server http://localhost:8080
+          --catalog lakehouse --schema silver --table weather_hourly
+          > iceberg-metadata-report.json
+      - name: Verify Iceberg metadata report
+        run: >-
+          uv run python tests/integration/check_iceberg_metadata_report.py
+          iceberg-metadata-report.json
       - name: Show service logs
         if: failure()
         run: >-
