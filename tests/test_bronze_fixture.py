@@ -4,12 +4,18 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from lakehouse_ops.ingestion.landing import prepare_landing_object
 from lakehouse_ops.ingestion.models import Location, WeatherPayload
 
 
-def test_bronze_fixture_is_a_canonical_landing_object() -> None:
-    fixture_path = Path(__file__).parent / "fixtures" / "open_meteo_landing.json"
+@pytest.mark.parametrize(
+    "fixture_name",
+    ["open_meteo_landing.json", "open_meteo_silver_cases.json"],
+)
+def test_bronze_fixture_is_a_canonical_landing_object(fixture_name: str) -> None:
+    fixture_path = Path(__file__).parent / "fixtures" / fixture_name
     document = json.loads(fixture_path.read_text(encoding="utf-8"))
     payload = WeatherPayload.from_source(
         Location(
