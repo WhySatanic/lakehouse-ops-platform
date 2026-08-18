@@ -121,6 +121,17 @@ jobs:
           echo "SCHEMA_EVOLVED_SNAPSHOT_ID=$(uv run python -c 'import json; print(json.load(open("artifacts/schema-evolution-report.json"))["after_add"]["snapshot_id"])')" >> "$GITHUB_ENV"
       - name: Verify schema compatibility through Trino
         run: docker compose --profile query run --rm trino-schema-evolution-check
+      - name: Exercise partition evolution
+        run: |
+          touch artifacts/partition-evolution-report.json
+          chmod 0666 artifacts/partition-evolution-report.json
+          docker compose --profile catalog --profile compute run --rm spark-partition-evolution-drill
+      - name: Verify partition evolution evidence
+        run: |
+          uv run python tests/integration/check_partition_evolution.py artifacts/partition-evolution-report.json
+          echo "PARTITION_INITIAL_SNAPSHOT_ID=$(uv run python -c 'import json; print(json.load(open("artifacts/partition-evolution-report.json"))["before_evolution"]["snapshot_id"])')" >> "$GITHUB_ENV"
+      - name: Verify mixed partition layouts through Trino
+        run: docker compose --profile query run --rm trino-partition-evolution-check
       - name: Collect Iceberg metadata through Trino
         run: >-
           uv run lakeops collect-iceberg-metadata

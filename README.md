@@ -172,6 +172,11 @@ data rewrite, and verifies current plus historical snapshot schemas from Spark a
 See the [schema evolution runbook](docs/runbooks/iceberg-schema-evolution.md) for the
 compatibility evidence and Hive Metastore boundary.
 
+The partition evolution drill changes an unpartitioned table to daily event-time
+partitioning and proves Spark and Trino can read old and new file layouts together. See the
+[partition evolution runbook](docs/runbooks/iceberg-partition-evolution.md) for the mixed-spec
+evidence and overwrite boundary.
+
 ## Engineering scope
 
 | Capability | Evidence planned in this repository |
