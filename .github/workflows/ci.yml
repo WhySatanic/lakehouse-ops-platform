@@ -282,6 +282,29 @@ jobs:
         run: >-
           uv run python tests/integration/check_orphan_inspection.py
           artifacts/orphan-inspection-report.json
+      - name: Prepare exact orphan removal fixture
+        run: >-
+          uv run python tests/integration/prepare_orphan_removal_fixture.py
+          artifacts/orphan-plan.json
+          artifacts/orphan-inspection-report.json
+          artifacts/orphan-approved-report.json
+      - name: Approve exact orphan candidate set
+        run: |
+          echo "MAINTENANCE_APPLY=true" >> "$GITHUB_ENV"
+          echo "MAINTENANCE_APPROVED_PLAN_ID=$(uv run python -c 'import json; print(json.load(open("artifacts/orphan-plan.json"))["plan_id"])')" >> "$GITHUB_ENV"
+          echo "MAINTENANCE_APPROVED_SNAPSHOT_ID=$(uv run python -c 'import json; print(json.load(open("artifacts/orphan-plan.json"))["source"]["current_snapshot_id"])')" >> "$GITHUB_ENV"
+          echo "MAINTENANCE_APPROVED_CANDIDATE_SET_ID=$(uv run python -c 'import json; print(json.load(open("artifacts/orphan-approved-report.json"))["candidate_set_id"])')" >> "$GITHUB_ENV"
+          echo "MAINTENANCE_CANDIDATE_REPORT_PATH=/opt/lakehouse/artifacts/orphan-approved-report.json" >> "$GITHUB_ENV"
+          touch artifacts/maintenance-report.json
+          chmod 0666 artifacts/maintenance-report.json
+      - name: Remove exact approved orphan candidate set
+        run: |
+          docker compose --profile catalog --profile compute run --rm spark-maintenance
+          mv artifacts/maintenance-report.json artifacts/orphan-removal-report.json
+      - name: Verify orphan deletion and table reconciliation
+        run: >-
+          uv run python tests/integration/check_orphan_removal.py
+          artifacts/orphan-removal-report.json
       - name: Show service logs
         if: failure()
         run: >-
