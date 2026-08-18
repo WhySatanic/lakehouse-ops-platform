@@ -9,8 +9,8 @@ observability, and performance experiments.
 
 > Status: early access `0.6.0`. Open-Meteo ingestion works against the local filesystem
 > and MinIO. The opt-in platform profiles include PostgreSQL-backed Hive Metastore and a
-> Spark writer for S3-backed Iceberg bronze and validated silver tables. Trino is the
-> next core milestone.
+> Spark writer for S3-backed Iceberg bronze and validated silver tables. A Trino 483
+> coordinator/worker profile reads the same tables through Hive Metastore.
 
 This repository follows an **early-access, always-runnable** model. Releases stay in
 the `0.x` line while interfaces evolve, but every version has a documented working
@@ -116,6 +116,11 @@ registered in Hive Metastore. The
 landing-to-bronze execution. The
 [validated silver runbook](docs/runbooks/spark-iceberg-silver.md) covers deterministic
 deduplication, auditable rejects, and independent post-condition checks.
+
+The opt-in `query` profile starts a Trino coordinator and worker with a read-only
+Iceberg catalog backed by the same Hive Metastore and MinIO warehouse. Follow the
+[Trino Iceberg query runbook](docs/runbooks/trino-iceberg-query.md) to start the cluster,
+query the bronze and silver tables, and run the fixture acceptance check.
 
 ## Engineering scope
 

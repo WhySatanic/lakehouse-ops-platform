@@ -40,7 +40,7 @@ services:
 
   metastore-db:
     image: postgres:17.10-alpine3.23
-    profiles: ["catalog", "compute"]
+    profiles: ["catalog", "compute", "query"]
     environment:
       POSTGRES_DB: ${HMS_POSTGRES_DB:-metastore}
       POSTGRES_USER: ${HMS_POSTGRES_USER:-hive}
@@ -64,7 +64,7 @@ services:
     build:
       context: .
       dockerfile: infra/hive-metastore/Dockerfile
-    profiles: ["catalog", "compute"]
+    profiles: ["catalog", "compute", "query"]
     depends_on:
       metastore-db:
         condition: service_healthy
@@ -349,8 +349,63 @@ services:
       ]
     restart: "no"
 
+  trino-coordinator:
+    image: trinodb/trino:483
+    profiles: ["query"]
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+    ports:
+      - "${TRINO_HTTP_PORT:-8080}:8080"
+    volumes:
+      - ./infra/trino/coordinator/config.properties:/etc/trino/config.properties:ro
+      - ./infra/trino/coordinator/node.properties:/etc/trino/node.properties:ro
+      - ./infra/trino/catalog/lakehouse.properties:/etc/trino/catalog/lakehouse.properties:ro
+      - trino-coordinator-data:/data/trino
+    mem_limit: 1g
+    restart: unless-stopped
+
+  trino-worker:
+    image: trinodb/trino:483
+    profiles: ["query"]
+    depends_on:
+      trino-coordinator:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+    volumes:
+      - ./infra/trino/worker/config.properties:/etc/trino/config.properties:ro
+      - ./infra/trino/worker/node.properties:/etc/trino/node.properties:ro
+      - ./infra/trino/catalog/lakehouse.properties:/etc/trino/catalog/lakehouse.properties:ro
+      - trino-worker-data:/data/trino
+    mem_limit: 1g
+    restart: unless-stopped
+
+  trino-query-check:
+    image: trinodb/trino:483
+    profiles: ["query"]
+    depends_on:
+      trino-coordinator:
+        condition: service_healthy
+      trino-worker:
+        condition: service_healthy
+    environment:
+      TRINO_SERVER: http://trino-coordinator:8080
+    volumes:
+      - ./tests/integration/check_trino.sh:/checks/check_trino.sh:ro
+    entrypoint: ["/bin/bash", "/checks/check_trino.sh"]
+    restart: "no"
+
 volumes:
   minio-data:
   metastore-db-data:
   warehouse-data:
   bronze-input:
+  trino-coordinator-data:
+  trino-worker-data:
