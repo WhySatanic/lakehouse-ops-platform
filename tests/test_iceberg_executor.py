@@ -431,6 +431,7 @@ def test_orphan_inspection_returns_sorted_review_evidence() -> None:
     assert "older_than => TIMESTAMP '2026-08-11 13:30:00.000000'" in procedure
     assert "dry_run => true" in procedure
     assert "stream_results => false" in procedure
+    assert "prefix_listing => true" in procedure
     assert "prefix_mismatch_mode => 'ERROR'" in procedure
 
 

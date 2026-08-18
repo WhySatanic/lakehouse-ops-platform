@@ -39,7 +39,8 @@ docker compose --profile catalog --profile compute run --rm spark-maintenance
 The executor verifies that the current snapshot still matches the plan and calls
 Iceberg `remove_orphan_files` with `dry_run => true`. Prefix mismatches use `ERROR`, so
 scheme or authority ambiguity stops the inspection instead of classifying a file as
-deletable. Applying this action is rejected because this release cannot delete files.
+deletable. Object listing uses Iceberg S3FileIO prefix operations rather than Hadoop
+S3A. Applying this action is rejected because this release cannot delete files.
 
 ## Review evidence
 

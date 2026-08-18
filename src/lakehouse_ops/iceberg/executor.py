@@ -304,7 +304,7 @@ def _inspect_orphan_files_sql(table: str, older_than: str) -> str:
     return (
         f"CALL {_identifier(catalog)}.system.remove_orphan_files("
         f"table => '{table_argument}', older_than => {_timestamp_literal(older_than)}, "
-        "dry_run => true, stream_results => false, "
+        "dry_run => true, stream_results => false, prefix_listing => true, "
         "prefix_mismatch_mode => 'ERROR')"
     )
 
