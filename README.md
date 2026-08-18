@@ -7,7 +7,7 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: early access `0.9.0`. Open-Meteo ingestion works against the local filesystem
+> Status: early access `0.10.0`. Open-Meteo ingestion works against the local filesystem
 > and MinIO. The opt-in platform profiles include PostgreSQL-backed Hive Metastore and a
 > Spark writer for S3-backed Iceberg bronze and validated silver tables. A Trino 483
 > coordinator/worker profile reads the same tables through Hive Metastore. The control
@@ -145,6 +145,11 @@ uv run lakeops plan-iceberg-maintenance \
 
 The [maintenance planning runbook](docs/runbooks/iceberg-maintenance-planning.md)
 documents compaction rules, policy overrides, the plan contract, and safety boundary.
+
+The first Spark executor supports snapshot-guarded `rewrite_data_files`. It defaults to
+dry-run and requires explicit plan and snapshot approvals before applying a bounded
+rewrite. See the [data-file rewrite runbook](docs/runbooks/iceberg-data-file-rewrite.md)
+for execution and reconciliation evidence.
 
 ## Engineering scope
 
