@@ -46,6 +46,13 @@ The fixture-specific `silver-contract-check` is reserved for CI. It proves survi
 selection, uniqueness, rejection classification, and expected row counts against the
 checked-in acceptance documents.
 
+## Upgrade from 0.5.0
+
+Run `uv sync --frozen --dev` and rebuild the shared `spark-bronze`/`spark-silver` image.
+No existing Iceberg table or metastore schema is rewritten. The two silver tables are
+created on the first silver run; retain the MinIO and PostgreSQL volumes, run bronze
+first, then execute both silver post-condition checks before enabling consumers.
+
 ## Failure handling
 
 1. If the bronze table is missing, run the bronze pipeline and its post-condition checks.
