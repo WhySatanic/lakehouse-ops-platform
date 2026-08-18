@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, Protocol
 
 
@@ -372,7 +372,7 @@ def _timestamp_literal(value: str) -> str:
         raise ExecutionContractError("older_than must be an ISO timestamp") from error
     if parsed.tzinfo is None:
         raise ExecutionContractError("older_than must include a timezone")
-    utc = parsed.astimezone(UTC).replace(tzinfo=None)
+    utc = parsed.astimezone(timezone.utc).replace(tzinfo=None)  # noqa: UP017
     return f"TIMESTAMP '{utc.isoformat(sep=' ', timespec='microseconds')}'"
 
 
