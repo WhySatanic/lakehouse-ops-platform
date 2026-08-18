@@ -7,7 +7,7 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: early access `0.3.0`. Open-Meteo ingestion works against the local filesystem
+> Status: early access `0.3.1`. Open-Meteo ingestion works against the local filesystem
 > and a reproducible MinIO/S3 landing zone. The distributed compute and catalog layers
 > are delivered in subsequent milestones described in the roadmap.
 
@@ -92,6 +92,17 @@ JSON failure report when the directory is not writable or the S3 bucket is unava
 uv run lakeops doctor --output data/landing
 uv run --env-file .env lakeops doctor --backend s3
 ```
+
+Audit filesystem landing objects before replay or recovery. The audit validates the
+document schema, recomputes its checksum, and checks that source, date, location, and
+filename partitions agree with the payload:
+
+```bash
+uv run lakeops audit-landing --output data/landing
+```
+
+See the [landing integrity runbook](docs/runbooks/landing-integrity.md) for failure
+handling and the checksum trust boundary.
 
 ## Engineering scope
 
