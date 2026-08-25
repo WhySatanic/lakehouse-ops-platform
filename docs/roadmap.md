@@ -52,12 +52,12 @@ preserves declared snapshots, and emits an auditable execution report.
 - [x] Resource groups for ingestion, BI, and ad-hoc workloads with queueing tests.
 - [x] Repeatable query corpus and baseline capture (`EXPLAIN ANALYZE`, wall time, CPU,
   scanned bytes, peak memory).
-- [ ] Partitioning, sorting, file-size, and metadata-cache experiments.
+- [x] Partitioning, sorting, file-size, and metadata-cache experiments.
   - [x] Data-file compaction experiment with snapshot-linked Trino medians.
   - [x] Partitioning and sorting experiments with pruning evidence.
     - [x] Day-partition A/B experiment with processed-row and physical-input evidence.
     - [x] Sort-order experiment with selective predicate evidence.
-  - [ ] Metadata-cache experiment with controlled cold and warm runs.
+  - [x] Metadata-cache experiment with controlled cold and warm runs.
 - [ ] Version-upgrade rehearsal with compatibility and rollback checks.
 
 Exit criterion: a checked-in report explains a bottleneck, the chosen change, measured
