@@ -385,6 +385,99 @@ def test_capture_trino_baseline_command(
     }
 
 
+def test_capture_trino_compaction_command(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    observed: dict[str, object] = {}
+
+    class FakeClient:
+        def __init__(self, server: str, *, user: str) -> None:
+            observed.update(server=server, user=user, client=self)
+
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+    def fake_capture(client: object, **kwargs: object) -> dict[str, str]:
+        observed.update(kwargs)
+        assert client is observed["client"]
+        return {"schema_version": "1.0", "status": "ready"}
+
+    monkeypatch.setattr(cli, "TrinoClient", FakeClient)
+    monkeypatch.setattr(cli, "capture_compaction_phase", fake_capture)
+
+    exit_code = cli.main(
+        [
+            "capture-trino-compaction",
+            "--server",
+            "http://trino.test:8080",
+            "--user",
+            "performance-user",
+            "--catalog",
+            "iceberg",
+            "--schema",
+            "ops",
+            "--table",
+            "events",
+            "--phase",
+            "after",
+            "--repetitions",
+            "5",
+        ]
+    )
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "schema_version": "1.0",
+        "status": "ready",
+    }
+    assert observed == {
+        "server": "http://trino.test:8080",
+        "user": "performance-user",
+        "client": observed["client"],
+        "catalog": "iceberg",
+        "schema": "ops",
+        "table": "events",
+        "phase": "after",
+        "repetitions": 5,
+    }
+
+
+def test_compare_trino_compaction_command(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    paths = [tmp_path / name for name in ("before.json", "after.json", "execution.json")]
+    for index, path in enumerate(paths):
+        path.write_text(json.dumps({"report": index}), encoding="utf-8")
+
+    monkeypatch.setattr(
+        cli,
+        "compare_compaction_phases",
+        lambda before, after, execution: {
+            "inputs": [before["report"], after["report"], execution["report"]]
+        },
+    )
+
+    exit_code = cli.main(
+        [
+            "compare-trino-compaction",
+            "--before",
+            str(paths[0]),
+            "--after",
+            str(paths[1]),
+            "--execution",
+            str(paths[2]),
+        ]
+    )
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == {"inputs": [0, 1, 2]}
+
+
 def test_plan_iceberg_maintenance_command(
     capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:

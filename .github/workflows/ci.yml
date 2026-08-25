@@ -250,6 +250,11 @@ jobs:
           --server http://localhost:8080
           --catalog lakehouse --schema ops --table maintenance_fixture
           > artifacts/maintenance-metadata.json
+      - name: Capture pre-compaction Trino benchmark
+        run: >-
+          uv run lakeops capture-trino-compaction
+          --server http://localhost:8080 --phase before --repetitions 3
+          > artifacts/trino-compaction-before.json
       - name: Plan data-file rewrite
         run: >-
           uv run lakeops plan-iceberg-maintenance
@@ -281,6 +286,22 @@ jobs:
         run: >-
           uv run python tests/integration/check_maintenance_execution.py
           artifacts/maintenance-dry-run.json artifacts/maintenance-report.json
+      - name: Capture post-compaction Trino benchmark
+        run: >-
+          uv run lakeops capture-trino-compaction
+          --server http://localhost:8080 --phase after --repetitions 3
+          > artifacts/trino-compaction-after.json
+      - name: Compare Trino compaction measurements
+        run: >-
+          uv run lakeops compare-trino-compaction
+          --before artifacts/trino-compaction-before.json
+          --after artifacts/trino-compaction-after.json
+          --execution artifacts/maintenance-report.json
+          > artifacts/trino-compaction-experiment.json
+      - name: Verify Trino compaction experiment
+        run: >-
+          uv run python tests/integration/check_trino_compaction_experiment.py
+          artifacts/trino-compaction-experiment.json
       - name: Collect post-compaction metadata
         run: |
           mv artifacts/maintenance-report.json artifacts/data-file-report.json

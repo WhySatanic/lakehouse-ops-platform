@@ -27,6 +27,11 @@ from lakehouse_ops.trino_baseline import (
     capture_baseline,
     load_query_corpus,
 )
+from lakehouse_ops.trino_experiment import (
+    TrinoExperimentError,
+    capture_compaction_phase,
+    compare_compaction_phases,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -73,6 +78,28 @@ def build_parser() -> argparse.ArgumentParser:
         "--server", default=os.getenv("TRINO_SERVER", "http://localhost:8080")
     )
     baseline.add_argument("--user", default="lakehouse-performance")
+
+    compaction_capture = subparsers.add_parser(
+        "capture-trino-compaction",
+        help="capture one phase of the Iceberg compaction experiment",
+    )
+    compaction_capture.add_argument(
+        "--server", default=os.getenv("TRINO_SERVER", "http://localhost:8080")
+    )
+    compaction_capture.add_argument("--user", default="lakehouse-performance")
+    compaction_capture.add_argument("--catalog", default="lakehouse")
+    compaction_capture.add_argument("--schema", default="ops")
+    compaction_capture.add_argument("--table", default="maintenance_fixture")
+    compaction_capture.add_argument("--phase", required=True, choices=("before", "after"))
+    compaction_capture.add_argument("--repetitions", type=int, default=3)
+
+    compaction_compare = subparsers.add_parser(
+        "compare-trino-compaction",
+        help="compare compaction phases with the applied maintenance report",
+    )
+    compaction_compare.add_argument("--before", required=True, type=Path)
+    compaction_compare.add_argument("--after", required=True, type=Path)
+    compaction_compare.add_argument("--execution", required=True, type=Path)
 
     plan = subparsers.add_parser(
         "plan-iceberg-maintenance", help="create an explainable Iceberg maintenance plan"
@@ -164,6 +191,31 @@ def main(argv: list[str] | None = None) -> int:
             with TrinoClient(args.server, user=args.user) as client:
                 report = capture_baseline(client, corpus)
         except QueryCorpusError as error:
+            parser.error(str(error))
+        print(json.dumps(report, sort_keys=True))
+        return 0
+    if args.command == "capture-trino-compaction":
+        try:
+            with TrinoClient(args.server, user=args.user) as client:
+                report = capture_compaction_phase(
+                    client,
+                    catalog=args.catalog,
+                    schema=args.schema,
+                    table=args.table,
+                    phase=args.phase,
+                    repetitions=args.repetitions,
+                )
+        except TrinoExperimentError as error:
+            parser.error(str(error))
+        print(json.dumps(report, sort_keys=True))
+        return 0
+    if args.command == "compare-trino-compaction":
+        try:
+            before = json.loads(args.before.read_text(encoding="utf-8"))
+            after = json.loads(args.after.read_text(encoding="utf-8"))
+            execution = json.loads(args.execution.read_text(encoding="utf-8"))
+            report = compare_compaction_phases(before, after, execution)
+        except (OSError, json.JSONDecodeError, TrinoExperimentError) as error:
             parser.error(str(error))
         print(json.dumps(report, sort_keys=True))
         return 0

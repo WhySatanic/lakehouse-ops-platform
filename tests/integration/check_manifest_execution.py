@@ -25,8 +25,8 @@ def main() -> None:
     assert execution["after"]["snapshot_id"] != execution["before"]["snapshot_id"]
     assert execution["before"]["data_file_count"] == 4
     assert execution["after"]["data_file_count"] == 4
-    assert execution["before"]["record_count"] == 4
-    assert execution["after"]["record_count"] == 4
+    assert execution["before"]["record_count"] == 100_000
+    assert execution["after"]["record_count"] == 100_000
     assert execution["after"]["manifest_count"] < execution["before"]["manifest_count"]
     assert execution["procedure_result"]["rewritten_manifests_count"] >= 2
     assert (

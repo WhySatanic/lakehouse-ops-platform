@@ -53,6 +53,9 @@ preserves declared snapshots, and emits an auditable execution report.
 - [x] Repeatable query corpus and baseline capture (`EXPLAIN ANALYZE`, wall time, CPU,
   scanned bytes, peak memory).
 - [ ] Partitioning, sorting, file-size, and metadata-cache experiments.
+  - [x] Data-file compaction experiment with snapshot-linked Trino medians.
+  - [ ] Partitioning and sorting experiments with pruning evidence.
+  - [ ] Metadata-cache experiment with controlled cold and warm runs.
 - [ ] Version-upgrade rehearsal with compatibility and rollback checks.
 
 Exit criterion: a checked-in report explains a bottleneck, the chosen change, measured
