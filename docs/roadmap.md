@@ -54,9 +54,9 @@ preserves declared snapshots, and emits an auditable execution report.
   scanned bytes, peak memory).
 - [ ] Partitioning, sorting, file-size, and metadata-cache experiments.
   - [x] Data-file compaction experiment with snapshot-linked Trino medians.
-  - [ ] Partitioning and sorting experiments with pruning evidence.
+  - [x] Partitioning and sorting experiments with pruning evidence.
     - [x] Day-partition A/B experiment with processed-row and physical-input evidence.
-    - [ ] Sort-order experiment with selective predicate evidence.
+    - [x] Sort-order experiment with selective predicate evidence.
   - [ ] Metadata-cache experiment with controlled cold and warm runs.
 - [ ] Version-upgrade rehearsal with compatibility and rollback checks.
 

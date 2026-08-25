@@ -126,6 +126,24 @@ jobs:
         run: >-
           uv run python tests/integration/check_trino_partition_pruning.py
           artifacts/trino-partition-pruning.json
+      - name: Create sort order fixture
+        run: |
+          touch artifacts/sort-order-fixture.json
+          chmod 0666 artifacts/sort-order-fixture.json
+          docker compose --profile catalog --profile compute run --rm spark-sort-order-fixture
+      - name: Verify sort order fixture
+        run: >-
+          uv run python tests/integration/check_sort_order_fixture.py
+          artifacts/sort-order-fixture.json
+      - name: Capture Trino sort order evidence
+        run: >-
+          uv run lakeops capture-trino-sort-order
+          --server http://localhost:8080 --range-start 30000 --range-size 128
+          --repetitions 3 > artifacts/trino-sort-order.json
+      - name: Verify Trino sort order evidence
+        run: >-
+          uv run python tests/integration/check_trino_sort_order.py
+          artifacts/trino-sort-order.json
       - name: Exercise Trino workload queueing
         run: >-
           uv run python tests/integration/exercise_trino_resource_groups.py

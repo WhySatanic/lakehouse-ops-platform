@@ -427,6 +427,33 @@ services:
       ]
     restart: "no"
 
+  spark-sort-order-fixture:
+    image: lakehouse-ops/spark-iceberg:3.5.9-1.11.0
+    profiles: ["compute"]
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+    environment:
+      LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
+      LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      HIVE_METASTORE_URI: thrift://hive-metastore:9083
+      SPARK_MASTER: local[2]
+      PYTHONPATH: /opt/lakehouse/jobs
+      SORT_ORDER_FIXTURE_REPORT_PATH: /opt/lakehouse/artifacts/sort-order-fixture.json
+    volumes:
+      - ./jobs/spark:/opt/lakehouse/jobs:ro
+      - ./tests/integration/create_sort_order_fixture.py:/opt/lakehouse/tests/create_sort_order_fixture.py:ro
+      - ./artifacts:/opt/lakehouse/artifacts
+    command:
+      [
+        "/opt/spark/bin/spark-submit",
+        "/opt/lakehouse/tests/create_sort_order_fixture.py",
+      ]
+    restart: "no"
+
   spark-interrupted-write-fixture:
     image: lakehouse-ops/spark-iceberg:3.5.9-1.11.0
     profiles: ["compute"]
