@@ -65,7 +65,7 @@ improvement, trade-offs, and rollback path.
 
 ## Phase 4 — centralized access control
 
-- [ ] Deny-by-default file policy and negative authorization tests.
+- [x] Deny-by-default file policy and negative authorization tests.
 - [ ] Ranger deployment and Trino plugin configuration.
 - [ ] Versioned role-to-resource policy model and policy deployment automation.
 - [ ] Row filters, column masking, audit delivery, and break-glass procedure.

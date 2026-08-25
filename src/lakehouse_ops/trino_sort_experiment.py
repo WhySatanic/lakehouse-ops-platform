@@ -123,7 +123,7 @@ def capture_sort_order_experiment(
 
     now = clock or (lambda: datetime.now(UTC))
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "status": "ready",
         "experiment": "iceberg_sort_order",
         "collected_at": now().astimezone(UTC).isoformat(),
@@ -174,10 +174,23 @@ def _table_state(
         f"SELECT count(*) AS partition_count FROM "
         f'{catalog}.{schema}."{table}$partitions"'
     )
-    create_rows = client.query(f"SHOW CREATE TABLE {qualified}")
-    if len(snapshot) != 1 or len(files) != 1 or len(partitions) != 1 or len(create_rows) != 1:
+    sort_order_rows = client.query(
+        f"SELECT value FROM {catalog}.{schema}.\"{table}$properties\" "
+        "WHERE key = 'sort-order'"
+    )
+    if (
+        len(snapshot) != 1
+        or len(files) != 1
+        or len(partitions) != 1
+        or len(sort_order_rows) > 1
+    ):
         raise SortExperimentError("Iceberg metadata query returned an unexpected row count")
-    create_sql = str(next(iter(create_rows[0].values())))
+    sort_order = ""
+    if sort_order_rows:
+        raw_sort_order = sort_order_rows[0].get("value")
+        if not isinstance(raw_sort_order, str) or not raw_sort_order.strip():
+            raise SortExperimentError("Iceberg sort-order property must be a string")
+        sort_order = raw_sort_order.strip()
     return {
         "table": qualified,
         "snapshot_id": _positive_identifier(snapshot[0], "snapshot_id"),
@@ -185,9 +198,13 @@ def _table_state(
         "record_count": _positive_integer(files[0], "record_count"),
         "total_size_bytes": _positive_integer(files[0], "total_size_bytes"),
         "partition_count": _positive_integer(partitions[0], "partition_count"),
-        "create_sql_sha256": _digest(create_sql),
+        "sort_order_sha256": _digest(sort_order),
         "sorted_by_event_id": bool(
-            re.search(r"sorted_by\s*=\s*ARRAY\s*\[\s*'event_id", create_sql, re.IGNORECASE)
+            re.match(
+                r"^event_id\s+ASC(?:\s+NULLS\s+(?:FIRST|LAST))?(?:\s*,|\s*$)",
+                sort_order,
+                re.IGNORECASE,
+            )
         ),
     }
 

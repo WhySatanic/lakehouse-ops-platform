@@ -614,6 +614,8 @@ services:
       - ./infra/trino/coordinator/node.properties:/etc/trino/node.properties:ro
       - ./infra/trino/coordinator/resource-groups.properties:/etc/trino/resource-groups.properties:ro
       - ./infra/trino/coordinator/resource-groups.json:/etc/trino/resource-groups.json:ro
+      - ./infra/trino/access-control.properties:/etc/trino/access-control.properties:ro
+      - ./infra/trino/access-control-rules.json:/etc/trino/access-control-rules.json:ro
       - ./infra/trino/catalog/lakehouse.properties:/etc/trino/catalog/lakehouse.properties:ro
       - ./infra/trino/catalog/lakehouse-cache-disabled.properties:/etc/trino/catalog/lakehouse_cache_disabled.properties:ro
       - trino-coordinator-data:/data/trino
@@ -633,7 +635,8 @@ services:
     volumes:
       - ./infra/trino/worker/config.properties:/etc/trino/config.properties:ro
       - ./infra/trino/worker/node.properties:/etc/trino/node.properties:ro
-      - ./infra/trino/worker/access-control.properties:/etc/trino/access-control.properties:ro
+      - ./infra/trino/access-control.properties:/etc/trino/access-control.properties:ro
+      - ./infra/trino/access-control-rules.json:/etc/trino/access-control-rules.json:ro
       - ./infra/trino/catalog/lakehouse.properties:/etc/trino/catalog/lakehouse.properties:ro
       - ./infra/trino/catalog/lakehouse-cache-disabled.properties:/etc/trino/catalog/lakehouse_cache_disabled.properties:ro
       - trino-worker-data:/data/trino
@@ -653,7 +656,8 @@ services:
     volumes:
       - ./infra/trino/worker/config.properties:/etc/trino/config.properties:ro
       - ./infra/trino/worker-2/node.properties:/etc/trino/node.properties:ro
-      - ./infra/trino/worker/access-control.properties:/etc/trino/access-control.properties:ro
+      - ./infra/trino/access-control.properties:/etc/trino/access-control.properties:ro
+      - ./infra/trino/access-control-rules.json:/etc/trino/access-control-rules.json:ro
       - ./infra/trino/catalog/lakehouse.properties:/etc/trino/catalog/lakehouse.properties:ro
       - ./infra/trino/catalog/lakehouse-cache-disabled.properties:/etc/trino/catalog/lakehouse_cache_disabled.properties:ro
       - trino-worker-2-data:/data/trino
@@ -675,6 +679,25 @@ services:
     volumes:
       - ./tests/integration/check_trino.sh:/checks/check_trino.sh:ro
     entrypoint: ["/bin/bash", "/checks/check_trino.sh"]
+    restart: "no"
+
+  trino-authorization-check:
+    image: trinodb/trino:483
+    profiles: ["query"]
+    depends_on:
+      trino-coordinator:
+        condition: service_healthy
+      trino-worker:
+        condition: service_healthy
+      trino-worker-2:
+        condition: service_healthy
+    environment:
+      TRINO_SERVER: http://trino-coordinator:8080
+      TRINO_AUTHORIZATION_REPORT_PATH: /artifacts/trino-authorization-report.json
+    volumes:
+      - ./artifacts:/artifacts
+      - ./tests/integration/check_trino_authorization.sh:/checks/check_trino_authorization.sh:ro
+    entrypoint: ["/bin/bash", "/checks/check_trino_authorization.sh"]
     restart: "no"
 
   trino-worker-shutdown-check:

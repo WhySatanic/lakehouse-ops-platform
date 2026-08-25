@@ -111,6 +111,15 @@ jobs:
           uv run python tests/integration/check_trino_upgrade_rehearsal.py
           artifacts/trino-upgrade-rehearsal.json
           config/trino/upgrade-rehearsal.json
+      - name: Exercise Trino deny-by-default authorization
+        run: |
+          touch artifacts/trino-authorization-report.json
+          chmod 0666 artifacts/trino-authorization-report.json
+          docker compose --profile query run --rm trino-authorization-check
+      - name: Verify Trino authorization evidence
+        run: >-
+          uv run python tests/integration/check_trino_authorization.py
+          artifacts/trino-authorization-report.json
       - name: Capture repeatable Trino query baseline
         run: |
           mkdir -p artifacts

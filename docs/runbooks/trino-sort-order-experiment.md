@@ -11,11 +11,12 @@ data skipping from partition pruning because both tables expose one Iceberg part
 
 ## Evidence contract
 
-The fixture and Trino reports use schema version `1.0`. The final report records:
+The fixture report uses schema version `1.0`, and the Trino report uses `1.1`. The final
+report records:
 
 - current snapshot, file count, record count, partition count, and byte size;
-- a digest of each table's Trino `SHOW CREATE TABLE` output;
-- proof that only the ordered table exposes `sorted_by = ARRAY['event_id']`;
+- a digest of each table's read-only Iceberg `sort-order` property;
+- proof that only the ordered table exposes `event_id ASC` as its sort order;
 - an identical aggregate result for event IDs 30,000 through 30,127;
 - three alternating `EXPLAIN ANALYZE` runs per layout;
 - medians for elapsed time, CPU, processed rows and bytes, physical input bytes, peak
@@ -56,7 +57,7 @@ operators. `physical_input_bytes_reduction_percent` measures the reduction in ob
 reads. Both must be positive. File counts can differ slightly because Spark write planning
 uses task sizing, so identical data and scan evidence are the gates, not exact file parity.
 
-The table snapshots and create-statement digests bind measurements to exact layouts.
+The table snapshots and sort-order digests bind measurements to exact layouts.
 Alternating execution order reduces systematic warm-cache bias, but does not turn three
 local repetitions into a production capacity benchmark.
 

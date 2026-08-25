@@ -40,7 +40,7 @@ def valid_table(value: object, *, name: str, sorted_by: bool) -> bool:
         and value["data_file_count"] >= 8
         and isinstance(value.get("total_size_bytes"), int)
         and value["total_size_bytes"] > 0
-        and valid_hash(value.get("create_sql_sha256"))
+        and valid_hash(value.get("sort_order_sha256"))
         and value.get("sorted_by_event_id") is sorted_by
     )
 
@@ -106,7 +106,7 @@ def main() -> None:
     expected_bytes_reduction = round((bytes_before - bytes_after) * 100 / bytes_before, 2)
 
     checks = {
-        "schema": report.get("schema_version") == "1.0",
+        "schema": report.get("schema_version") == "1.1",
         "status": report.get("status") == "ready",
         "experiment": report.get("experiment") == "iceberg_sort_order",
         "engine": report.get("engine") == "trino",

@@ -68,9 +68,11 @@ acceptance check. Table data and metastore state remain in their existing volume
 
 This profile is a local query-path proof, not a production deployment. It has two
 workers, no TLS or user authentication, and no centralized policy engine. The
-coordinator applies file-backed resource groups. Workers use local `allow-all` system
-access control so the shutdown drill can write system information. The Iceberg catalog
-is read-only; Spark remains the table writer.
+coordinator applies file-backed resource groups, and every Trino node loads the shared
+deny-by-default file policy described in the
+[authorization runbook](trino-authorization.md). Because the HTTP profile trusts the
+claimed username, these rules are testable authorization evidence rather than a secure
+external boundary. The Iceberg catalog is read-only; Spark remains the table writer.
 
 ## Upgrade from 0.6.0
 
