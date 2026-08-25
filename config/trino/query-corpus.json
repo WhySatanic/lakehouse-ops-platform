@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "name": "silver_weather_baseline",
+  "queries": [
+    {
+      "id": "full_table_scan",
+      "description": "Scan the validated silver table and aggregate its time range.",
+      "sql": "SELECT count(*) AS rows, min(observed_at) AS first_observation, max(observed_at) AS last_observation FROM lakehouse.silver.weather_hourly"
+    },
+    {
+      "id": "location_aggregate",
+      "description": "Measure grouped weather aggregation by location.",
+      "sql": "SELECT location_name, count(*) AS observations, avg(temperature_2m) AS average_temperature FROM lakehouse.silver.weather_hourly GROUP BY location_name ORDER BY location_name"
+    },
+    {
+      "id": "partition_time_filter",
+      "description": "Exercise the event-time partition predicate and ordered result path.",
+      "sql": "SELECT location_name, observed_at, temperature_2m FROM lakehouse.silver.weather_hourly WHERE observed_at >= TIMESTAMP '2024-01-01 00:00:00' ORDER BY observed_at, location_name LIMIT 100"
+    }
+  ]
+}

@@ -324,6 +324,67 @@ def test_collect_iceberg_metadata_command(
     }
 
 
+def test_capture_trino_baseline_command(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    corpus = tmp_path / "queries.json"
+    corpus.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "name": "cli_test",
+                "queries": [
+                    {"id": "scan_query", "description": "Scan", "sql": "SELECT 1"}
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    class FakeClient:
+        def __init__(self, server: str, *, user: str) -> None:
+            assert server == "http://trino.test:8080"
+            assert user == "performance-user"
+
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+    monkeypatch.setattr(cli, "TrinoClient", FakeClient)
+    monkeypatch.setattr(
+        cli,
+        "capture_baseline",
+        lambda client, loaded: {
+            "schema_version": "1.0",
+            "status": "ready",
+            "corpus": {"name": loaded.name, "query_count": len(loaded.queries)},
+        },
+    )
+
+    exit_code = cli.main(
+        [
+            "capture-trino-baseline",
+            "--corpus",
+            str(corpus),
+            "--server",
+            "http://trino.test:8080",
+            "--user",
+            "performance-user",
+        ]
+    )
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "schema_version": "1.0",
+        "status": "ready",
+        "corpus": {"name": "cli_test", "query_count": 1},
+    }
+
+
 def test_plan_iceberg_maintenance_command(
     capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:

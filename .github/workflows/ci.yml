@@ -97,6 +97,17 @@ jobs:
           trino-coordinator trino-worker
       - name: Query Iceberg tables through Trino
         run: docker compose --profile query run --rm trino-query-check
+      - name: Capture repeatable Trino query baseline
+        run: |
+          mkdir -p artifacts
+          uv run lakeops capture-trino-baseline \
+            --server http://localhost:8080 \
+            --corpus config/trino/query-corpus.json \
+            > artifacts/trino-baseline.json
+      - name: Verify Trino query baseline
+        run: >-
+          uv run python tests/integration/check_trino_baseline.py
+          artifacts/trino-baseline.json
       - name: Exercise snapshot time travel and rollback
         run: |
           mkdir -p artifacts
