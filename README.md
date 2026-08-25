@@ -7,7 +7,7 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: early access `0.20.0`. Open-Meteo ingestion works against the local filesystem
+> Status: early access `0.21.0`. Open-Meteo ingestion works against the local filesystem
 > and MinIO. The opt-in platform profiles include PostgreSQL-backed Hive Metastore and a
 > Spark writer for S3-backed Iceberg bronze and validated silver tables. A Trino 483
 > coordinator with two workers reads the same tables through Hive Metastore. The control
@@ -126,6 +126,10 @@ query the bronze and silver tables, and run the fixture acceptance check.
 The [Trino worker shutdown runbook](docs/runbooks/trino-worker-shutdown.md) drains one
 worker through Trino's management API, proves that it leaves discovery, and verifies
 that the remaining worker still serves the Iceberg query path.
+
+The [Trino resource groups runbook](docs/runbooks/trino-resource-groups.md) defines
+separate ingestion, BI, and ad-hoc budgets, then proves selector assignments and
+ad-hoc queueing under contention with cancellable protocol-level queries.
 
 The control plane can collect a versioned table-health snapshot from Trino's Iceberg
 metadata tables:

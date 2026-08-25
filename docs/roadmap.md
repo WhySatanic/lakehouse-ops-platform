@@ -49,7 +49,7 @@ preserves declared snapshots, and emits an auditable execution report.
 ## Phase 3 — Trino performance and workload management
 
 - [x] Multi-worker topology with health checks and graceful shutdown runbook.
-- [ ] Resource groups for ingestion, BI, and ad-hoc workloads with queueing tests.
+- [x] Resource groups for ingestion, BI, and ad-hoc workloads with queueing tests.
 - [x] Repeatable query corpus and baseline capture (`EXPLAIN ANALYZE`, wall time, CPU,
   scanned bytes, peak memory).
 - [ ] Partitioning, sorting, file-size, and metadata-cache experiments.
