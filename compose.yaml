@@ -598,7 +598,7 @@ services:
     restart: "no"
 
   trino-coordinator:
-    image: trinodb/trino:483
+    image: ${TRINO_SERVER_IMAGE:-trinodb/trino:483}
     profiles: ["query"]
     depends_on:
       hive-metastore:
@@ -621,7 +621,7 @@ services:
     restart: unless-stopped
 
   trino-worker:
-    image: trinodb/trino:483
+    image: ${TRINO_SERVER_IMAGE:-trinodb/trino:483}
     profiles: ["query"]
     depends_on:
       trino-coordinator:
@@ -641,7 +641,7 @@ services:
     restart: on-failure
 
   trino-worker-2:
-    image: trinodb/trino:483
+    image: ${TRINO_SERVER_IMAGE:-trinodb/trino:483}
     profiles: ["query"]
     depends_on:
       trino-coordinator:
