@@ -58,7 +58,7 @@ preserves declared snapshots, and emits an auditable execution report.
     - [x] Day-partition A/B experiment with processed-row and physical-input evidence.
     - [x] Sort-order experiment with selective predicate evidence.
   - [x] Metadata-cache experiment with controlled cold and warm runs.
-- [ ] Version-upgrade rehearsal with compatibility and rollback checks.
+- [x] Version-upgrade rehearsal with compatibility and rollback checks.
 
 Exit criterion: a checked-in report explains a bottleneck, the chosen change, measured
 improvement, trade-offs, and rollback path.

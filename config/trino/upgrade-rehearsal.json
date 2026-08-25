@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "source": {
+    "image": "trinodb/trino:482",
+    "version": "482"
+  },
+  "target": {
+    "image": "trinodb/trino:483",
+    "version": "483"
+  },
+  "release_notes": "https://trino.io/docs/current/release/release-483.html"
+}
