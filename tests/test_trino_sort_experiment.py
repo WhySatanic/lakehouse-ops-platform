@@ -65,13 +65,17 @@ class FakeTrinoClient:
             ]
         if "$partitions" in sql:
             return [{"partition_count": 2 if self.partitioned else 1}]
-        if sql.startswith("SHOW CREATE TABLE"):
-            sorted_property = ""
+        if "$properties" in sql:
+            sort_order = False
             if (sorted_table and not self.missing_sort_order) or (
                 not sorted_table and self.baseline_sort_order
             ):
-                sorted_property = ", sorted_by = ARRAY['event_id']"
-            return [{"Create Table": f"CREATE TABLE x WITH (format = 'PARQUET'{sorted_property})"}]
+                sort_order = True
+            return (
+                [{"value": "event_id ASC NULLS FIRST"}]
+                if sort_order
+                else []
+            )
         if self.filtered_empty:
             return []
         checksum = 99_999 if sorted_table and self.result_mismatch else 3_848_128
@@ -133,8 +137,10 @@ def capture(client: FakeTrinoClient, **kwargs: object) -> dict[str, object]:
 
 
 def test_capture_sort_order_experiment_records_reduction() -> None:
-    report = capture(FakeTrinoClient())
+    client = FakeTrinoClient()
+    report = capture(client)
 
+    assert report["schema_version"] == "1.1"
     assert report["tables"]["baseline"]["snapshot_id"] == "21"
     assert report["tables"]["sorted"]["sorted_by_event_id"] is True
     assert report["filtered_result"]["row_count"] == 128
@@ -146,6 +152,8 @@ def test_capture_sort_order_experiment_records_reduction() -> None:
     assert report["collected_at"] == "2026-08-25T08:00:00+00:00"
     assert len(report["runs"]["baseline"]) == 3
     assert len(report["runs"]["sorted"]) == 3
+    assert any("$properties" in query for query in client.queries)
+    assert not any(query.startswith("SHOW CREATE TABLE") for query in client.queries)
 
 
 @pytest.mark.parametrize(

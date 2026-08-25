@@ -65,6 +65,11 @@ No data migration is required. Recreate the coordinator and both workers so ever
 mounts the shared access-control properties and JSON rules. Existing anonymous local
 queries now need one of the documented identities and permissions.
 
+The sort-order evidence report moves from schema `1.0` to `1.1` and replaces
+`create_sql_sha256` with `sort_order_sha256`. This keeps the performance inspector on
+read-only Iceberg metadata instead of granting the write-capable catalog access that
+Trino requires for `SHOW CREATE TABLE`.
+
 ```bash
 docker compose --env-file .env --profile query up -d --force-recreate \
   trino-coordinator trino-worker trino-worker-2
