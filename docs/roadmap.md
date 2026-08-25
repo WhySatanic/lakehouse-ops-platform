@@ -41,7 +41,7 @@ writes an Iceberg table with Spark, and validates it through Trino.
   - [x] Schema and partition evolution with compatibility evidence.
     - [x] Nullable-column add and field rename with historical-schema evidence.
     - [x] Partition-spec evolution with mixed-layout evidence.
-- [ ] Failure injection for interrupted writes and post-condition reconciliation.
+- [x] Failure injection for interrupted writes and post-condition reconciliation.
 
 Exit criterion: maintenance produces a measured reduction in file count/query latency,
 preserves declared snapshots, and emits an auditable execution report.

@@ -400,6 +400,33 @@ services:
       ]
     restart: "no"
 
+  spark-interrupted-write-fixture:
+    image: lakehouse-ops/spark-iceberg:3.5.9-1.11.0
+    profiles: ["compute"]
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+    environment:
+      LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
+      LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      HIVE_METASTORE_URI: thrift://hive-metastore:9083
+      SPARK_MASTER: local[2]
+      PYTHONPATH: /opt/lakehouse/jobs
+      INTERRUPTED_WRITE_REPORT_PATH: /opt/lakehouse/artifacts/interrupted-write-report.json
+    volumes:
+      - ./jobs/spark:/opt/lakehouse/jobs:ro
+      - ./tests/integration/prepare_interrupted_write_fixture.py:/opt/lakehouse/tests/prepare_interrupted_write_fixture.py:ro
+      - ./artifacts:/opt/lakehouse/artifacts
+    command:
+      [
+        "/opt/spark/bin/spark-submit",
+        "/opt/lakehouse/tests/prepare_interrupted_write_fixture.py",
+      ]
+    restart: "no"
+
   bronze-catalog-check:
     image: postgres:17.10-alpine3.23
     profiles: ["compute"]
@@ -616,6 +643,23 @@ services:
     volumes:
       - ./tests/integration/check_partition_evolution_trino.sh:/checks/check_partition_evolution_trino.sh:ro
     entrypoint: ["/bin/bash", "/checks/check_partition_evolution_trino.sh"]
+    restart: "no"
+
+  trino-interrupted-write-check:
+    image: trinodb/trino:483
+    profiles: ["query"]
+    depends_on:
+      trino-coordinator:
+        condition: service_healthy
+      trino-worker:
+        condition: service_healthy
+    environment:
+      TRINO_SERVER: http://trino-coordinator:8080
+      INTERRUPTED_WRITE_SNAPSHOT_ID: ${INTERRUPTED_WRITE_SNAPSHOT_ID:-unset}
+      INTERRUPTED_WRITE_FILE_COUNT: ${INTERRUPTED_WRITE_FILE_COUNT:-unset}
+    volumes:
+      - ./tests/integration/check_interrupted_write_trino.sh:/checks/check_interrupted_write_trino.sh:ro
+    entrypoint: ["/bin/bash", "/checks/check_interrupted_write_trino.sh"]
     restart: "no"
 
 volumes:

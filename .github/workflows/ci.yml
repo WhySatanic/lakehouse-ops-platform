@@ -132,6 +132,22 @@ jobs:
           echo "PARTITION_INITIAL_SNAPSHOT_ID=$(uv run python -c 'import json; print(json.load(open("artifacts/partition-evolution-report.json"))["before_evolution"]["snapshot_id"])')" >> "$GITHUB_ENV"
       - name: Verify mixed partition layouts through Trino
         run: docker compose --profile query run --rm trino-partition-evolution-check
+      - name: Prepare interrupted-write fixture
+        run: |
+          touch artifacts/interrupted-write-report.json
+          chmod 0666 artifacts/interrupted-write-report.json
+          docker compose --profile catalog --profile compute run --rm spark-interrupted-write-fixture
+      - name: Inject interrupted write and reconcile post-conditions
+        run: >-
+          uv run python tests/integration/exercise_interrupted_write_reconciliation.py
+          artifacts/interrupted-write-report.json
+      - name: Verify interrupted-write recovery evidence
+        run: |
+          uv run python tests/integration/check_interrupted_write_reconciliation.py artifacts/interrupted-write-report.json
+          echo "INTERRUPTED_WRITE_SNAPSHOT_ID=$(uv run python -c 'import json; print(json.load(open("artifacts/interrupted-write-report.json"))["before"]["snapshot_id"])')" >> "$GITHUB_ENV"
+          echo "INTERRUPTED_WRITE_FILE_COUNT=$(uv run python -c 'import json; print(len(json.load(open("artifacts/interrupted-write-report.json"))["before"]["referenced_files"]))')" >> "$GITHUB_ENV"
+      - name: Verify reconciled table through Trino
+        run: docker compose --profile query run --rm trino-interrupted-write-check
       - name: Collect Iceberg metadata through Trino
         run: >-
           uv run lakeops collect-iceberg-metadata
