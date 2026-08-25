@@ -36,6 +36,10 @@ from lakehouse_ops.trino_partition_experiment import (
     PartitionExperimentError,
     capture_partition_pruning_experiment,
 )
+from lakehouse_ops.trino_sort_experiment import (
+    SortExperimentError,
+    capture_sort_order_experiment,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -121,6 +125,22 @@ def build_parser() -> argparse.ArgumentParser:
     partition_pruning.add_argument("--partitioned-table", default="pruning_partitioned")
     partition_pruning.add_argument("--target-day", default="2026-01-16")
     partition_pruning.add_argument("--repetitions", type=int, default=3)
+
+    sort_order = subparsers.add_parser(
+        "capture-trino-sort-order",
+        help="compare identical unpartitioned Iceberg tables with different file ordering",
+    )
+    sort_order.add_argument(
+        "--server", default=os.getenv("TRINO_SERVER", "http://localhost:8080")
+    )
+    sort_order.add_argument("--user", default="lakehouse-performance")
+    sort_order.add_argument("--catalog", default="lakehouse")
+    sort_order.add_argument("--schema", default="ops")
+    sort_order.add_argument("--baseline-table", default="sort_baseline")
+    sort_order.add_argument("--sorted-table", default="sort_ordered")
+    sort_order.add_argument("--range-start", type=int, default=30_000)
+    sort_order.add_argument("--range-size", type=int, default=128)
+    sort_order.add_argument("--repetitions", type=int, default=3)
 
     plan = subparsers.add_parser(
         "plan-iceberg-maintenance", help="create an explainable Iceberg maintenance plan"
@@ -253,6 +273,23 @@ def main(argv: list[str] | None = None) -> int:
                     repetitions=args.repetitions,
                 )
         except PartitionExperimentError as error:
+            parser.error(str(error))
+        print(json.dumps(report, sort_keys=True))
+        return 0
+    if args.command == "capture-trino-sort-order":
+        try:
+            with TrinoClient(args.server, user=args.user) as client:
+                report = capture_sort_order_experiment(
+                    client,
+                    catalog=args.catalog,
+                    schema=args.schema,
+                    baseline_table=args.baseline_table,
+                    sorted_table=args.sorted_table,
+                    range_start=args.range_start,
+                    range_size=args.range_size,
+                    repetitions=args.repetitions,
+                )
+        except SortExperimentError as error:
             parser.error(str(error))
         print(json.dumps(report, sort_keys=True))
         return 0

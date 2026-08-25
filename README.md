@@ -7,7 +7,7 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: early access `0.23.0`. Open-Meteo ingestion works against the local filesystem
+> Status: early access `0.24.0`. Open-Meteo ingestion works against the local filesystem
 > and MinIO. The opt-in platform profiles include PostgreSQL-backed Hive Metastore and a
 > Spark writer for S3-backed Iceberg bronze and validated silver tables. A Trino 483
 > coordinator with two workers reads the same tables through Hive Metastore. The control
@@ -138,6 +138,10 @@ and after data-file rewrite, without requiring latency to improve on a tiny fixt
 The [Trino partition pruning experiment](docs/runbooks/trino-partition-pruning-experiment.md)
 compares identical unpartitioned and day-partitioned Iceberg tables, then requires lower
 processed-row and physical-input volume for a single-day predicate.
+
+The [Trino sort-order experiment](docs/runbooks/trino-sort-order-experiment.md) compares
+identical unpartitioned tables with hash-scattered and globally ordered files. A selective
+event-ID range must preserve results while reducing processed rows and object-store reads.
 
 The control plane can collect a versioned table-health snapshot from Trino's Iceberg
 metadata tables:
