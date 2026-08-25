@@ -23,8 +23,8 @@ def main() -> None:
     assert execution["action_id"] == dry_run["action_id"]
     assert execution["before"]["snapshot_id"] == dry_run["before"]["snapshot_id"]
     assert execution["after"]["snapshot_id"] != execution["before"]["snapshot_id"]
-    assert execution["before"]["record_count"] == 4
-    assert execution["after"]["record_count"] == 4
+    assert execution["before"]["record_count"] == 100_000
+    assert execution["after"]["record_count"] == 100_000
     assert execution["after"]["data_file_count"] < execution["before"]["data_file_count"]
     assert execution["procedure_result"]["rewritten_data_files_count"] >= 2
     assert execution["procedure_result"]["failed_data_files_count"] == 0

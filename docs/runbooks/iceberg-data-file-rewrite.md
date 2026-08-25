@@ -52,6 +52,10 @@ The procedure is restricted to one concurrent file group, disables partial progr
 and rewrites no more than 1,000 files. A successful report requires preserved row count,
 a new snapshot, fewer data files, and zero failed files.
 
+The [Trino compaction experiment](trino-compaction-experiment.md) captures the same
+read-only workload before and after this operation. Its comparison report rejects
+snapshot or file-count evidence that does not match the applied maintenance report.
+
 ## Failure handling
 
 - `current snapshot does not match`: discard the stale plan, recollect metadata, and

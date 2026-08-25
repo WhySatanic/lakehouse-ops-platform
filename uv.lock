@@ -226,7 +226,7 @@ wheels = [
 
 [[package]]
 name = "lakehouse-ops-platform"
-version = "0.21.0"
+version = "0.22.0"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },

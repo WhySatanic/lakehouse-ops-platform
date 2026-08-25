@@ -36,7 +36,7 @@ def main() -> None:
             )
         else:
             expired_unavailable = False
-        if current_rows != 4 or retained_rows != 4 or not expired_unavailable:
+        if current_rows != 100_000 or retained_rows != 100_000 or not expired_unavailable:
             raise RuntimeError(
                 "snapshot retention check failed: "
                 f"current={current_rows}, retained={retained_rows}, "

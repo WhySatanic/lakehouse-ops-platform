@@ -4,6 +4,9 @@ import json
 
 from spark_catalog import build_session, required_environment
 
+FILES = 4
+ROWS_PER_FILE = 25_000
+
 
 def main() -> None:
     bucket = required_environment("LAKEHOUSE_BUCKET")
@@ -29,10 +32,17 @@ def main() -> None:
             )
             """
         )
-        for event_id in range(4):
-            spark.sql(
-                "INSERT INTO lakehouse.ops.maintenance_fixture VALUES "
-                f"({event_id}, 'fixture-{event_id}')"
+        for batch in range(FILES):
+            first_id = batch * ROWS_PER_FILE
+            last_id = first_id + ROWS_PER_FILE
+            (
+                spark.range(first_id, last_id, numPartitions=1)
+                .selectExpr(
+                    "id AS event_id",
+                    "concat('fixture-', cast(id AS string)) AS payload",
+                )
+                .writeTo("lakehouse.ops.maintenance_fixture")
+                .append()
             )
         files = spark.sql(
             "SELECT count(*) AS count FROM lakehouse.ops.maintenance_fixture.data_files"
@@ -41,7 +51,7 @@ def main() -> None:
             "SELECT count(*) AS count FROM lakehouse.ops.maintenance_fixture.manifests"
         ).first()["count"]
         rows = spark.table("lakehouse.ops.maintenance_fixture").count()
-        if files != 4 or manifests != 4 or rows != 4:
+        if files != FILES or manifests != FILES or rows != FILES * ROWS_PER_FILE:
             raise RuntimeError(
                 f"unexpected fixture state: files={files}, manifests={manifests}, rows={rows}"
             )
