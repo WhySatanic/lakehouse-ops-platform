@@ -98,6 +98,8 @@ jobs:
           docker compose --profile query up -d --wait
           trino-coordinator trino-worker trino-worker-2
       - name: Query Iceberg tables through Trino
+        env:
+          TRINO_SERVER_IMAGE: trinodb/trino:482
         run: docker compose --profile query run --rm trino-query-check
       - name: Rehearse Trino upgrade and rollback
         run: >-
