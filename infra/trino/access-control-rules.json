@@ -1,0 +1,129 @@
+{
+  "catalogs": [
+    {
+      "user": "platform_admin",
+      "catalog": ".*",
+      "allow": "all"
+    },
+    {
+      "user": "lakehouse-(ops|ci|performance|recovery-drill|operator|bi-inspector|ingestion-ci|bi-ci|analyst)|metadata-cache-readiness|upgrade-(readiness|rehearsal)",
+      "catalog": "lakehouse|lakehouse_cache_disabled|system",
+      "allow": "read-only"
+    },
+    {
+      "user": "data_engineer|analytics_engineer|analyst",
+      "catalog": "lakehouse|lakehouse_cache_disabled",
+      "allow": "read-only"
+    },
+    {
+      "catalog": "system",
+      "allow": "none"
+    },
+    {
+      "catalog": ".*",
+      "allow": "none"
+    }
+  ],
+  "schemas": [
+    {
+      "user": "platform_admin",
+      "catalog": ".*",
+      "schema": ".*",
+      "owner": true
+    },
+    {
+      "catalog": ".*",
+      "schema": ".*",
+      "owner": false
+    }
+  ],
+  "tables": [
+    {
+      "user": "platform_admin",
+      "catalog": ".*",
+      "schema": ".*",
+      "table": ".*",
+      "privileges": ["SELECT", "INSERT", "DELETE", "UPDATE", "OWNERSHIP", "GRANT_SELECT"]
+    },
+    {
+      "user": "lakehouse-(ops|ci|performance|recovery-drill|operator|bi-inspector|ingestion-ci|bi-ci|analyst)|metadata-cache-readiness|upgrade-(readiness|rehearsal)",
+      "catalog": "lakehouse|lakehouse_cache_disabled|system",
+      "schema": ".*",
+      "table": ".*",
+      "privileges": ["SELECT"]
+    },
+    {
+      "user": "data_engineer",
+      "catalog": "lakehouse|lakehouse_cache_disabled",
+      "schema": "bronze|silver|gold",
+      "table": ".*",
+      "privileges": ["SELECT"]
+    },
+    {
+      "user": "analytics_engineer",
+      "catalog": "lakehouse|lakehouse_cache_disabled",
+      "schema": "silver|gold",
+      "table": ".*",
+      "privileges": ["SELECT"]
+    },
+    {
+      "user": "analyst",
+      "catalog": "lakehouse|lakehouse_cache_disabled",
+      "schema": "gold",
+      "table": ".*",
+      "privileges": ["SELECT"]
+    },
+    {
+      "catalog": ".*",
+      "schema": ".*",
+      "table": ".*",
+      "privileges": []
+    }
+  ],
+  "queries": [
+    {
+      "user": "platform_admin|lakehouse-bi-inspector",
+      "allow": ["execute", "view", "kill"]
+    },
+    {
+      "allow": ["execute"]
+    }
+  ],
+  "system_information": [
+    {
+      "user": "platform_admin|lakehouse-operator",
+      "allow": ["read", "write"]
+    },
+    {
+      "user": "lakehouse-(ops|ci|performance|recovery-drill|bi-inspector|ingestion-ci|bi-ci|analyst)|metadata-cache-readiness|upgrade-(readiness|rehearsal)",
+      "allow": ["read"]
+    },
+    {
+      "allow": []
+    }
+  ],
+  "system_session_properties": [
+    {
+      "user": "platform_admin",
+      "property": ".*",
+      "allow": true
+    },
+    {
+      "property": ".*",
+      "allow": false
+    }
+  ],
+  "catalog_session_properties": [
+    {
+      "user": "platform_admin",
+      "catalog": ".*",
+      "property": ".*",
+      "allow": true
+    },
+    {
+      "catalog": ".*",
+      "property": ".*",
+      "allow": false
+    }
+  ]
+}
