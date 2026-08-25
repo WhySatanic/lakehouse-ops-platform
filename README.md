@@ -183,6 +183,12 @@ unreferenced object and repeats the checks through Trino. See the
 [interrupted-write reconciliation runbook](docs/runbooks/iceberg-interrupted-write-reconciliation.md)
 for the modeled failure boundary and evidence contract.
 
+The Trino baseline runner executes a versioned, read-only query corpus with
+`EXPLAIN ANALYZE` and records wall time, CPU, processed bytes, physical input, peak memory,
+spilling, SQL digests, and plan digests. See the
+[query baseline runbook](docs/runbooks/trino-query-baseline.md) for capture and comparison
+rules.
+
 ## Engineering scope
 
 | Capability | Evidence planned in this repository |

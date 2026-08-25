@@ -22,6 +22,11 @@ from lakehouse_ops.ingestion.models import Location, WeatherPayload
 from lakehouse_ops.ingestion.open_meteo import OpenMeteoClient
 from lakehouse_ops.ingestion.s3_landing import S3LandingZone
 from lakehouse_ops.trino import TrinoClient
+from lakehouse_ops.trino_baseline import (
+    QueryCorpusError,
+    capture_baseline,
+    load_query_corpus,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -59,6 +64,15 @@ def build_parser() -> argparse.ArgumentParser:
     metadata.add_argument("--catalog", default="lakehouse")
     metadata.add_argument("--schema", default="silver")
     metadata.add_argument("--table", default="weather_hourly")
+
+    baseline = subparsers.add_parser(
+        "capture-trino-baseline", help="run a versioned query corpus with Trino metrics"
+    )
+    baseline.add_argument("--corpus", required=True, type=Path)
+    baseline.add_argument(
+        "--server", default=os.getenv("TRINO_SERVER", "http://localhost:8080")
+    )
+    baseline.add_argument("--user", default="lakehouse-performance")
 
     plan = subparsers.add_parser(
         "plan-iceberg-maintenance", help="create an explainable Iceberg maintenance plan"
@@ -143,6 +157,15 @@ def main(argv: list[str] | None = None) -> int:
                 args.catalog, args.schema, args.table
             )
         print(json.dumps(report.as_dict(), sort_keys=True))
+        return 0
+    if args.command == "capture-trino-baseline":
+        try:
+            corpus = load_query_corpus(args.corpus)
+            with TrinoClient(args.server, user=args.user) as client:
+                report = capture_baseline(client, corpus)
+        except QueryCorpusError as error:
+            parser.error(str(error))
+        print(json.dumps(report, sort_keys=True))
         return 0
     if args.command == "plan-iceberg-maintenance":
         try:

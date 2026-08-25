@@ -50,7 +50,7 @@ preserves declared snapshots, and emits an auditable execution report.
 
 - [ ] Multi-worker topology with health checks and graceful shutdown runbook.
 - [ ] Resource groups for ingestion, BI, and ad-hoc workloads with queueing tests.
-- [ ] Repeatable query corpus and baseline capture (`EXPLAIN ANALYZE`, wall time, CPU,
+- [x] Repeatable query corpus and baseline capture (`EXPLAIN ANALYZE`, wall time, CPU,
   scanned bytes, peak memory).
 - [ ] Partitioning, sorting, file-size, and metadata-cache experiments.
 - [ ] Version-upgrade rehearsal with compatibility and rollback checks.
