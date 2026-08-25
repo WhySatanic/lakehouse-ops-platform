@@ -26,7 +26,7 @@ assert_result() {
 
 assert_result workers \
   "SELECT count(*) FROM system.runtime.nodes WHERE coordinator = false" \
-  "1"
+  "2"
 assert_result bronze_rows \
   "SELECT count(*) FROM lakehouse.bronze.weather_hourly" \
   "4"
@@ -49,4 +49,4 @@ assert_result silver_snapshots \
   "SELECT count(*) > 0 FROM lakehouse.silver.\"weather_hourly\$snapshots\"" \
   "true"
 
-printf '{"status":"ready","workers":1,"bronze_rows":4,"silver_rows":2,"reject_rows":1,"duplicate_keys":0}\n'
+printf '{"status":"ready","workers":2,"bronze_rows":4,"silver_rows":2,"reject_rows":1,"duplicate_keys":0}\n'

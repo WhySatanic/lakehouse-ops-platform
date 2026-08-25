@@ -25,7 +25,8 @@ Start the catalog, object store, and Trino topology, then initialize MinIO:
 docker compose --profile catalog --profile compute up -d --wait \
   minio metastore-db hive-metastore
 docker compose run --rm minio-init
-docker compose --profile query up -d --wait trino-coordinator trino-worker
+docker compose --profile query up -d --wait \
+  trino-coordinator trino-worker trino-worker-2
 mkdir -p artifacts
 touch artifacts/interrupted-write-report.json
 chmod 0666 artifacts/interrupted-write-report.json

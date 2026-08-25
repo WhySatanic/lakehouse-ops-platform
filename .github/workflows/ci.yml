@@ -91,10 +91,10 @@ jobs:
           silver-catalog-check
       - name: Verify silver Iceberg objects
         run: docker compose --profile compute run --rm silver-storage-check
-      - name: Start Trino coordinator and worker
+      - name: Start Trino coordinator and workers
         run: >-
           docker compose --profile query up -d --wait
-          trino-coordinator trino-worker
+          trino-coordinator trino-worker trino-worker-2
       - name: Query Iceberg tables through Trino
         run: docker compose --profile query run --rm trino-query-check
       - name: Capture repeatable Trino query baseline
@@ -108,6 +108,15 @@ jobs:
         run: >-
           uv run python tests/integration/check_trino_baseline.py
           artifacts/trino-baseline.json
+      - name: Drain one Trino worker
+        run: |
+          touch artifacts/trino-worker-shutdown-report.json
+          chmod 0666 artifacts/trino-worker-shutdown-report.json
+          docker compose --profile query run --rm trino-worker-shutdown-check
+      - name: Verify Trino worker shutdown evidence
+        run: >-
+          uv run python tests/integration/check_trino_worker_shutdown.py
+          artifacts/trino-worker-shutdown-report.json
       - name: Exercise snapshot time travel and rollback
         run: |
           mkdir -p artifacts
@@ -372,6 +381,7 @@ jobs:
         run: >-
           docker compose --profile catalog --profile compute --profile query logs
           minio metastore-db hive-metastore trino-coordinator trino-worker
+          trino-worker-2
       - name: Stop integration profile
         if: always()
         run: >-

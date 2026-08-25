@@ -576,10 +576,30 @@ services:
     volumes:
       - ./infra/trino/worker/config.properties:/etc/trino/config.properties:ro
       - ./infra/trino/worker/node.properties:/etc/trino/node.properties:ro
+      - ./infra/trino/worker/access-control.properties:/etc/trino/access-control.properties:ro
       - ./infra/trino/catalog/lakehouse.properties:/etc/trino/catalog/lakehouse.properties:ro
       - trino-worker-data:/data/trino
     mem_limit: 1g
-    restart: unless-stopped
+    restart: on-failure
+
+  trino-worker-2:
+    image: trinodb/trino:483
+    profiles: ["query"]
+    depends_on:
+      trino-coordinator:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+    volumes:
+      - ./infra/trino/worker/config.properties:/etc/trino/config.properties:ro
+      - ./infra/trino/worker-2/node.properties:/etc/trino/node.properties:ro
+      - ./infra/trino/worker/access-control.properties:/etc/trino/access-control.properties:ro
+      - ./infra/trino/catalog/lakehouse.properties:/etc/trino/catalog/lakehouse.properties:ro
+      - trino-worker-2-data:/data/trino
+    mem_limit: 1g
+    restart: on-failure
 
   trino-query-check:
     image: trinodb/trino:483
@@ -589,11 +609,33 @@ services:
         condition: service_healthy
       trino-worker:
         condition: service_healthy
+      trino-worker-2:
+        condition: service_healthy
     environment:
       TRINO_SERVER: http://trino-coordinator:8080
     volumes:
       - ./tests/integration/check_trino.sh:/checks/check_trino.sh:ro
     entrypoint: ["/bin/bash", "/checks/check_trino.sh"]
+    restart: "no"
+
+  trino-worker-shutdown-check:
+    image: trinodb/trino:483
+    profiles: ["query"]
+    depends_on:
+      trino-coordinator:
+        condition: service_healthy
+      trino-worker:
+        condition: service_healthy
+      trino-worker-2:
+        condition: service_healthy
+    environment:
+      TRINO_SERVER: http://trino-coordinator:8080
+      TRINO_SHUTDOWN_WORKER: http://trino-worker-2:8080
+      TRINO_SHUTDOWN_REPORT_PATH: /artifacts/trino-worker-shutdown-report.json
+    volumes:
+      - ./artifacts:/artifacts
+      - ./tests/integration/check_trino_worker_shutdown.sh:/checks/check_trino_worker_shutdown.sh:ro
+    entrypoint: ["/bin/bash", "/checks/check_trino_worker_shutdown.sh"]
     restart: "no"
 
   trino-snapshot-rollback-check:
@@ -669,3 +711,4 @@ volumes:
   bronze-input:
   trino-coordinator-data:
   trino-worker-data:
+  trino-worker-2-data:

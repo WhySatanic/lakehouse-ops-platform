@@ -21,7 +21,7 @@ baselines can prove that they ran the same workload.
 
 ## Capture
 
-Run the core data path and start both Trino nodes, then execute:
+Run the core data path and start the Trino coordinator and both workers, then execute:
 
 ```bash
 uv run lakeops capture-trino-baseline \

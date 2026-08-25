@@ -1,6 +1,6 @@
 # Trino Iceberg query path
 
-The `query` profile runs Trino 483 as one coordinator and one worker. Both nodes use a
+The `query` profile runs Trino 483 as one coordinator and two workers. All nodes use a
 read-only Iceberg catalog named `lakehouse`, Hive Metastore for table discovery, and
 the native Trino S3 filesystem for MinIO warehouse access. The coordinator does not
 execute queries, so successful table reads also prove worker participation.
@@ -16,7 +16,7 @@ silver rows, and one rejected row.
 
 ```bash
 docker compose --env-file .env --profile query up -d --wait \
-  trino-coordinator trino-worker
+  trino-coordinator trino-worker trino-worker-2
 docker compose --env-file .env exec trino-coordinator \
   trino --server http://localhost:8080 --catalog lakehouse --schema silver
 ```
@@ -41,7 +41,7 @@ Run this after loading the deterministic integration fixtures:
 docker compose --env-file .env --profile query run --rm trino-query-check
 ```
 
-The check requires one worker, verifies bronze/silver/reject row counts, proves the
+The check requires two workers, verifies bronze/silver/reject row counts, proves the
 deduplication winner and validation error, and reads the Iceberg snapshot metadata
 table. It exits non-zero at the first failed post-condition.
 
@@ -52,7 +52,7 @@ Inspect node and metastore connectivity first:
 ```bash
 docker compose --env-file .env --profile query ps
 docker compose --env-file .env --profile query logs \
-  trino-coordinator trino-worker hive-metastore
+  trino-coordinator trino-worker trino-worker-2 hive-metastore
 ```
 
 - An empty `system.runtime.nodes` worker set means the worker has not joined discovery.
@@ -66,9 +66,11 @@ acceptance check. Table data and metastore state remain in their existing volume
 
 ## Current limits
 
-This profile is a local query-path proof, not a production deployment. It has one
-worker, no TLS or user authentication, no resource groups, and no centralized policy
-engine. The Iceberg catalog is read-only; Spark remains the table writer.
+This profile is a local query-path proof, not a production deployment. It has two
+workers, no TLS or user authentication, no resource groups, and no centralized policy
+engine. Workers use local `allow-all` system access control so the shutdown drill can
+write system information. The Iceberg catalog is read-only; Spark remains the table
+writer.
 
 ## Upgrade from 0.6.0
 
