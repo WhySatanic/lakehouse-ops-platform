@@ -177,6 +177,12 @@ partitioning and proves Spark and Trino can read old and new file layouts togeth
 [partition evolution runbook](docs/runbooks/iceberg-partition-evolution.md) for the mixed-spec
 evidence and overwrite boundary.
 
+The interrupted-write drill uploads a valid Parquet object without committing new Iceberg
+metadata, proves the snapshot and rows remain unchanged, then removes only the ETag-guarded
+unreferenced object and repeats the checks through Trino. See the
+[interrupted-write reconciliation runbook](docs/runbooks/iceberg-interrupted-write-reconciliation.md)
+for the modeled failure boundary and evidence contract.
+
 ## Engineering scope
 
 | Capability | Evidence planned in this repository |
