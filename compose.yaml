@@ -558,6 +558,8 @@ services:
     volumes:
       - ./infra/trino/coordinator/config.properties:/etc/trino/config.properties:ro
       - ./infra/trino/coordinator/node.properties:/etc/trino/node.properties:ro
+      - ./infra/trino/coordinator/resource-groups.properties:/etc/trino/resource-groups.properties:ro
+      - ./infra/trino/coordinator/resource-groups.json:/etc/trino/resource-groups.json:ro
       - ./infra/trino/catalog/lakehouse.properties:/etc/trino/catalog/lakehouse.properties:ro
       - trino-coordinator-data:/data/trino
     mem_limit: 1g

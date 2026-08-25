@@ -1,0 +1,51 @@
+{
+  "rootGroups": [
+    {
+      "name": "global",
+      "softMemoryLimit": "100%",
+      "hardConcurrencyLimit": 4,
+      "maxQueued": 30,
+      "schedulingPolicy": "weighted_fair",
+      "jmxExport": true,
+      "subGroups": [
+        {
+          "name": "ingestion",
+          "softMemoryLimit": "40%",
+          "hardConcurrencyLimit": 1,
+          "maxQueued": 4,
+          "schedulingWeight": 2,
+          "jmxExport": true
+        },
+        {
+          "name": "bi",
+          "softMemoryLimit": "40%",
+          "hardConcurrencyLimit": 2,
+          "maxQueued": 10,
+          "schedulingWeight": 4,
+          "jmxExport": true
+        },
+        {
+          "name": "adhoc",
+          "softMemoryLimit": "20%",
+          "hardConcurrencyLimit": 1,
+          "maxQueued": 3,
+          "schedulingWeight": 1,
+          "jmxExport": true
+        }
+      ]
+    }
+  ],
+  "selectors": [
+    {
+      "user": "lakehouse-ingestion(?:-.*)?",
+      "group": "global.ingestion"
+    },
+    {
+      "user": "lakehouse-bi(?:-.*)?",
+      "group": "global.bi"
+    },
+    {
+      "group": "global.adhoc"
+    }
+  ]
+}

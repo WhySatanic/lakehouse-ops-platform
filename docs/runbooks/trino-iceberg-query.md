@@ -67,10 +67,10 @@ acceptance check. Table data and metastore state remain in their existing volume
 ## Current limits
 
 This profile is a local query-path proof, not a production deployment. It has two
-workers, no TLS or user authentication, no resource groups, and no centralized policy
-engine. Workers use local `allow-all` system access control so the shutdown drill can
-write system information. The Iceberg catalog is read-only; Spark remains the table
-writer.
+workers, no TLS or user authentication, and no centralized policy engine. The
+coordinator applies file-backed resource groups. Workers use local `allow-all` system
+access control so the shutdown drill can write system information. The Iceberg catalog
+is read-only; Spark remains the table writer.
 
 ## Upgrade from 0.6.0
 

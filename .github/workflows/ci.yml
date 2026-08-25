@@ -108,6 +108,14 @@ jobs:
         run: >-
           uv run python tests/integration/check_trino_baseline.py
           artifacts/trino-baseline.json
+      - name: Exercise Trino workload queueing
+        run: >-
+          uv run python tests/integration/exercise_trino_resource_groups.py
+          http://localhost:8080 artifacts/trino-resource-groups-report.json
+      - name: Verify Trino resource group evidence
+        run: >-
+          uv run python tests/integration/check_trino_resource_groups.py
+          artifacts/trino-resource-groups-report.json
       - name: Drain one Trino worker
         run: |
           touch artifacts/trino-worker-shutdown-report.json
