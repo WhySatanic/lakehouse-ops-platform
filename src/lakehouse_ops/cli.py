@@ -32,6 +32,10 @@ from lakehouse_ops.trino_experiment import (
     capture_compaction_phase,
     compare_compaction_phases,
 )
+from lakehouse_ops.trino_partition_experiment import (
+    PartitionExperimentError,
+    capture_partition_pruning_experiment,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -100,6 +104,23 @@ def build_parser() -> argparse.ArgumentParser:
     compaction_compare.add_argument("--before", required=True, type=Path)
     compaction_compare.add_argument("--after", required=True, type=Path)
     compaction_compare.add_argument("--execution", required=True, type=Path)
+
+    partition_pruning = subparsers.add_parser(
+        "capture-trino-partition-pruning",
+        help="compare identical unpartitioned and day-partitioned Iceberg tables",
+    )
+    partition_pruning.add_argument(
+        "--server", default=os.getenv("TRINO_SERVER", "http://localhost:8080")
+    )
+    partition_pruning.add_argument("--user", default="lakehouse-performance")
+    partition_pruning.add_argument("--catalog", default="lakehouse")
+    partition_pruning.add_argument("--schema", default="ops")
+    partition_pruning.add_argument(
+        "--unpartitioned-table", default="pruning_unpartitioned"
+    )
+    partition_pruning.add_argument("--partitioned-table", default="pruning_partitioned")
+    partition_pruning.add_argument("--target-day", default="2026-01-16")
+    partition_pruning.add_argument("--repetitions", type=int, default=3)
 
     plan = subparsers.add_parser(
         "plan-iceberg-maintenance", help="create an explainable Iceberg maintenance plan"
@@ -216,6 +237,22 @@ def main(argv: list[str] | None = None) -> int:
             execution = json.loads(args.execution.read_text(encoding="utf-8"))
             report = compare_compaction_phases(before, after, execution)
         except (OSError, json.JSONDecodeError, TrinoExperimentError) as error:
+            parser.error(str(error))
+        print(json.dumps(report, sort_keys=True))
+        return 0
+    if args.command == "capture-trino-partition-pruning":
+        try:
+            with TrinoClient(args.server, user=args.user) as client:
+                report = capture_partition_pruning_experiment(
+                    client,
+                    catalog=args.catalog,
+                    schema=args.schema,
+                    unpartitioned_table=args.unpartitioned_table,
+                    partitioned_table=args.partitioned_table,
+                    target_day=args.target_day,
+                    repetitions=args.repetitions,
+                )
+        except PartitionExperimentError as error:
             parser.error(str(error))
         print(json.dumps(report, sort_keys=True))
         return 0

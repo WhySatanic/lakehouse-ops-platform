@@ -108,6 +108,24 @@ jobs:
         run: >-
           uv run python tests/integration/check_trino_baseline.py
           artifacts/trino-baseline.json
+      - name: Create partition pruning fixture
+        run: |
+          touch artifacts/partition-pruning-fixture.json
+          chmod 0666 artifacts/partition-pruning-fixture.json
+          docker compose --profile catalog --profile compute run --rm spark-partition-pruning-fixture
+      - name: Verify partition pruning fixture
+        run: >-
+          uv run python tests/integration/check_partition_pruning_fixture.py
+          artifacts/partition-pruning-fixture.json
+      - name: Capture Trino partition pruning evidence
+        run: >-
+          uv run lakeops capture-trino-partition-pruning
+          --server http://localhost:8080 --target-day 2026-01-16 --repetitions 3
+          > artifacts/trino-partition-pruning.json
+      - name: Verify Trino partition pruning evidence
+        run: >-
+          uv run python tests/integration/check_trino_partition_pruning.py
+          artifacts/trino-partition-pruning.json
       - name: Exercise Trino workload queueing
         run: >-
           uv run python tests/integration/exercise_trino_resource_groups.py
