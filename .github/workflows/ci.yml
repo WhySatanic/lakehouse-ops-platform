@@ -126,6 +126,16 @@ jobs:
         run: >-
           uv run python tests/integration/check_trino_partition_pruning.py
           artifacts/trino-partition-pruning.json
+      - name: Exercise Trino metadata cache
+        run: >-
+          uv run python tests/integration/exercise_trino_metadata_cache.py
+          http://localhost:8080 artifacts/trino-metadata-cache.json
+          infra/trino/catalog/lakehouse.properties
+          infra/trino/catalog/lakehouse-cache-disabled.properties
+      - name: Verify Trino metadata cache evidence
+        run: >-
+          uv run python tests/integration/check_trino_metadata_cache.py
+          artifacts/trino-metadata-cache.json
       - name: Create sort order fixture
         run: |
           touch artifacts/sort-order-fixture.json

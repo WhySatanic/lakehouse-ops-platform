@@ -615,6 +615,7 @@ services:
       - ./infra/trino/coordinator/resource-groups.properties:/etc/trino/resource-groups.properties:ro
       - ./infra/trino/coordinator/resource-groups.json:/etc/trino/resource-groups.json:ro
       - ./infra/trino/catalog/lakehouse.properties:/etc/trino/catalog/lakehouse.properties:ro
+      - ./infra/trino/catalog/lakehouse-cache-disabled.properties:/etc/trino/catalog/lakehouse_cache_disabled.properties:ro
       - trino-coordinator-data:/data/trino
     mem_limit: 1g
     restart: unless-stopped
@@ -634,6 +635,7 @@ services:
       - ./infra/trino/worker/node.properties:/etc/trino/node.properties:ro
       - ./infra/trino/worker/access-control.properties:/etc/trino/access-control.properties:ro
       - ./infra/trino/catalog/lakehouse.properties:/etc/trino/catalog/lakehouse.properties:ro
+      - ./infra/trino/catalog/lakehouse-cache-disabled.properties:/etc/trino/catalog/lakehouse_cache_disabled.properties:ro
       - trino-worker-data:/data/trino
     mem_limit: 1g
     restart: on-failure
@@ -653,6 +655,7 @@ services:
       - ./infra/trino/worker-2/node.properties:/etc/trino/node.properties:ro
       - ./infra/trino/worker/access-control.properties:/etc/trino/access-control.properties:ro
       - ./infra/trino/catalog/lakehouse.properties:/etc/trino/catalog/lakehouse.properties:ro
+      - ./infra/trino/catalog/lakehouse-cache-disabled.properties:/etc/trino/catalog/lakehouse_cache_disabled.properties:ro
       - trino-worker-2-data:/data/trino
     mem_limit: 1g
     restart: on-failure
