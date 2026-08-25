@@ -14,6 +14,7 @@ from lakehouse_ops.trino_upgrade import (
     load_upgrade_plan,
     run_upgrade_rehearsal,
     validate_upgrade_report,
+    write_upgrade_report,
 )
 
 
@@ -147,6 +148,15 @@ def test_load_upgrade_plan_rejects_invalid_file(tmp_path: Path) -> None:
 
     with pytest.raises(UpgradeRehearsalError, match="cannot read"):
         load_upgrade_plan(path)
+
+
+def test_write_upgrade_report_creates_parent_directory(tmp_path: Path) -> None:
+    path = tmp_path / "evidence" / "upgrade.json"
+    report = {"status": "ready"}
+
+    write_upgrade_report(path, report)
+
+    assert json.loads(path.read_text(encoding="utf-8")) == report
 
 
 def test_run_upgrade_rehearsal_proves_upgrade_and_rollback(tmp_path: Path) -> None:

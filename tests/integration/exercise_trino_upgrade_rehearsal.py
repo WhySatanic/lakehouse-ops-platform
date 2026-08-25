@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import subprocess
 import time
@@ -11,7 +10,11 @@ from typing import Any
 import httpx
 
 from lakehouse_ops.trino import TrinoClient
-from lakehouse_ops.trino_upgrade import load_upgrade_plan, run_upgrade_rehearsal
+from lakehouse_ops.trino_upgrade import (
+    load_upgrade_plan,
+    run_upgrade_rehearsal,
+    write_upgrade_report,
+)
 
 SERVICES = ("trino-coordinator", "trino-worker", "trino-worker-2")
 
@@ -114,10 +117,8 @@ def main() -> None:
         initial,
         plan,
     )
-    args.report.write_text(
-        json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
-    print(json.dumps(report, sort_keys=True))
+    write_upgrade_report(args.report, report)
+    print(args.report.read_text(encoding="utf-8").strip())
 
 
 if __name__ == "__main__":

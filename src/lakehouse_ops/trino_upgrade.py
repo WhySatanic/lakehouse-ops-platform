@@ -195,6 +195,14 @@ def validate_upgrade_report(report: dict[str, Any], plan: dict[str, Any]) -> Non
         raise UpgradeRehearsalError("upgrade compatibility status is incomplete")
 
 
+def write_upgrade_report(path: Path, report: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def _capture_phase(
     client: QueryClient,
     label: str,
