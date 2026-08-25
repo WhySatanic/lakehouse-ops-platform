@@ -478,6 +478,69 @@ def test_compare_trino_compaction_command(
     assert json.loads(capsys.readouterr().out) == {"inputs": [0, 1, 2]}
 
 
+def test_capture_trino_partition_pruning_command(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    observed: dict[str, object] = {}
+
+    class FakeClient:
+        def __init__(self, server: str, *, user: str) -> None:
+            observed.update(server=server, user=user, client=self)
+
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+    def fake_capture(client: object, **kwargs: object) -> dict[str, str]:
+        observed.update(kwargs)
+        assert client is observed["client"]
+        return {"schema_version": "1.0", "status": "ready"}
+
+    monkeypatch.setattr(cli, "TrinoClient", FakeClient)
+    monkeypatch.setattr(cli, "capture_partition_pruning_experiment", fake_capture)
+
+    exit_code = cli.main(
+        [
+            "capture-trino-partition-pruning",
+            "--server",
+            "http://trino.test:8080",
+            "--user",
+            "performance-user",
+            "--catalog",
+            "iceberg",
+            "--schema",
+            "experiments",
+            "--unpartitioned-table",
+            "events_flat",
+            "--partitioned-table",
+            "events_daily",
+            "--target-day",
+            "2026-01-16",
+            "--repetitions",
+            "5",
+        ]
+    )
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "schema_version": "1.0",
+        "status": "ready",
+    }
+    assert observed == {
+        "server": "http://trino.test:8080",
+        "user": "performance-user",
+        "client": observed["client"],
+        "catalog": "iceberg",
+        "schema": "experiments",
+        "unpartitioned_table": "events_flat",
+        "partitioned_table": "events_daily",
+        "target_day": "2026-01-16",
+        "repetitions": 5,
+    }
+
+
 def test_plan_iceberg_maintenance_command(
     capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
