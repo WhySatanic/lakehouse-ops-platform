@@ -11,7 +11,7 @@ Start the query profile and ensure the target table has at least one snapshot:
 
 ```bash
 docker compose --env-file .env --profile query up -d --wait \
-  trino-coordinator trino-worker
+  trino-coordinator trino-worker trino-worker-2
 ```
 
 Follow the [Trino query runbook](trino-iceberg-query.md) if the catalog or worker is not
