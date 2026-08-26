@@ -53,6 +53,7 @@ class RangerState:
         self.policies: list[dict[str, object]] = []
         self.users: set[str] = set()
         self.next_policy_id = 100
+        self.inject_late_bootstrap = False
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -77,6 +78,13 @@ class RangerState:
         if request.method == "GET" and path.endswith("/lakehouse-trino/policy"):
             return httpx.Response(200, json=self.policies)
         if request.method == "POST" and path.endswith("/policy"):
+            if self.inject_late_bootstrap:
+                self.inject_late_bootstrap = False
+                self.policies.append(_bootstrap_policy(99))
+                return httpx.Response(
+                    400,
+                    text="Another policy already exists for matching resource",
+                )
             policy = {**_json(request), "id": self.next_policy_id}
             self.next_policy_id += 1
             self.policies.append(policy)
@@ -149,15 +157,7 @@ def test_sync_updates_drift_and_deletes_stale_managed_policy() -> None:
             "description": MANAGED_DESCRIPTION,
             "resources": {"catalog": {"values": ["stale"]}},
         },
-        {
-            "id": 52,
-            "service": "lakehouse-trino",
-            "name": "all - catalog",
-            "description": "Policy for all - catalog",
-            "policyItems": [
-                {"users": ["admin"], "delegateAdmin": True, "accesses": []}
-            ],
-        },
+        _bootstrap_policy(52),
     ]
     transport = httpx.MockTransport(state.handle)
 
@@ -176,6 +176,27 @@ def test_sync_updates_drift_and_deletes_stale_managed_policy() -> None:
     assert report["policies"]["deleted"] == 1
     assert report["policies"]["bootstrap_deleted"] == 1
     assert "lakehouse-ops-stale" not in {policy["name"] for policy in state.policies}
+
+
+def test_sync_removes_bootstrap_policy_created_during_first_policy_write() -> None:
+    state = RangerState()
+    state.inject_late_bootstrap = True
+
+    with RangerAdminClient(
+        "http://ranger.test",
+        "admin",
+        "secret",
+        transport=httpx.MockTransport(state.handle),
+    ) as client:
+        report = client.sync(
+            model_path=MODEL_PATH,
+            service_name="lakehouse-trino",
+            trino_jdbc_url="jdbc:trino://trino-coordinator:8080",
+            service_user="platform_admin",
+        )
+
+    assert report["policies"]["bootstrap_deleted"] == 1
+    assert all(not policy["name"].startswith("all - ") for policy in state.policies)
 
 
 def test_client_reports_ranger_http_failure() -> None:
@@ -209,3 +230,15 @@ def test_client_reports_ranger_network_failure() -> None:
 
 def _json(request: httpx.Request) -> dict[str, object]:
     return json.loads(request.content)
+
+
+def _bootstrap_policy(policy_id: int) -> dict[str, object]:
+    return {
+        "id": policy_id,
+        "service": "lakehouse-trino",
+        "name": "all - catalog",
+        "description": "Policy for all - catalog",
+        "policyItems": [
+            {"users": ["admin"], "delegateAdmin": True, "accesses": []}
+        ],
+    }

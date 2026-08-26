@@ -152,17 +152,7 @@ class RangerAdminClient:
         )
         user_status = self._ensure_users(users)
         desired = compile_ranger_policies(model, service_name)
-        existing = self._request(
-            "GET", f"/service/public/v2/api/service/{service_name}/policy"
-        )
-        bootstrap_policies = [
-            policy
-            for policy in existing
-            if isinstance(policy, dict) and _is_ranger_bootstrap_policy(policy)
-        ]
-        for policy in bootstrap_policies:
-            self._request("DELETE", f"/service/public/v2/api/policy/{policy['id']}")
-        existing = [policy for policy in existing if policy not in bootstrap_policies]
+        existing, bootstrap_deleted = self._remove_bootstrap_policies(service_name)
         existing_by_name = {
             policy["name"]: policy for policy in existing if isinstance(policy, dict)
         }
@@ -184,7 +174,20 @@ class RangerAdminClient:
                     None,
                 )
             if current is None:
-                self._request("POST", "/service/public/v2/api/policy", json=policy)
+                try:
+                    self._request("POST", "/service/public/v2/api/policy", json=policy)
+                except RangerAdminError as error:
+                    if "Another policy already exists for matching resource" not in str(
+                        error
+                    ):
+                        raise
+                    _, late_bootstrap_deleted = self._remove_bootstrap_policies(
+                        service_name
+                    )
+                    if late_bootstrap_deleted == 0:
+                        raise
+                    bootstrap_deleted += late_bootstrap_deleted
+                    self._request("POST", "/service/public/v2/api/policy", json=policy)
                 created += 1
             elif _policy_projection(current) == _policy_projection(policy):
                 consumed_ids.add(current["id"])
@@ -213,13 +216,31 @@ class RangerAdminClient:
             "users": user_status,
             "policies": {
                 "desired": len(desired),
-                "bootstrap_deleted": len(bootstrap_policies),
+                "bootstrap_deleted": bootstrap_deleted,
                 "created": created,
                 "updated": updated,
                 "unchanged": unchanged,
                 "deleted": deleted,
             },
         }
+
+    def _remove_bootstrap_policies(
+        self, service_name: str
+    ) -> tuple[list[dict[str, Any]], int]:
+        existing = self._request(
+            "GET", f"/service/public/v2/api/service/{service_name}/policy"
+        )
+        bootstrap_policies = [
+            policy
+            for policy in existing
+            if isinstance(policy, dict) and _is_ranger_bootstrap_policy(policy)
+        ]
+        for policy in bootstrap_policies:
+            self._request("DELETE", f"/service/public/v2/api/policy/{policy['id']}")
+        return (
+            [policy for policy in existing if policy not in bootstrap_policies],
+            len(bootstrap_policies),
+        )
 
     def _ensure_service(
         self, service_name: str, *, trino_jdbc_url: str, service_user: str
