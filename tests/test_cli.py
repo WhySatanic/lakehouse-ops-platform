@@ -319,6 +319,7 @@ def test_sync_ranger_policy_command(
     assert json.loads(capsys.readouterr().out)["status"] == "synchronized"
     assert observed["url"] == "http://ranger.test:6080"
     assert observed["password"] == "secret"
+    assert observed["break_glass_path"] is None
 
 
 def test_sync_ranger_policy_requires_password(

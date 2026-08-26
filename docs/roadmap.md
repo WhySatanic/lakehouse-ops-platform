@@ -74,7 +74,10 @@ improvement, trade-offs, and rollback path.
 - [ ] Row filters, column masking, audit delivery, and break-glass procedure.
   - [x] Trino allow and deny decisions delivered to the Ranger Solr audit store.
   - [ ] Row-filter and column-mask policies with live acceptance evidence.
-  - [ ] Reviewed break-glass grant, expiry, and revocation drill.
+    - [ ] Compatibility blocker: the Apache Ranger 2.9.0 Trino service definition does not
+      advertise row-filter or data-mask support; do not claim enforcement without a tested
+      plugin and service-definition path.
+  - [x] Reviewed break-glass grant, expiry, and revocation drill.
 - [ ] S3 service-account policies aligned with engine responsibilities.
 
 Exit criterion: automated tests prove the role matrix, including denied access, masking,

@@ -50,6 +50,53 @@ The Ranger plugin downloads only policy, role, user-store, and tag bundles witho
 Admin session. Administrative endpoints still require authentication. Live decisions are
 written to the `ranger_audits` Solr collection.
 
+## Break-glass access
+
+An incident responder can receive a temporary role binding from a reviewed JSON lease.
+The lease requires a distinct approver, incident ticket, reason, UTC issue and expiry
+timestamps, and a TTL no longer than one hour. Validate producers against
+[`config/access/break-glass-lease.schema.json`](../../config/access/break-glass-lease.schema.json)
+before submitting the lease:
+
+```json
+{
+  "schema_version": "1.0",
+  "grant_id": "BG-2026-0042",
+  "user": "incident-responder",
+  "role": "platform_admin",
+  "approved_by": "incident-commander",
+  "ticket": "INC-4242",
+  "reason": "restore lakehouse query service",
+  "issued_at": "2026-08-26T11:55:00Z",
+  "expires_at": "2026-08-26T12:25:00Z"
+}
+```
+
+Apply the reviewed lease through the normal policy synchronizer and retain its JSON report
+with the incident evidence:
+
+```bash
+uv run --env-file .env lakeops sync-ranger-policy \
+  --break-glass-lease approved-break-glass.json \
+  > break-glass-grant-report.json
+```
+
+An active lease adds the named user to the requested existing role. A future lease is
+reported as `not_yet_valid`; an expired lease is reported as `expired` and is not added to
+the effective policy. Run the same command at or after expiry to reconcile Ranger and
+remove the temporary binding. The user record may remain in Ranger, but it has no managed
+Lakehouse Ops access after revocation.
+
+Ranger does not schedule this reconciliation. Production automation must run the sync at
+least as frequently as the required revocation window and alert on failures. The CI drill
+proves an initially denied user becomes allowed with an active lease, then becomes denied
+again after expired-lease reconciliation. It does not claim production authentication or
+a highly available scheduler.
+
+The official Ranger 2.9.0 Trino service definition used here does not advertise row-filter
+or data-mask support. Those controls remain a compatibility investigation rather than an
+implemented capability.
+
 The `RANGER_ADMIN_USER` and `RANGER_ADMIN_PASSWORD` values configure only the readiness
 client. On first boot Ranger creates its documented development administrator account.
 Change that password in Ranger Admin, then put the matching client credentials in `.env`.
@@ -78,9 +125,10 @@ Keep it on a trusted local machine. Ranger provides centralized authorization he
 local Trino endpoint still trusts the supplied user header. This is enforcement evidence,
 not a production authentication boundary.
 
-## Upgrade from 0.29.0
+## Upgrade from 0.30.0
 
-No Iceberg or metastore migration is required. The file policy remains the default, so an
-existing environment keeps its previous behavior. Start Ranger, run the synchronizer, then
-set both Trino opt-in variables and recreate all Trino nodes. Remove those variables and
-recreate the nodes to roll back to file authorization.
+No Iceberg, metastore, Ranger database, or base role-model migration is required. Existing
+sync commands keep their previous behavior. To use break-glass access, provide a reviewed
+lease with `--break-glass-lease` and arrange reconciliation at or before its expiry. Roll
+back by omitting the lease and running the synchronizer once; this removes its temporary
+role binding.
