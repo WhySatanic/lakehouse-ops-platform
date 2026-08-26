@@ -247,15 +247,15 @@ services:
       minio-init:
         condition: service_completed_successfully
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lakeops}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      MINIO_INGEST_USER: ${MINIO_INGEST_USER:-lakeops-ingest}
+      MINIO_INGEST_PASSWORD: ${MINIO_INGEST_PASSWORD:-ingest-development-only}
       LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
     volumes:
       - ./tests/fixtures/open_meteo_landing.json:/fixtures/open_meteo_landing.json:ro
     entrypoint: ["/bin/sh", "-ec"]
     command:
       - |
-        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc alias set local http://minio:9000 "$${MINIO_INGEST_USER}" "$${MINIO_INGEST_PASSWORD}"
         mc cp /fixtures/open_meteo_landing.json \
           "local/$${LAKEHOUSE_BUCKET}/landing/source=open_meteo/ingest_date=2026-08-06/location=moscow/d11e9a60acb9c55a4dee581bdccb9ecf992328f50db03042d8df4ba1301defa6.json"
     restart: "no"
@@ -267,15 +267,15 @@ services:
       minio-init:
         condition: service_completed_successfully
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lakeops}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      MINIO_INGEST_USER: ${MINIO_INGEST_USER:-lakeops-ingest}
+      MINIO_INGEST_PASSWORD: ${MINIO_INGEST_PASSWORD:-ingest-development-only}
       LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
     volumes:
       - ./tests/fixtures/open_meteo_silver_cases.json:/fixtures/open_meteo_silver_cases.json:ro
     entrypoint: ["/bin/sh", "-ec"]
     command:
       - |
-        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc alias set local http://minio:9000 "$${MINIO_INGEST_USER}" "$${MINIO_INGEST_PASSWORD}"
         mc cp /fixtures/open_meteo_silver_cases.json \
           "local/$${LAKEHOUSE_BUCKET}/landing/source=open_meteo/ingest_date=2026-08-06/location=moscow/0500bb2b50ec417801db2bce49ee65ed3f835ad6271792b3a3a083ecc44c572b.json"
     restart: "no"
@@ -287,15 +287,15 @@ services:
       landing-fixture:
         condition: service_completed_successfully
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lakeops}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      MINIO_SPARK_USER: ${MINIO_SPARK_USER:-lakeops-spark}
+      MINIO_SPARK_PASSWORD: ${MINIO_SPARK_PASSWORD:-spark-development-only}
       LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
     volumes:
       - bronze-input:/input
     entrypoint: ["/bin/sh", "-ec"]
     command:
       - |
-        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc alias set local http://minio:9000 "$${MINIO_SPARK_USER}" "$${MINIO_SPARK_PASSWORD}"
         mc mirror --overwrite "local/$${LAKEHOUSE_BUCKET}/landing" /input
         object_count="$$(mc find "local/$${LAKEHOUSE_BUCKET}/landing" --name '*.json' | wc -l | tr -d ' ')"
         test "$$object_count" -gt 0
@@ -316,8 +316,8 @@ services:
     environment:
       LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
       LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_ACCESS_KEY_ID: ${MINIO_SPARK_USER:-lakeops-spark}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SPARK_PASSWORD:-spark-development-only}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       HIVE_METASTORE_URI: thrift://hive-metastore:9083
       BRONZE_INPUT_ROOT: /opt/lakehouse/input
@@ -340,8 +340,8 @@ services:
     environment:
       LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
       LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_ACCESS_KEY_ID: ${MINIO_SPARK_USER:-lakeops-spark}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SPARK_PASSWORD:-spark-development-only}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       HIVE_METASTORE_URI: thrift://hive-metastore:9083
       SPARK_MASTER: local[2]
@@ -359,8 +359,8 @@ services:
     environment:
       LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
       LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_ACCESS_KEY_ID: ${MINIO_SPARK_USER:-lakeops-spark}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SPARK_PASSWORD:-spark-development-only}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       HIVE_METASTORE_URI: thrift://hive-metastore:9083
       SPARK_MASTER: local[2]
@@ -384,8 +384,8 @@ services:
     environment:
       LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
       LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_ACCESS_KEY_ID: ${MINIO_SPARK_USER:-lakeops-spark}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SPARK_PASSWORD:-spark-development-only}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       HIVE_METASTORE_URI: thrift://hive-metastore:9083
       SPARK_MASTER: local[2]
@@ -418,8 +418,8 @@ services:
     environment:
       LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
       LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_ACCESS_KEY_ID: ${MINIO_SPARK_USER:-lakeops-spark}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SPARK_PASSWORD:-spark-development-only}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       HIVE_METASTORE_URI: thrift://hive-metastore:9083
       SPARK_MASTER: local[2]
@@ -445,8 +445,8 @@ services:
     environment:
       LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
       LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_ACCESS_KEY_ID: ${MINIO_SPARK_USER:-lakeops-spark}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SPARK_PASSWORD:-spark-development-only}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       HIVE_METASTORE_URI: thrift://hive-metastore:9083
       SPARK_MASTER: local[2]
@@ -472,8 +472,8 @@ services:
     environment:
       LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
       LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_ACCESS_KEY_ID: ${MINIO_SPARK_USER:-lakeops-spark}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SPARK_PASSWORD:-spark-development-only}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       HIVE_METASTORE_URI: thrift://hive-metastore:9083
       SPARK_MASTER: local[2]
@@ -499,8 +499,8 @@ services:
     environment:
       LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
       LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_ACCESS_KEY_ID: ${MINIO_SPARK_USER:-lakeops-spark}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SPARK_PASSWORD:-spark-development-only}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       HIVE_METASTORE_URI: thrift://hive-metastore:9083
       SPARK_MASTER: local[2]
@@ -526,8 +526,8 @@ services:
     environment:
       LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
       LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_ACCESS_KEY_ID: ${MINIO_SPARK_USER:-lakeops-spark}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SPARK_PASSWORD:-spark-development-only}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       HIVE_METASTORE_URI: thrift://hive-metastore:9083
       SPARK_MASTER: local[2]
@@ -553,8 +553,8 @@ services:
     environment:
       LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
       LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_ACCESS_KEY_ID: ${MINIO_SPARK_USER:-lakeops-spark}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SPARK_PASSWORD:-spark-development-only}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       HIVE_METASTORE_URI: thrift://hive-metastore:9083
       SPARK_MASTER: local[2]
@@ -580,8 +580,8 @@ services:
     environment:
       LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
       LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_ACCESS_KEY_ID: ${MINIO_SPARK_USER:-lakeops-spark}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SPARK_PASSWORD:-spark-development-only}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       HIVE_METASTORE_URI: thrift://hive-metastore:9083
       SPARK_MASTER: local[2]
@@ -625,13 +625,13 @@ services:
       spark-bronze:
         condition: service_completed_successfully
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lakeops}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      MINIO_TRINO_USER: ${MINIO_TRINO_USER:-lakeops-trino}
+      MINIO_TRINO_PASSWORD: ${MINIO_TRINO_PASSWORD:-trino-development-only}
       LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
     entrypoint: ["/bin/sh", "-ec"]
     command:
       - |
-        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc alias set local http://minio:9000 "$${MINIO_TRINO_USER}" "$${MINIO_TRINO_PASSWORD}"
         metadata_files="$$(mc find "local/$${LAKEHOUSE_BUCKET}/warehouse" --name '*.metadata.json' | wc -l | tr -d ' ')"
         data_files="$$(mc find "local/$${LAKEHOUSE_BUCKET}/warehouse" --name '*.parquet' | wc -l | tr -d ' ')"
         test "$$metadata_files" -gt 0
@@ -667,13 +667,13 @@ services:
       minio-init:
         condition: service_completed_successfully
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lakeops}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      MINIO_TRINO_USER: ${MINIO_TRINO_USER:-lakeops-trino}
+      MINIO_TRINO_PASSWORD: ${MINIO_TRINO_PASSWORD:-trino-development-only}
       LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
     entrypoint: ["/bin/sh", "-ec"]
     command:
       - |
-        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc alias set local http://minio:9000 "$${MINIO_TRINO_USER}" "$${MINIO_TRINO_PASSWORD}"
         silver_metadata="$$(mc find "local/$${LAKEHOUSE_BUCKET}/warehouse/silver/weather_hourly/metadata" --name '*.metadata.json' | wc -l | tr -d ' ')"
         silver_data="$$(mc find "local/$${LAKEHOUSE_BUCKET}/warehouse/silver/weather_hourly/data" --name '*.parquet' | wc -l | tr -d ' ')"
         reject_metadata="$$(mc find "local/$${LAKEHOUSE_BUCKET}/warehouse/silver/weather_hourly_rejects/metadata" --name '*.metadata.json' | wc -l | tr -d ' ')"
@@ -695,8 +695,8 @@ services:
     environment:
       LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
       LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_ACCESS_KEY_ID: ${MINIO_SPARK_USER:-lakeops-spark}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SPARK_PASSWORD:-spark-development-only}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       HIVE_METASTORE_URI: thrift://hive-metastore:9083
       SPARK_MASTER: local[2]
@@ -721,8 +721,8 @@ services:
       hive-metastore:
         condition: service_healthy
     environment:
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_ACCESS_KEY_ID: ${MINIO_TRINO_USER:-lakeops-trino}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_TRINO_PASSWORD:-trino-development-only}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
     ports:
       - "${TRINO_HTTP_PORT:-8080}:8080"
@@ -748,8 +748,8 @@ services:
       trino-coordinator:
         condition: service_healthy
     environment:
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_ACCESS_KEY_ID: ${MINIO_TRINO_USER:-lakeops-trino}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_TRINO_PASSWORD:-trino-development-only}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
     volumes:
       - ./infra/trino/worker/config.properties:/etc/trino/config.properties:ro
@@ -771,8 +771,8 @@ services:
       trino-coordinator:
         condition: service_healthy
     environment:
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_ACCESS_KEY_ID: ${MINIO_TRINO_USER:-lakeops-trino}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_TRINO_PASSWORD:-trino-development-only}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
     volumes:
       - ./infra/trino/worker/config.properties:/etc/trino/config.properties:ro

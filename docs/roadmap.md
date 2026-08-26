@@ -80,7 +80,9 @@ improvement, trade-offs, and rollback path.
   - [x] Reviewed break-glass grant, expiry, and revocation drill.
 - [ ] S3 service-account policies aligned with engine responsibilities.
   - [x] Idempotent MinIO identities and live allow/deny matrix for ingestion, Spark, and Trino.
-  - [ ] Run engine containers with dedicated credentials instead of bootstrap root.
+  - [x] Run ingestion, Spark, and Trino containers with dedicated credentials instead of
+    bootstrap root.
+  - [ ] Define and prove a dedicated Hive Metastore object-store identity.
 
 Exit criterion: automated tests prove the role matrix, including denied access, masking,
 row filtering, impersonation boundaries, and audit events.
