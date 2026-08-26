@@ -54,7 +54,9 @@ written to the `ranger_audits` Solr collection.
 
 An incident responder can receive a temporary role binding from a reviewed JSON lease.
 The lease requires a distinct approver, incident ticket, reason, UTC issue and expiry
-timestamps, and a TTL no longer than one hour:
+timestamps, and a TTL no longer than one hour. Validate producers against
+[`config/access/break-glass-lease.schema.json`](../../config/access/break-glass-lease.schema.json)
+before submitting the lease:
 
 ```json
 {

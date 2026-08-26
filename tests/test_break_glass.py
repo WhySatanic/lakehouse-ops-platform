@@ -5,13 +5,34 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator, FormatChecker
 
 from lakehouse_ops.access_policy import load_access_policy
 from lakehouse_ops.break_glass import BreakGlassError, apply_break_glass_lease
 
 ROOT = Path(__file__).parents[1]
 MODEL_PATH = ROOT / "config" / "access" / "role-policy.json"
+SCHEMA_PATH = ROOT / "config" / "access" / "break-glass-lease.schema.json"
 NOW = datetime(2026, 8, 26, 12, 0, tzinfo=UTC)
+
+
+def test_break_glass_schema_accepts_supported_lease() -> None:
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    Draft202012Validator.check_schema(schema)
+
+    validator = Draft202012Validator(schema, format_checker=FormatChecker())
+    validator.validate(_lease_document(issued_at=NOW - timedelta(minutes=5)))
+
+
+def test_break_glass_schema_rejects_unreviewed_extension() -> None:
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    lease = _lease_document(issued_at=NOW - timedelta(minutes=5))
+    lease["bypass_validation"] = True
+
+    errors = list(Draft202012Validator(schema).iter_errors(lease))
+
+    assert len(errors) == 1
+    assert errors[0].validator == "additionalProperties"
 
 
 def test_active_lease_adds_approved_role_binding(tmp_path: Path) -> None:
@@ -124,7 +145,17 @@ def _write_lease(
     expires_at: datetime | None = None,
     change: dict[str, object] | None = None,
 ) -> Path:
-    document: dict[str, object] = {
+    document = _lease_document(issued_at=issued_at, expires_at=expires_at)
+    document.update(change or {})
+    path = tmp_path / "lease.json"
+    path.write_text(json.dumps(document), encoding="utf-8")
+    return path
+
+
+def _lease_document(
+    *, issued_at: datetime, expires_at: datetime | None = None
+) -> dict[str, object]:
+    return {
         "schema_version": "1.0",
         "grant_id": "BG-2026-0042",
         "user": "incident-responder",
@@ -137,7 +168,3 @@ def _write_lease(
         .isoformat()
         .replace("+00:00", "Z"),
     }
-    document.update(change or {})
-    path = tmp_path / "lease.json"
-    path.write_text(json.dumps(document), encoding="utf-8")
-    return path
