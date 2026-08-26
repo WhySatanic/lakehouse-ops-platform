@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 
 from lakehouse_ops.access_policy import load_access_policy
+from lakehouse_ops.break_glass import apply_break_glass_lease
 
 MANAGED_DESCRIPTION = "Managed by Lakehouse Ops role-policy schema 1.0"
 
@@ -138,8 +139,12 @@ class RangerAdminClient:
         service_name: str,
         trino_jdbc_url: str,
         service_user: str,
+        break_glass_path: Path | None = None,
     ) -> dict[str, Any]:
         model = load_access_policy(model_path)
+        break_glass = None
+        if break_glass_path is not None:
+            model, break_glass = apply_break_glass_lease(model, break_glass_path)
         service_status = self._ensure_service(
             service_name, trino_jdbc_url=trino_jdbc_url, service_user=service_user
         )
@@ -210,7 +215,7 @@ class RangerAdminClient:
             ):
                 self._request("DELETE", f"/service/public/v2/api/policy/{current['id']}")
                 deleted += 1
-        return {
+        report = {
             "schema_version": "1.0",
             "status": "synchronized",
             "service": service_name,
@@ -225,6 +230,9 @@ class RangerAdminClient:
                 "deleted": deleted,
             },
         }
+        if break_glass is not None:
+            report["break_glass"] = break_glass
+        return report
 
     def _remove_bootstrap_policies(
         self, service_name: str, service_user: str

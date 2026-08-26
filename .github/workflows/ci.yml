@@ -103,6 +103,35 @@ jobs:
         run: >-
           uv run python tests/integration/check_trino_authorization.py
           artifacts/trino-authorization-report.json --mode ranger
+      - name: Grant approved break-glass access
+        run: |
+          uv run python tests/integration/create_break_glass_lease.py \
+            artifacts/break-glass-active.json --state active
+          uv run lakeops sync-ranger-policy \
+            --break-glass-lease artifacts/break-glass-active.json \
+            > artifacts/break-glass-grant.json
+      - name: Verify break-glass grant
+        run: >-
+          uv run python tests/integration/check_break_glass_access.py
+          --server http://localhost:8080 --expect allowed
+          > artifacts/break-glass-allowed.json
+      - name: Expire and revoke break-glass access
+        run: |
+          uv run python tests/integration/create_break_glass_lease.py \
+            artifacts/break-glass-expired.json --state expired
+          uv run lakeops sync-ranger-policy \
+            --break-glass-lease artifacts/break-glass-expired.json \
+            > artifacts/break-glass-revoke.json
+      - name: Verify break-glass revocation
+        run: >-
+          uv run python tests/integration/check_break_glass_access.py
+          --server http://localhost:8080 --expect denied
+          > artifacts/break-glass-denied.json
+      - name: Verify break-glass drill evidence
+        run: >-
+          uv run python tests/integration/check_break_glass_drill.py
+          artifacts/break-glass-grant.json artifacts/break-glass-allowed.json
+          artifacts/break-glass-revoke.json artifacts/break-glass-denied.json
       - name: Wait for Ranger audit evidence
         run: |
           for _ in $(seq 1 12); do

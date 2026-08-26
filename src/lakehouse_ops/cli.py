@@ -9,6 +9,7 @@ from typing import Any
 import boto3
 
 from lakehouse_ops.access_policy import AccessPolicyError, render_trino_policy
+from lakehouse_ops.break_glass import BreakGlassError
 from lakehouse_ops.doctor import DoctorReport, check_file_landing, check_s3_bucket
 from lakehouse_ops.iceberg.metadata import IcebergMetadataCollector
 from lakehouse_ops.iceberg.planner import IcebergMaintenancePlanner, MaintenancePolicy
@@ -95,6 +96,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--trino-jdbc-url", default="jdbc:trino://trino-coordinator:8080"
     )
     ranger_policy.add_argument("--service-user", default="platform_admin")
+    ranger_policy.add_argument(
+        "--break-glass-lease",
+        type=Path,
+        help="apply an approved, time-bounded role lease during synchronization",
+    )
 
     metadata = subparsers.add_parser(
         "collect-iceberg-metadata", help="collect an Iceberg table health snapshot"
@@ -267,8 +273,9 @@ def main(argv: list[str] | None = None) -> int:
                     service_name=args.service_name,
                     trino_jdbc_url=args.trino_jdbc_url,
                     service_user=args.service_user,
+                    break_glass_path=args.break_glass_lease,
                 )
-        except (OSError, AccessPolicyError, RangerAdminError) as error:
+        except (OSError, AccessPolicyError, BreakGlassError, RangerAdminError) as error:
             parser.error(str(error))
         print(json.dumps(report, sort_keys=True))
         return 0

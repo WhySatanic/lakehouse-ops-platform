@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -136,6 +137,54 @@ def test_sync_creates_then_leaves_service_and_policies_unchanged() -> None:
         "unchanged": len(state.policies),
         "deleted": 0,
     }
+
+
+def test_sync_applies_active_break_glass_lease(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+    lease_path = tmp_path / "break-glass.json"
+    lease_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "grant_id": "BG-TEST-1",
+                "user": "incident-responder",
+                "role": "platform_admin",
+                "approved_by": "incident-commander",
+                "ticket": "INC-TEST-1",
+                "reason": "recover query access",
+                "issued_at": (now - timedelta(minutes=5)).isoformat(),
+                "expires_at": (now + timedelta(minutes=30)).isoformat(),
+            }
+        ),
+        encoding="utf-8",
+    )
+    state = RangerState()
+
+    with RangerAdminClient(
+        "http://ranger.test",
+        "admin",
+        "secret",
+        transport=httpx.MockTransport(state.handle),
+    ) as client:
+        report = client.sync(
+            model_path=MODEL_PATH,
+            service_name="lakehouse-trino",
+            trino_jdbc_url="jdbc:trino://trino-coordinator:8080",
+            service_user="platform_admin",
+            break_glass_path=lease_path,
+        )
+
+    assert report["break_glass"]["status"] == "active"
+    assert "incident-responder" in state.users
+    admin_policies = [
+        policy
+        for policy in state.policies
+        if any(
+            "incident-responder" in item["users"]
+            for item in policy.get("policyItems", [])
+        )
+    ]
+    assert admin_policies
 
 
 def test_sync_updates_drift_and_deletes_stale_managed_policy() -> None:
