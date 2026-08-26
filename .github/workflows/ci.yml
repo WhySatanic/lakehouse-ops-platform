@@ -103,13 +103,19 @@ jobs:
         run: >-
           uv run python tests/integration/check_trino_authorization.py
           artifacts/trino-authorization-report.json --mode ranger
-      - name: Capture Ranger audit evidence
-        run: >-
-          docker compose exec -T ranger-solr curl -fsS
-          'http://localhost:8983/solr/ranger_audits/select?q=repo%3Alakehouse-trino&rows=100&fl=repo,enforcer,reqUser,resource,access,action,result,evtTime&wt=json'
-          > artifacts/ranger-audit.json
-      - name: Verify Ranger audit evidence
-        run: uv run python tests/integration/check_ranger_audit.py artifacts/ranger-audit.json
+      - name: Wait for Ranger audit evidence
+        run: |
+          for _ in $(seq 1 12); do
+            docker compose exec -T ranger-solr curl -fsS \
+              'http://localhost:8983/solr/ranger_audits/select?q=repo%3Alakehouse-trino&rows=100&fl=repo,enforcer,reqUser,resource,access,action,result,evtTime&wt=json' \
+              > artifacts/ranger-audit.json
+            if uv run python tests/integration/check_ranger_audit.py \
+              artifacts/ranger-audit.json 2>/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          uv run python tests/integration/check_ranger_audit.py artifacts/ranger-audit.json
       - name: Show Ranger logs
         if: failure()
         run: >-
