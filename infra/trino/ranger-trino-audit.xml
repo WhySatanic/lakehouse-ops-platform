@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <property>
+    <name>xasecure.audit.is.enabled</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>xasecure.audit.solr.is.enabled</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>xasecure.audit.solr.solr_url</name>
+    <value>http://ranger-solr:8983/solr/ranger_audits</value>
+  </property>
+</configuration>

@@ -22,6 +22,7 @@ from lakehouse_ops.ingestion.landing import FileLandingZone
 from lakehouse_ops.ingestion.models import Location, WeatherPayload
 from lakehouse_ops.ingestion.open_meteo import OpenMeteoClient
 from lakehouse_ops.ingestion.s3_landing import S3LandingZone
+from lakehouse_ops.ranger import RangerAdminClient, RangerAdminError
 from lakehouse_ops.trino import TrinoClient
 from lakehouse_ops.trino_baseline import (
     QueryCorpusError,
@@ -75,6 +76,25 @@ def build_parser() -> argparse.ArgumentParser:
     access_policy.add_argument("--model", required=True, type=Path)
     access_policy.add_argument("--output", required=True, type=Path)
     access_policy.add_argument("--check", action="store_true")
+
+    ranger_policy = subparsers.add_parser(
+        "sync-ranger-policy",
+        help="synchronize Ranger policies from the versioned role model",
+    )
+    ranger_policy.add_argument(
+        "--model", type=Path, default=Path("config/access/role-policy.json")
+    )
+    ranger_policy.add_argument(
+        "--url", default=os.getenv("RANGER_ADMIN_URL", "http://localhost:6080")
+    )
+    ranger_policy.add_argument(
+        "--username", default=os.getenv("RANGER_ADMIN_USER", "admin")
+    )
+    ranger_policy.add_argument("--service-name", default="lakehouse-trino")
+    ranger_policy.add_argument(
+        "--trino-jdbc-url", default="jdbc:trino://trino-coordinator:8080"
+    )
+    ranger_policy.add_argument("--service-user", default="platform_admin")
 
     metadata = subparsers.add_parser(
         "collect-iceberg-metadata", help="collect an Iceberg table health snapshot"
@@ -236,6 +256,22 @@ def main(argv: list[str] | None = None) -> int:
         status = "in_sync" if in_sync else "drift" if args.check else "rendered"
         print(json.dumps({"output": str(args.output), "status": status}, sort_keys=True))
         return 0 if not args.check or in_sync else 1
+    if args.command == "sync-ranger-policy":
+        password = os.getenv("RANGER_ADMIN_PASSWORD")
+        if not password:
+            parser.error("RANGER_ADMIN_PASSWORD is required")
+        try:
+            with RangerAdminClient(args.url, args.username, password) as client:
+                report = client.sync(
+                    model_path=args.model,
+                    service_name=args.service_name,
+                    trino_jdbc_url=args.trino_jdbc_url,
+                    service_user=args.service_user,
+                )
+        except (OSError, AccessPolicyError, RangerAdminError) as error:
+            parser.error(str(error))
+        print(json.dumps(report, sort_keys=True))
+        return 0
     if args.command == "collect-iceberg-metadata":
         with TrinoClient(args.server, user=args.user) as client:
             report = IcebergMetadataCollector(client).collect(
