@@ -54,7 +54,26 @@ docker compose exec minio sh -c \
 ```
 
 The bootstrap command is safe to repeat because bucket creation uses
-`mc mb --ignore-existing`.
+`mc mb --ignore-existing`. It also reconciles three development identities and their
+versioned policies from `config/s3`:
+
+| Identity | Allowed | Boundary |
+| --- | --- | --- |
+| ingestion | read and write `landing/*` | no warehouse access |
+| Spark | read `landing/*`, manage `warehouse/*` | no landing writes |
+| Trino | read `warehouse/*` | no landing access or writes |
+
+Run `docker compose --env-file .env run --rm minio-access-check` to verify permitted and
+denied operations. The data checks authenticate as the scoped identities, not as root.
+Engine containers still use bootstrap credentials until the next migration increment, so
+the parent roadmap criterion remains open.
+
+## Upgrade from 0.31
+
+Add the six service-account variables from `.env.example`, then run `minio-init` twice and
+`minio-access-check` once. Existing bucket data is unchanged. Roll back by restoring the
+0.31 Compose file; the scoped users and policies may remain unused in MinIO and do not
+alter root access.
 
 ## Stop
 

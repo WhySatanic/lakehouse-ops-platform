@@ -79,6 +79,8 @@ improvement, trade-offs, and rollback path.
       plugin and service-definition path.
   - [x] Reviewed break-glass grant, expiry, and revocation drill.
 - [ ] S3 service-account policies aligned with engine responsibilities.
+  - [x] Idempotent MinIO identities and live allow/deny matrix for ingestion, Spark, and Trino.
+  - [ ] Run engine containers with dedicated credentials instead of bootstrap root.
 
 Exit criterion: automated tests prove the role matrix, including denied access, masking,
 row filtering, impersonation boundaries, and audit events.
