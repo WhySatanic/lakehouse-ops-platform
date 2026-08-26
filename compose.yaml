@@ -35,6 +35,8 @@ services:
       MINIO_SPARK_PASSWORD: ${MINIO_SPARK_PASSWORD:-spark-development-only}
       MINIO_TRINO_USER: ${MINIO_TRINO_USER:-lakeops-trino}
       MINIO_TRINO_PASSWORD: ${MINIO_TRINO_PASSWORD:-trino-development-only}
+      MINIO_HMS_USER: ${MINIO_HMS_USER:-lakeops-hms}
+      MINIO_HMS_PASSWORD: ${MINIO_HMS_PASSWORD:-hms-development-only}
     volumes:
       - ./config/s3:/policies:ro
     entrypoint: ["/bin/sh", "-ec"]
@@ -44,7 +46,7 @@ services:
         "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" &&
         mc mb --ignore-existing "local/$${LAKEHOUSE_BUCKET}" &&
         mc anonymous set none "local/$${LAKEHOUSE_BUCKET}" &&
-        for identity in ingest spark trino; do
+        for identity in ingest spark trino hms; do
           upper="$$(printf '%s' "$$identity" | tr '[:lower:]' '[:upper:]')";
           eval user="\$${MINIO_$${upper}_USER}";
           eval password="\$${MINIO_$${upper}_PASSWORD}";
@@ -70,6 +72,8 @@ services:
       MINIO_SPARK_PASSWORD: ${MINIO_SPARK_PASSWORD:-spark-development-only}
       MINIO_TRINO_USER: ${MINIO_TRINO_USER:-lakeops-trino}
       MINIO_TRINO_PASSWORD: ${MINIO_TRINO_PASSWORD:-trino-development-only}
+      MINIO_HMS_USER: ${MINIO_HMS_USER:-lakeops-hms}
+      MINIO_HMS_PASSWORD: ${MINIO_HMS_PASSWORD:-hms-development-only}
     volumes:
       - ./tests/fixtures/open_meteo_landing.json:/fixtures/probe.json:ro
     entrypoint: ["/bin/sh", "-ec"]
@@ -78,15 +82,19 @@ services:
         mc alias set ingest http://minio:9000 "$${MINIO_INGEST_USER}" "$${MINIO_INGEST_PASSWORD}"
         mc alias set spark http://minio:9000 "$${MINIO_SPARK_USER}" "$${MINIO_SPARK_PASSWORD}"
         mc alias set trino http://minio:9000 "$${MINIO_TRINO_USER}" "$${MINIO_TRINO_PASSWORD}"
+        mc alias set hms http://minio:9000 "$${MINIO_HMS_USER}" "$${MINIO_HMS_PASSWORD}"
         mc cp /fixtures/probe.json "ingest/$${LAKEHOUSE_BUCKET}/landing/_access/ingest.json"
         mc stat "spark/$${LAKEHOUSE_BUCKET}/landing/_access/ingest.json" >/dev/null
         mc cp /fixtures/probe.json "spark/$${LAKEHOUSE_BUCKET}/warehouse/_access/spark.json"
         mc stat "trino/$${LAKEHOUSE_BUCKET}/warehouse/_access/spark.json" >/dev/null
+        mc cp /fixtures/probe.json "hms/$${LAKEHOUSE_BUCKET}/warehouse/_access/hms.json"
+        mc rm "hms/$${LAKEHOUSE_BUCKET}/warehouse/_access/hms.json"
         if mc cp /fixtures/probe.json "ingest/$${LAKEHOUSE_BUCKET}/warehouse/_access/denied.json" >/dev/null 2>&1; then exit 1; fi
         if mc cp /fixtures/probe.json "spark/$${LAKEHOUSE_BUCKET}/landing/_access/denied.json" >/dev/null 2>&1; then exit 1; fi
         if mc cp /fixtures/probe.json "trino/$${LAKEHOUSE_BUCKET}/warehouse/_access/denied.json" >/dev/null 2>&1; then exit 1; fi
         if mc stat "trino/$${LAKEHOUSE_BUCKET}/landing/_access/ingest.json" >/dev/null 2>&1; then exit 1; fi
-        printf '%s\n' '{"schema_version":"1.0","status":"ready","ingest":"landing-read-write","spark":"landing-read-warehouse-write","trino":"warehouse-read-only"}'
+        if mc cp /fixtures/probe.json "hms/$${LAKEHOUSE_BUCKET}/landing/_access/denied.json" >/dev/null 2>&1; then exit 1; fi
+        printf '%s\n' '{"schema_version":"1.0","status":"ready","ingest":"landing-read-write","spark":"landing-read-warehouse-write","trino":"warehouse-read-only","hms":"warehouse-path-manage"}'
     restart: "no"
 
   metastore-db:
@@ -124,8 +132,8 @@ services:
     environment:
       SERVICE_NAME: metastore
       DB_DRIVER: postgres
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeops}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-lakeops-development-only}
+      AWS_ACCESS_KEY_ID: ${MINIO_HMS_USER:-lakeops-hms}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_HMS_PASSWORD:-hms-development-only}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       SERVICE_OPTS: >-
         -Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver
