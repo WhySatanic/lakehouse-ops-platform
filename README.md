@@ -7,7 +7,7 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: early access `0.31.0`. Open-Meteo ingestion works against the local filesystem
+> Status: early access `0.32.0`. Open-Meteo ingestion works against the local filesystem
 > and MinIO. The opt-in platform profiles include PostgreSQL-backed Hive Metastore and a
 > Spark writer for S3-backed Iceberg bronze and validated silver tables. A Trino 483
 > coordinator with two workers reads the same tables through Hive Metastore. The control
@@ -87,6 +87,8 @@ uv run pytest
 For the first infrastructure-backed path, copy `.env.example` to `.env` and follow the
 [MinIO landing-zone runbook](docs/runbooks/minio-landing.md). The S3 adapter uses a
 conditional write, so concurrent ingestion attempts cannot overwrite an existing key.
+MinIO bootstrap also reconciles separate ingestion, Spark, and Trino identities. A live
+matrix proves each account can reach only its assigned landing or warehouse boundary.
 
 Check storage readiness before a run. The command returns a non-zero exit code and a
 JSON failure report when the directory is not writable or the S3 bucket is unavailable:

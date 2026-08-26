@@ -185,6 +185,8 @@ jobs:
           minio metastore-db hive-metastore
       - name: Initialize storage
         run: docker compose run --rm minio-init
+      - name: Verify MinIO service-account policy boundaries
+        run: docker compose run --rm minio-access-check
       - name: Verify metastore schema
         run: docker compose --profile catalog run --rm metastore-schema-check
       - name: Land deterministic fixture
