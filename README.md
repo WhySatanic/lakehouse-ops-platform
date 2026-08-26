@@ -7,7 +7,7 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: early access `0.28.0`. Open-Meteo ingestion works against the local filesystem
+> Status: early access `0.29.0`. Open-Meteo ingestion works against the local filesystem
 > and MinIO. The opt-in platform profiles include PostgreSQL-backed Hive Metastore and a
 > Spark writer for S3-backed Iceberg bronze and validated silver tables. A Trino 483
 > coordinator with two workers reads the same tables through Hive Metastore. The control
@@ -157,6 +157,12 @@ allowed role paths and six negative cases without claiming that the unauthentica
 local HTTP profile is a production security boundary. The checked-in Trino rules are
 generated from a versioned role-to-resource model, and CI rejects policy drift between
 the model and the deployed artifact.
+
+The opt-in `security` profile runs Apache Ranger Admin 2.9.0 with its official PostgreSQL
+and Solr images. Its readiness check verifies that Ranger exposes the Trino service
+definition and the resources required by the next policy-enforcement increment. See the
+[Ranger Admin runbook](docs/runbooks/ranger-admin.md). Trino still uses the file policy in
+this release; the Ranger plugin is not yet enabled.
 
 The control plane can collect a versioned table-health snapshot from Trino's Iceberg
 metadata tables:
