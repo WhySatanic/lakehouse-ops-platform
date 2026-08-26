@@ -8,6 +8,7 @@ from typing import Any
 
 import boto3
 
+from lakehouse_ops.access_policy import AccessPolicyError, render_trino_policy
 from lakehouse_ops.doctor import DoctorReport, check_file_landing, check_s3_bucket
 from lakehouse_ops.iceberg.metadata import IcebergMetadataCollector
 from lakehouse_ops.iceberg.planner import IcebergMaintenancePlanner, MaintenancePolicy
@@ -66,6 +67,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     audit = subparsers.add_parser("audit-landing", help="verify landed file integrity")
     audit.add_argument("--output", type=Path, default=Path("data/landing"))
+
+    access_policy = subparsers.add_parser(
+        "render-trino-access-policy",
+        help="render or verify the Trino policy from the versioned role model",
+    )
+    access_policy.add_argument("--model", required=True, type=Path)
+    access_policy.add_argument("--output", required=True, type=Path)
+    access_policy.add_argument("--check", action="store_true")
 
     metadata = subparsers.add_parser(
         "collect-iceberg-metadata", help="collect an Iceberg table health snapshot"
@@ -219,6 +228,14 @@ def main(argv: list[str] | None = None) -> int:
         report = audit_file_landing(args.output)
         print(json.dumps(report.as_dict(), sort_keys=True))
         return 0 if report.healthy else 1
+    if args.command == "render-trino-access-policy":
+        try:
+            in_sync = render_trino_policy(args.model, args.output, check=args.check)
+        except (OSError, AccessPolicyError) as error:
+            parser.error(str(error))
+        status = "in_sync" if in_sync else "drift" if args.check else "rendered"
+        print(json.dumps({"output": str(args.output), "status": status}, sort_keys=True))
+        return 0 if not args.check or in_sync else 1
     if args.command == "collect-iceberg-metadata":
         with TrinoClient(args.server, user=args.user) as client:
             report = IcebergMetadataCollector(client).collect(

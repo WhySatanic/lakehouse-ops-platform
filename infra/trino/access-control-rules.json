@@ -6,12 +6,22 @@
       "allow": "all"
     },
     {
-      "user": "lakehouse-(ops|ci|performance|recovery-drill|operator|bi-inspector|ingestion-ci|bi-ci|analyst)|metadata-cache-readiness|upgrade-(readiness|rehearsal)",
+      "user": "lakehouse\\-operator|lakehouse\\-bi\\-inspector|lakehouse\\-ops|lakehouse\\-ci|lakehouse\\-performance|lakehouse\\-recovery\\-drill|lakehouse\\-ingestion\\-ci|lakehouse\\-bi\\-ci|lakehouse\\-analyst|metadata\\-cache\\-readiness|upgrade\\-readiness|upgrade\\-rehearsal",
       "catalog": "lakehouse|lakehouse_cache_disabled|system",
       "allow": "read-only"
     },
     {
-      "user": "data_engineer|analytics_engineer|analyst",
+      "user": "data_engineer",
+      "catalog": "lakehouse|lakehouse_cache_disabled",
+      "allow": "read-only"
+    },
+    {
+      "user": "analytics_engineer",
+      "catalog": "lakehouse|lakehouse_cache_disabled",
+      "allow": "read-only"
+    },
+    {
+      "user": "analyst",
       "catalog": "lakehouse|lakehouse_cache_disabled",
       "allow": "read-only"
     },
@@ -43,35 +53,50 @@
       "catalog": ".*",
       "schema": ".*",
       "table": ".*",
-      "privileges": ["SELECT", "INSERT", "DELETE", "UPDATE", "OWNERSHIP", "GRANT_SELECT"]
+      "privileges": [
+        "SELECT",
+        "INSERT",
+        "DELETE",
+        "UPDATE",
+        "OWNERSHIP",
+        "GRANT_SELECT"
+      ]
     },
     {
-      "user": "lakehouse-(ops|ci|performance|recovery-drill|operator|bi-inspector|ingestion-ci|bi-ci|analyst)|metadata-cache-readiness|upgrade-(readiness|rehearsal)",
+      "user": "lakehouse\\-operator|lakehouse\\-bi\\-inspector|lakehouse\\-ops|lakehouse\\-ci|lakehouse\\-performance|lakehouse\\-recovery\\-drill|lakehouse\\-ingestion\\-ci|lakehouse\\-bi\\-ci|lakehouse\\-analyst|metadata\\-cache\\-readiness|upgrade\\-readiness|upgrade\\-rehearsal",
       "catalog": "lakehouse|lakehouse_cache_disabled|system",
       "schema": ".*",
       "table": ".*",
-      "privileges": ["SELECT"]
+      "privileges": [
+        "SELECT"
+      ]
     },
     {
       "user": "data_engineer",
       "catalog": "lakehouse|lakehouse_cache_disabled",
       "schema": "bronze|silver|gold",
       "table": ".*",
-      "privileges": ["SELECT"]
+      "privileges": [
+        "SELECT"
+      ]
     },
     {
       "user": "analytics_engineer",
       "catalog": "lakehouse|lakehouse_cache_disabled",
       "schema": "silver|gold",
       "table": ".*",
-      "privileges": ["SELECT"]
+      "privileges": [
+        "SELECT"
+      ]
     },
     {
       "user": "analyst",
       "catalog": "lakehouse|lakehouse_cache_disabled",
       "schema": "gold",
       "table": ".*",
-      "privileges": ["SELECT"]
+      "privileges": [
+        "SELECT"
+      ]
     },
     {
       "catalog": ".*",
@@ -82,21 +107,47 @@
   ],
   "queries": [
     {
-      "user": "platform_admin|lakehouse-bi-inspector",
-      "allow": ["execute", "view", "kill"]
+      "user": "platform_admin",
+      "allow": [
+        "execute",
+        "view",
+        "kill"
+      ]
     },
     {
-      "allow": ["execute"]
+      "user": "lakehouse\\-bi\\-inspector",
+      "allow": [
+        "execute",
+        "view",
+        "kill"
+      ]
+    },
+    {
+      "allow": [
+        "execute"
+      ]
     }
   ],
   "system_information": [
     {
-      "user": "platform_admin|lakehouse-operator",
-      "allow": ["read", "write"]
+      "user": "platform_admin",
+      "allow": [
+        "read",
+        "write"
+      ]
     },
     {
-      "user": "lakehouse-(ops|ci|performance|recovery-drill|bi-inspector|ingestion-ci|bi-ci|analyst)|metadata-cache-readiness|upgrade-(readiness|rehearsal)",
-      "allow": ["read"]
+      "user": "lakehouse\\-operator",
+      "allow": [
+        "read",
+        "write"
+      ]
+    },
+    {
+      "user": "lakehouse\\-operator|lakehouse\\-bi\\-inspector|lakehouse\\-ops|lakehouse\\-ci|lakehouse\\-performance|lakehouse\\-recovery\\-drill|lakehouse\\-ingestion\\-ci|lakehouse\\-bi\\-ci|lakehouse\\-analyst|metadata\\-cache\\-readiness|upgrade\\-readiness|upgrade\\-rehearsal",
+      "allow": [
+        "read"
+      ]
     },
     {
       "allow": []
