@@ -38,8 +38,15 @@ def test_trino_policy_is_warehouse_read_only() -> None:
     assert all("landing" not in value for value in _values(policy, "Resource"))
 
 
+def test_hms_policy_manages_only_warehouse_paths() -> None:
+    policy = _policy("hms")
+    assert {"s3:PutObject", "s3:GetObject", "s3:DeleteObject"} <= _values(policy, "Action")
+    assert "arn:aws:s3:::__BUCKET__/warehouse/*" in _values(policy, "Resource")
+    assert all("landing" not in value for value in _values(policy, "Resource"))
+
+
 def test_policies_do_not_grant_wildcards() -> None:
-    for name in ("ingest", "spark", "trino"):
+    for name in ("ingest", "spark", "trino", "hms"):
         policy = _policy(name)
         assert "*" not in _values(policy, "Action")
         assert "*" not in _values(policy, "Resource")
@@ -48,6 +55,7 @@ def test_policies_do_not_grant_wildcards() -> None:
 def test_runtime_services_do_not_use_minio_root_credentials() -> None:
     compose = COMPOSE_PATH.read_text(encoding="utf-8")
     runtime_services = (
+        "hive-metastore",
         "landing-fixture",
         "silver-landing-fixture",
         "bronze-input-sync",
@@ -68,3 +76,4 @@ def test_runtime_services_do_not_use_minio_root_credentials() -> None:
         block = compose[start:end]
         assert "MINIO_ROOT_USER" not in block
         assert "MINIO_ROOT_PASSWORD" not in block
+        assert "lakeops-development-only" not in block

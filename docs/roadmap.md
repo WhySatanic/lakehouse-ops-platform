@@ -78,11 +78,11 @@ improvement, trade-offs, and rollback path.
       advertise row-filter or data-mask support; do not claim enforcement without a tested
       plugin and service-definition path.
   - [x] Reviewed break-glass grant, expiry, and revocation drill.
-- [ ] S3 service-account policies aligned with engine responsibilities.
+- [x] S3 service-account policies aligned with engine responsibilities.
   - [x] Idempotent MinIO identities and live allow/deny matrix for ingestion, Spark, and Trino.
   - [x] Run ingestion, Spark, and Trino containers with dedicated credentials instead of
     bootstrap root.
-  - [ ] Define and prove a dedicated Hive Metastore object-store identity.
+  - [x] Dedicated Hive Metastore warehouse policy with clean E2E evidence.
 
 Exit criterion: automated tests prove the role matrix, including denied access, masking,
 row filtering, impersonation boundaries, and audit events.

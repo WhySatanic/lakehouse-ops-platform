@@ -62,19 +62,20 @@ versioned policies from `config/s3`:
 | ingestion | read and write `landing/*` | no warehouse access |
 | Spark | read `landing/*`, manage `warehouse/*` | no landing writes |
 | Trino | read `warehouse/*` | no landing access or writes |
+| Hive Metastore | manage namespace paths in `warehouse/*` | no landing access |
 
 Run `docker compose --env-file .env run --rm minio-access-check` to verify permitted and
 denied operations. The data checks authenticate as the scoped identities, not as root.
 The landing fixtures authenticate as ingestion, Spark jobs authenticate as Spark, and
-Trino nodes authenticate as Trino. Hive Metastore still uses the bootstrap identity until
-its object-store responsibilities and dedicated policy are proven separately.
+Trino nodes authenticate as Trino. Hive Metastore authenticates as its warehouse-only
+identity because namespace creation validates and creates external warehouse paths.
 
-## Upgrade from 0.32
+## Upgrade from 0.33
 
-Keep the six service-account variables from `.env.example`, run `minio-init`, and recreate
-the ingestion, Spark, and Trino containers so they receive the scoped credentials. Run
-`minio-access-check` before the end-to-end workflow. Existing bucket data is unchanged.
-Roll back by restoring the 0.32 Compose file and recreating the affected containers.
+Add `MINIO_HMS_USER` and `MINIO_HMS_PASSWORD` from `.env.example`, run `minio-init`,
+then run `minio-access-check`. Recreate Hive Metastore so it receives the dedicated
+identity. Existing bucket and catalog data are unchanged. Roll back by restoring the
+0.33 Compose file and recreating Hive Metastore with the previous bootstrap credentials.
 
 ## Stop
 
