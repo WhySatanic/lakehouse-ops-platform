@@ -67,7 +67,7 @@ improvement, trade-offs, and rollback path.
 
 - [x] Deny-by-default file policy and negative authorization tests.
 - [ ] Ranger deployment and Trino plugin configuration.
-- [ ] Versioned role-to-resource policy model and policy deployment automation.
+- [x] Versioned role-to-resource policy model and policy deployment automation.
 - [ ] Row filters, column masking, audit delivery, and break-glass procedure.
 - [ ] S3 service-account policies aligned with engine responsibilities.
 

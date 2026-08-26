@@ -24,6 +24,12 @@ jobs:
         run: uv sync --frozen --dev
       - name: Lint
         run: uv run ruff check .
+      - name: Check generated Trino access policy
+        run: >-
+          uv run lakeops render-trino-access-policy
+          --model config/access/role-policy.json
+          --output infra/trino/access-control-rules.json
+          --check
       - name: Test
         run: uv run pytest
 

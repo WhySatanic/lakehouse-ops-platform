@@ -263,6 +263,26 @@ def test_audit_landing_command_fails_for_empty_root(
     assert report["status"] == "failed"
 
 
+def test_render_trino_access_policy_command_detects_drift(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    model = Path(__file__).parents[1] / "config" / "access" / "role-policy.json"
+    output = tmp_path / "access-control-rules.json"
+
+    check_args = [
+        "render-trino-access-policy",
+        "--model",
+        str(model),
+        "--output",
+        str(output),
+    ]
+    assert cli.main([*check_args, "--check"]) == 1
+    assert json.loads(capsys.readouterr().out)["status"] == "drift"
+
+    assert cli.main(check_args) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "rendered"
+
+
 def test_collect_iceberg_metadata_command(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

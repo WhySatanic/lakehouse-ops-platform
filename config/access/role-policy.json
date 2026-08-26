@@ -1,0 +1,104 @@
+{
+  "schema_version": "1.0",
+  "policy_id": "local-lakehouse",
+  "roles": {
+    "platform_admin": {
+      "catalogs": [{"catalogs": ["*"], "access": "all"}],
+      "schemas": [{"catalogs": ["*"], "schemas": ["*"], "owner": true}],
+      "tables": [{
+        "catalogs": ["*"],
+        "schemas": ["*"],
+        "tables": ["*"],
+        "privileges": ["SELECT", "INSERT", "DELETE", "UPDATE", "OWNERSHIP", "GRANT_SELECT"]
+      }],
+      "queries": ["execute", "view", "kill"],
+      "system_information": ["read", "write"],
+      "system_session_properties": true,
+      "catalog_session_properties": true
+    },
+    "system_operator": {
+      "system_information": ["read", "write"]
+    },
+    "query_inspector": {
+      "queries": ["execute", "view", "kill"]
+    },
+    "operations_reader": {
+      "catalogs": [{
+        "catalogs": ["lakehouse", "lakehouse_cache_disabled", "system"],
+        "access": "read-only"
+      }],
+      "tables": [{
+        "catalogs": ["lakehouse", "lakehouse_cache_disabled", "system"],
+        "schemas": ["*"],
+        "tables": ["*"],
+        "privileges": ["SELECT"]
+      }],
+      "system_information": ["read"]
+    },
+    "data_engineer": {
+      "catalogs": [{
+        "catalogs": ["lakehouse", "lakehouse_cache_disabled"],
+        "access": "read-only"
+      }],
+      "tables": [{
+        "catalogs": ["lakehouse", "lakehouse_cache_disabled"],
+        "schemas": ["bronze", "silver", "gold"],
+        "tables": ["*"],
+        "privileges": ["SELECT"]
+      }]
+    },
+    "analytics_engineer": {
+      "catalogs": [{
+        "catalogs": ["lakehouse", "lakehouse_cache_disabled"],
+        "access": "read-only"
+      }],
+      "tables": [{
+        "catalogs": ["lakehouse", "lakehouse_cache_disabled"],
+        "schemas": ["silver", "gold"],
+        "tables": ["*"],
+        "privileges": ["SELECT"]
+      }]
+    },
+    "analyst": {
+      "catalogs": [{
+        "catalogs": ["lakehouse", "lakehouse_cache_disabled"],
+        "access": "read-only"
+      }],
+      "tables": [{
+        "catalogs": ["lakehouse", "lakehouse_cache_disabled"],
+        "schemas": ["gold"],
+        "tables": ["*"],
+        "privileges": ["SELECT"]
+      }]
+    }
+  },
+  "bindings": [
+    {"users": ["platform_admin"], "roles": ["platform_admin"]},
+    {"users": ["lakehouse-operator"], "roles": ["system_operator", "operations_reader"]},
+    {"users": ["lakehouse-bi-inspector"], "roles": ["query_inspector", "operations_reader"]},
+    {
+      "users": [
+        "lakehouse-ops",
+        "lakehouse-ci",
+        "lakehouse-performance",
+        "lakehouse-recovery-drill",
+        "lakehouse-ingestion-ci",
+        "lakehouse-bi-ci",
+        "lakehouse-analyst",
+        "metadata-cache-readiness",
+        "upgrade-readiness",
+        "upgrade-rehearsal"
+      ],
+      "roles": ["operations_reader"]
+    },
+    {"users": ["data_engineer"], "roles": ["data_engineer"]},
+    {"users": ["analytics_engineer"], "roles": ["analytics_engineer"]},
+    {"users": ["analyst"], "roles": ["analyst"]}
+  ],
+  "defaults": {
+    "catalog_access": "none",
+    "system_catalog_access": "none",
+    "queries": ["execute"],
+    "system_information": []
+  }
+}
