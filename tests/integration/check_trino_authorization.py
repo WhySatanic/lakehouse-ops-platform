@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import argparse
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +19,7 @@ EXPECTED_CASES = {
 }
 
 
-def validate(report: dict[str, Any]) -> list[str]:
+def validate(report: dict[str, Any], *, expected_mode: str = "file") -> list[str]:
     errors: list[str] = []
     if report.get("schema_version") != "1.0":
         errors.append("schema_version")
@@ -32,7 +32,7 @@ def validate(report: dict[str, Any]) -> list[str]:
     else:
         if policy.get("engine") != "trino":
             errors.append("policy.engine")
-        if policy.get("mode") != "file":
+        if policy.get("mode") != expected_mode:
             errors.append("policy.mode")
         if policy.get("default") != "deny":
             errors.append("policy.default")
@@ -61,10 +61,12 @@ def validate(report: dict[str, Any]) -> list[str]:
 
 
 def main() -> None:
-    if len(sys.argv) != 2:
-        raise SystemExit("usage: check_trino_authorization.py REPORT.json")
-    report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-    errors = validate(report)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("report", type=Path)
+    parser.add_argument("--mode", choices=("file", "ranger"), default="file")
+    args = parser.parse_args()
+    report = json.loads(args.report.read_text(encoding="utf-8"))
+    errors = validate(report, expected_mode=args.mode)
     if errors:
         raise SystemExit(f"Trino authorization evidence failed: {', '.join(errors)}")
     print(
@@ -72,6 +74,7 @@ def main() -> None:
             {
                 "status": "ready",
                 "policy": "deny-by-default",
+                "mode": args.mode,
                 "allowed_cases": 4,
                 "denied_cases": 6,
             },

@@ -283,6 +283,62 @@ def test_render_trino_access_policy_command_detects_drift(
     assert json.loads(capsys.readouterr().out)["status"] == "rendered"
 
 
+def test_sync_ranger_policy_command(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    observed: dict[str, object] = {}
+
+    class FakeRangerAdminClient:
+        def __init__(self, url: str, username: str, password: str) -> None:
+            observed.update(url=url, username=username, password=password)
+
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def sync(self, **kwargs: object) -> dict[str, object]:
+            observed.update(kwargs)
+            return {"schema_version": "1.0", "status": "synchronized"}
+
+    monkeypatch.setattr(cli, "RangerAdminClient", FakeRangerAdminClient)
+    monkeypatch.setenv("RANGER_ADMIN_PASSWORD", "secret")
+
+    exit_code = cli.main(
+        [
+            "sync-ranger-policy",
+            "--model",
+            str(Path(__file__).parents[1] / "config" / "access" / "role-policy.json"),
+            "--url",
+            "http://ranger.test:6080",
+        ]
+    )
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "synchronized"
+    assert observed["url"] == "http://ranger.test:6080"
+    assert observed["password"] == "secret"
+
+
+def test_sync_ranger_policy_requires_password(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.delenv("RANGER_ADMIN_PASSWORD", raising=False)
+
+    with pytest.raises(SystemExit) as error:
+        cli.main(
+            [
+                "sync-ranger-policy",
+                "--model",
+                str(Path(__file__).parents[1] / "config" / "access" / "role-policy.json"),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "RANGER_ADMIN_PASSWORD is required" in capsys.readouterr().err
+
+
 def test_collect_iceberg_metadata_command(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -3,6 +3,7 @@ set -euo pipefail
 
 server="${TRINO_SERVER:-http://trino-coordinator:8080}"
 report_path="${TRINO_AUTHORIZATION_REPORT_PATH:?TRINO_AUTHORIZATION_REPORT_PATH is required}"
+authorization_mode="${TRINO_AUTHORIZATION_MODE:-file}"
 
 query() {
   local user="$1"
@@ -69,13 +70,13 @@ expect_denied unknown_user_cannot_read_system untrusted_user \
 expect_denied data_engineer_cannot_create_schema data_engineer \
   "CREATE SCHEMA lakehouse.authorization_test"
 
-cat >"$report_path" <<'EOF'
+cat >"$report_path" <<EOF
 {
   "schema_version": "1.0",
   "status": "succeeded",
   "policy": {
     "engine": "trino",
-    "mode": "file",
+    "mode": "$authorization_mode",
     "default": "deny",
     "authentication_enforced": false
   },

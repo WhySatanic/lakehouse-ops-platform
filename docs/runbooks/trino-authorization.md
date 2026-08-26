@@ -9,8 +9,8 @@ catalog, table, system-information, and session-property requests.
 
 This is an authorization exercise, not authentication. The local HTTP profile trusts the
 `X-Trino-User` header, so anyone who can reach port 8080 can claim another identity. Do
-not expose this profile outside a trusted development machine. Ranger integration and an
-authenticated transport are separate roadmap increments.
+not expose this profile outside a trusted development machine. Both the file adapter and
+Ranger enforce the matrix, while authenticated transport remains a separate increment.
 
 ## Implemented matrix
 
@@ -50,6 +50,12 @@ validator then checks the complete case set and the explicit authentication limi
 
 The report uses schema version `1.0` and is written to
 `artifacts/trino-authorization-report.json`.
+
+For centralized enforcement, start Ranger, run `lakeops sync-ranger-policy`, set
+`TRINO_ACCESS_CONTROL_PROPERTIES=./infra/trino/ranger-access-control.properties` and
+`TRINO_AUTHORIZATION_MODE=ranger`, then recreate all Trino nodes. Pass `--mode ranger` to
+the report validator. The [Ranger runbook](ranger-admin.md) contains the complete sequence
+and rollback path.
 
 ## Change, validate, and deploy
 

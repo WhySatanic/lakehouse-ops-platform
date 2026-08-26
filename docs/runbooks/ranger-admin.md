@@ -1,10 +1,8 @@
-# Apache Ranger Admin readiness
+# Apache Ranger policy enforcement
 
 The opt-in `security` profile runs the official Apache Ranger 2.9.0 images for Ranger
-Admin, PostgreSQL, and Solr. This slice establishes a reproducible central policy service
-without changing Trino authorization. The query profile continues to enforce the
-generated deny-by-default file policy until policy bootstrap and live Ranger enforcement
-have their own acceptance evidence.
+Admin, PostgreSQL, and Solr. The file policy remains Trino's default. Operators can opt in
+to the Ranger adapter after synchronizing the versioned role model.
 
 ## Start and verify
 
@@ -22,8 +20,35 @@ requires the catalog, schema, table, column, user, query, and system-information
 types plus the access types needed for selection, execution, impersonation, and operator
 read/write access. A reachable login page alone does not pass the check.
 
-The check prints a schema-versioned JSON report. It does not create a Ranger repository,
-upload policies, enable Trino's Ranger plugin, or claim that Ranger is enforcing queries.
+The check prints a schema-versioned JSON readiness report. Synchronize the central service,
+users, and policies before enabling the plugin:
+
+```bash
+uv run --env-file .env lakeops sync-ranger-policy
+uv run --env-file .env lakeops sync-ranger-policy
+```
+
+The second run should report no created, updated, or deleted policies. The synchronizer
+removes only Ranger's exact generated bootstrap policies and policies carrying the
+Lakehouse Ops managed description. It leaves unrelated operator-managed policies intact.
+
+Enable Ranger on every Trino node and run the live evidence matrix:
+
+```bash
+TRINO_ACCESS_CONTROL_PROPERTIES=./infra/trino/ranger-access-control.properties \
+TRINO_AUTHORIZATION_MODE=ranger \
+docker compose --env-file .env --profile query up -d --wait \
+  trino-coordinator trino-worker trino-worker-2
+TRINO_ACCESS_CONTROL_PROPERTIES=./infra/trino/ranger-access-control.properties \
+TRINO_AUTHORIZATION_MODE=ranger \
+docker compose --env-file .env --profile query run --rm trino-authorization-check
+uv run python tests/integration/check_trino_authorization.py \
+  artifacts/trino-authorization-report.json --mode ranger
+```
+
+The Ranger plugin downloads only policy, role, user-store, and tag bundles without an
+Admin session. Administrative endpoints still require authentication. Live decisions are
+written to the `ranger_audits` Solr collection.
 
 The `RANGER_ADMIN_USER` and `RANGER_ADMIN_PASSWORD` values configure only the readiness
 client. On first boot Ranger creates its documented development administrator account.
@@ -48,13 +73,14 @@ order because Ranger initialization depends on both backing services.
 ## Security boundary
 
 The example credentials are public development defaults. The profile exposes Ranger Admin
-over plain HTTP and has no external identity provider, TLS, or secret manager. Keep it on a
-trusted local machine. A later increment must add Trino plugin configuration, bootstrap the
-versioned role policy, prove positive and negative decisions through Ranger, and document
-the authentication boundary before this becomes an enforcement path.
+and Trino over plain HTTP and has no external identity provider, TLS, or secret manager.
+Keep it on a trusted local machine. Ranger provides centralized authorization here, but the
+local Trino endpoint still trusts the supplied user header. This is enforcement evidence,
+not a production authentication boundary.
 
-## Upgrade from 0.28.0
+## Upgrade from 0.29.0
 
-No data migration is required. The new services are isolated behind the `security` profile
-and do not start with the catalog, compute, or query profiles. Existing Trino behavior is
-unchanged. Pull the pinned images before the first run if deployment bandwidth is limited.
+No Iceberg or metastore migration is required. The file policy remains the default, so an
+existing environment keeps its previous behavior. Start Ranger, run the synchronizer, then
+set both Trino opt-in variables and recreate all Trino nodes. Remove those variables and
+recreate the nodes to roll back to file authorization.

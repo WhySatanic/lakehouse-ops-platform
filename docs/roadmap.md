@@ -66,12 +66,15 @@ improvement, trade-offs, and rollback path.
 ## Phase 4 — centralized access control
 
 - [x] Deny-by-default file policy and negative authorization tests.
-- [ ] Ranger deployment and Trino plugin configuration.
+- [x] Ranger deployment and Trino plugin configuration.
   - [x] Opt-in Ranger Admin deployment with PostgreSQL, Solr, and Trino service-definition
     readiness evidence.
-  - [ ] Trino plugin configuration, policy bootstrap, and live enforcement evidence.
+  - [x] Trino plugin configuration, policy bootstrap, and live enforcement evidence.
 - [x] Versioned role-to-resource policy model and policy deployment automation.
 - [ ] Row filters, column masking, audit delivery, and break-glass procedure.
+  - [x] Trino allow and deny decisions delivered to the Ranger Solr audit store.
+  - [ ] Row-filter and column-mask policies with live acceptance evidence.
+  - [ ] Reviewed break-glass grant, expiry, and revocation drill.
 - [ ] S3 service-account policies aligned with engine responsibilities.
 
 Exit criterion: automated tests prove the role matrix, including denied access, masking,
