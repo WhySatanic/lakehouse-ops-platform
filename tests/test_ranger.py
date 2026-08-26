@@ -239,6 +239,6 @@ def _bootstrap_policy(policy_id: int) -> dict[str, object]:
         "name": "all - catalog",
         "description": "Policy for all - catalog",
         "policyItems": [
-            {"users": ["admin"], "delegateAdmin": True, "accesses": []}
+            {"users": ["platform_admin"], "delegateAdmin": True, "accesses": []}
         ],
     }

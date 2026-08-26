@@ -152,7 +152,9 @@ class RangerAdminClient:
         )
         user_status = self._ensure_users(users)
         desired = compile_ranger_policies(model, service_name)
-        existing, bootstrap_deleted = self._remove_bootstrap_policies(service_name)
+        existing, bootstrap_deleted = self._remove_bootstrap_policies(
+            service_name, service_user
+        )
         existing_by_name = {
             policy["name"]: policy for policy in existing if isinstance(policy, dict)
         }
@@ -182,7 +184,7 @@ class RangerAdminClient:
                     ):
                         raise
                     _, late_bootstrap_deleted = self._remove_bootstrap_policies(
-                        service_name
+                        service_name, service_user
                     )
                     if late_bootstrap_deleted == 0:
                         raise
@@ -225,7 +227,7 @@ class RangerAdminClient:
         }
 
     def _remove_bootstrap_policies(
-        self, service_name: str
+        self, service_name: str, service_user: str
     ) -> tuple[list[dict[str, Any]], int]:
         existing = self._request(
             "GET", f"/service/public/v2/api/service/{service_name}/policy"
@@ -233,7 +235,8 @@ class RangerAdminClient:
         bootstrap_policies = [
             policy
             for policy in existing
-            if isinstance(policy, dict) and _is_ranger_bootstrap_policy(policy)
+            if isinstance(policy, dict)
+            and _is_ranger_bootstrap_policy(policy, service_user)
         ]
         for policy in bootstrap_policies:
             self._request("DELETE", f"/service/public/v2/api/policy/{policy['id']}")
@@ -407,7 +410,7 @@ def _policy_projection(policy: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _is_ranger_bootstrap_policy(policy: dict[str, Any]) -> bool:
+def _is_ranger_bootstrap_policy(policy: dict[str, Any], service_user: str) -> bool:
     items = policy.get("policyItems")
     return (
         isinstance(policy.get("name"), str)
@@ -418,7 +421,7 @@ def _is_ranger_bootstrap_policy(policy: dict[str, Any]) -> bool:
         and bool(items)
         and all(
             isinstance(item, dict)
-            and item.get("users") == ["admin"]
+            and item.get("users") == [service_user]
             and item.get("delegateAdmin") is True
             for item in items
         )
