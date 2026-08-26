@@ -65,15 +65,16 @@ versioned policies from `config/s3`:
 
 Run `docker compose --env-file .env run --rm minio-access-check` to verify permitted and
 denied operations. The data checks authenticate as the scoped identities, not as root.
-Engine containers still use bootstrap credentials until the next migration increment, so
-the parent roadmap criterion remains open.
+The landing fixtures authenticate as ingestion, Spark jobs authenticate as Spark, and
+Trino nodes authenticate as Trino. Hive Metastore still uses the bootstrap identity until
+its object-store responsibilities and dedicated policy are proven separately.
 
-## Upgrade from 0.31
+## Upgrade from 0.32
 
-Add the six service-account variables from `.env.example`, then run `minio-init` twice and
-`minio-access-check` once. Existing bucket data is unchanged. Roll back by restoring the
-0.31 Compose file; the scoped users and policies may remain unused in MinIO and do not
-alter root access.
+Keep the six service-account variables from `.env.example`, run `minio-init`, and recreate
+the ingestion, Spark, and Trino containers so they receive the scoped credentials. Run
+`minio-access-check` before the end-to-end workflow. Existing bucket data is unchanged.
+Roll back by restoring the 0.32 Compose file and recreating the affected containers.
 
 ## Stop
 

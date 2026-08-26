@@ -29,9 +29,9 @@ def main() -> None:
         "s3",
         endpoint_url=os.environ.get("LAKEOPS_S3_ENDPOINT_URL", "http://localhost:9000"),
         region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
-        aws_access_key_id=os.environ.get("MINIO_ROOT_USER", "lakeops"),
+        aws_access_key_id=os.environ.get("MINIO_SPARK_USER", "lakeops-spark"),
         aws_secret_access_key=os.environ.get(
-            "MINIO_ROOT_PASSWORD", "lakeops-development-only"
+            "MINIO_SPARK_PASSWORD", "spark-development-only"
         ),
     )
     client.put_object(Bucket=bucket, Key=key, Body=b"orphan-removal-fixture")
