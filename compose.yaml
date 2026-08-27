@@ -918,6 +918,42 @@ services:
     entrypoint: ["/bin/bash", "/checks/check_interrupted_write_trino.sh"]
     restart: "no"
 
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.27.0
+    profiles: ["observability"]
+    command: ["--config.file=/etc/blackbox_exporter/config.yml"]
+    ports:
+      - "${BLACKBOX_EXPORTER_PORT:-9115}:9115"
+    volumes:
+      - ./config/observability/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: ["observability"]
+    depends_on:
+      blackbox-exporter:
+        condition: service_started
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./config/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    restart: unless-stopped
+
+  prometheus-check:
+    image: python:3.12-alpine3.22
+    profiles: ["observability"]
+    depends_on:
+      prometheus:
+        condition: service_started
+    environment:
+      PROMETHEUS_SERVER: http://prometheus:9090
+    volumes:
+      - ./tests/integration/check_prometheus_targets.py:/checks/check_prometheus_targets.py:ro
+    entrypoint: ["python", "/checks/check_prometheus_targets.py"]
+    restart: "no"
+
 volumes:
   minio-data:
   metastore-db-data:

@@ -175,6 +175,7 @@ jobs:
           docker compose --profile compute config --quiet
           docker compose --profile query config --quiet
           docker compose --profile security config --quiet
+          docker compose --profile observability config --quiet
       - name: Build catalog and compute images
         run: >-
           docker compose --profile catalog --profile compute build
@@ -233,6 +234,12 @@ jobs:
         env:
           TRINO_SERVER_IMAGE: trinodb/trino:482
         run: docker compose --profile query run --rm trino-query-check
+      - name: Start Prometheus readiness collection
+        run: >-
+          docker compose --profile observability up -d
+          blackbox-exporter prometheus
+      - name: Verify Prometheus core targets
+        run: docker compose --profile observability run --rm prometheus-check
       - name: Rehearse Trino upgrade and rollback
         run: >-
           uv run python tests/integration/exercise_trino_upgrade_rehearsal.py
@@ -609,11 +616,13 @@ jobs:
       - name: Show service logs
         if: failure()
         run: >-
-          docker compose --profile catalog --profile compute --profile query logs
+          docker compose --profile catalog --profile compute --profile query
+          --profile observability logs
           minio metastore-db hive-metastore trino-coordinator trino-worker
           trino-worker-2
       - name: Stop integration profile
         if: always()
         run: >-
           docker compose --profile catalog --profile compute --profile query
+          --profile observability
           down --volumes

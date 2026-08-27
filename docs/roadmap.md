@@ -90,6 +90,9 @@ row filtering, impersonation boundaries, and audit events.
 ## Phase 5 — observability and serving
 
 - [ ] Prometheus collection, Grafana dashboards, and actionable alerts.
+  - [x] Prometheus black-box readiness collection for MinIO, Hive Metastore, and Trino.
+  - [ ] Grafana dashboards for platform health and workload signals.
+  - [ ] Actionable alerts with a tested delivery path.
 - [ ] Platform SLOs for query success, ingestion freshness, and maintenance backlog.
 - [ ] ClickHouse serving profile and a documented Iceberg/S3 integration experiment.
 - [ ] Recovery drill for lost worker, unavailable metastore, and restored metadata DB.
