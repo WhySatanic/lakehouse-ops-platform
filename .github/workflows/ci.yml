@@ -56,7 +56,8 @@ jobs:
           docker compose --profile catalog --profile compute --profile query config --quiet
       - name: Build catalog and compute images
         run: >-
-          docker compose --profile catalog --profile compute build
+          uv run python -m lakehouse_ops.verified_build --attempts 3
+          --delay-seconds 5 -- docker compose --profile catalog --profile compute build
           hive-metastore spark-bronze spark-silver
       - name: Start Ranger Admin dependencies
         run: >-
@@ -178,7 +179,8 @@ jobs:
           docker compose --profile observability config --quiet
       - name: Build catalog and compute images
         run: >-
-          docker compose --profile catalog --profile compute build
+          uv run python -m lakehouse_ops.verified_build --attempts 3
+          --delay-seconds 5 -- docker compose --profile catalog --profile compute build
           hive-metastore spark-bronze spark-silver
       - name: Start core services
         run: >-
