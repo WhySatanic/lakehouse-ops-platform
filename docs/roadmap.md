@@ -92,6 +92,8 @@ row filtering, impersonation boundaries, and audit events.
 - [ ] Prometheus collection, Grafana dashboards, and actionable alerts.
   - [x] Prometheus black-box readiness collection for MinIO, Hive Metastore, and Trino.
   - [ ] Grafana dashboards for platform health and workload signals.
+    - [x] Provisioned core readiness dashboard with a live datasource check.
+    - [ ] Workload, maintenance, and freshness dashboards.
   - [ ] Actionable alerts with a tested delivery path.
 - [ ] Platform SLOs for query success, ingestion freshness, and maintenance backlog.
 - [ ] ClickHouse serving profile and a documented Iceberg/S3 integration experiment.
