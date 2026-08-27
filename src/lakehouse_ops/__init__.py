@@ -1,3 +1,11 @@
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 
-__version__ = version("lakehouse-ops-platform")
+
+def _resolve_version() -> str:
+    try:
+        return version("lakehouse-ops-platform")
+    except PackageNotFoundError:
+        return "0+unknown"
+
+
+__version__ = _resolve_version()
