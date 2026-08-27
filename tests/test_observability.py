@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 CHECK_PATH = ROOT / "tests" / "integration" / "check_prometheus_targets.py"
 GRAFANA_CHECK_PATH = ROOT / "tests" / "integration" / "check_grafana_readiness.py"
+ALERT_CHECK_PATH = ROOT / "tests" / "integration" / "check_alert_delivery.py"
 
 
 def _load_checker():
@@ -17,6 +18,14 @@ def _load_checker():
 
 def _load_grafana_checker():
     spec = importlib.util.spec_from_file_location("check_grafana_readiness", GRAFANA_CHECK_PATH)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_alert_checker():
+    spec = importlib.util.spec_from_file_location("check_alert_delivery", ALERT_CHECK_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -81,3 +90,38 @@ def test_grafana_checker_requires_exact_provisioned_dashboard() -> None:
     assert not checker.dashboard_is_provisioned(
         [{"uid": "other", "title": "Lakehouse Core Readiness"}]
     )
+
+
+def test_alert_rule_has_actionable_target_context() -> None:
+    rules = (ROOT / "config" / "observability" / "alerts.yml").read_text()
+    prometheus = (ROOT / "config" / "observability" / "prometheus.yml").read_text()
+    alertmanager = (ROOT / "config" / "observability" / "alertmanager.yml").read_text()
+
+    assert "alert: LakehouseCoreTargetDown" in rules
+    assert "expr: probe_success == 0" in rules
+    assert "{{ $labels.instance }}" in rules
+    assert "/etc/prometheus/rules/*.yml" in prometheus
+    assert "alertmanager:9093" in prometheus
+    assert "http://alert-webhook:8080/alerts" in alertmanager
+    assert "send_resolved: true" in alertmanager
+
+
+def test_alert_checker_matches_exact_status_and_target() -> None:
+    checker = _load_alert_checker()
+    events = [
+        {
+            "alerts": [
+                {
+                    "status": "firing",
+                    "labels": {
+                        "alertname": checker.ALERT_NAME,
+                        "instance": checker.DEFAULT_TARGET,
+                    },
+                }
+            ]
+        }
+    ]
+
+    assert checker.has_matching_alert(events, "firing", checker.DEFAULT_TARGET)
+    assert not checker.has_matching_alert(events, "resolved", checker.DEFAULT_TARGET)
+    assert not checker.has_matching_alert(events, "firing", "http://other:8080/v1/info")

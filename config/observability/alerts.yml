@@ -1,0 +1,13 @@
+groups:
+  - name: lakehouse-core-readiness
+    interval: 5s
+    rules:
+      - alert: LakehouseCoreTargetDown
+        expr: probe_success == 0
+        for: 30s
+        labels:
+          severity: critical
+          component: core
+        annotations:
+          summary: Lakehouse core target is unavailable
+          description: '{{ $labels.instance }} has failed readiness probes for 30 seconds.'

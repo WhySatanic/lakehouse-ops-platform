@@ -934,11 +934,14 @@ services:
     depends_on:
       blackbox-exporter:
         condition: service_started
+      alertmanager:
+        condition: service_started
     command: ["--config.file=/etc/prometheus/prometheus.yml"]
     ports:
       - "${PROMETHEUS_PORT:-9090}:9090"
     volumes:
       - ./config/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./config/observability/alerts.yml:/etc/prometheus/rules/alerts.yml:ro
     restart: unless-stopped
 
   prometheus-check:
@@ -984,6 +987,42 @@ services:
     volumes:
       - ./tests/integration/check_grafana_readiness.py:/checks/check_grafana_readiness.py:ro
     entrypoint: ["python", "/checks/check_grafana_readiness.py"]
+    restart: "no"
+
+  alert-webhook:
+    image: python:3.12-alpine3.22
+    profiles: ["observability"]
+    volumes:
+      - ./tests/integration/alert_webhook.py:/checks/alert_webhook.py:ro
+    entrypoint: ["python", "/checks/alert_webhook.py"]
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    profiles: ["observability"]
+    depends_on:
+      alert-webhook:
+        condition: service_started
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml"]
+    ports:
+      - "${ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      - ./config/observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    restart: unless-stopped
+
+  alert-delivery-check:
+    image: python:3.12-alpine3.22
+    profiles: ["observability"]
+    depends_on:
+      alert-webhook:
+        condition: service_started
+    environment:
+      ALERT_WEBHOOK_SERVER: http://alert-webhook:8080
+      EXPECTED_ALERT_STATUS: ${EXPECTED_ALERT_STATUS:-firing}
+      EXPECTED_ALERT_TARGET: http://trino-coordinator:8080/v1/info
+    volumes:
+      - ./tests/integration/check_alert_delivery.py:/checks/check_alert_delivery.py:ro
+    entrypoint: ["python", "/checks/check_alert_delivery.py"]
     restart: "no"
 
 volumes:
