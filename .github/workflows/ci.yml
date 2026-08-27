@@ -338,6 +338,14 @@ jobs:
         run: >-
           uv run python tests/integration/check_trino_resource_groups.py
           artifacts/trino-resource-groups-report.json
+      - name: Exercise abrupt Trino worker recovery
+        run: >-
+          uv run python tests/integration/exercise_trino_worker_recovery.py
+          http://localhost:8080 artifacts/trino-worker-recovery.json
+      - name: Verify abrupt Trino worker recovery evidence
+        run: >-
+          uv run python tests/integration/check_trino_worker_recovery.py
+          artifacts/trino-worker-recovery.json
       - name: Drain one Trino worker
         run: |
           touch artifacts/trino-worker-shutdown-report.json
