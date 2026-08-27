@@ -144,6 +144,12 @@
       ]
     },
     {
+      "user": "lakehouse\\-observer",
+      "allow": [
+        "read"
+      ]
+    },
+    {
       "user": "lakehouse\\-operator|lakehouse\\-bi\\-inspector|lakehouse\\-ops|lakehouse\\-ci|lakehouse\\-performance|lakehouse\\-recovery\\-drill|lakehouse\\-ingestion\\-ci|lakehouse\\-bi\\-ci|lakehouse\\-analyst|metadata\\-cache\\-readiness|upgrade\\-readiness|upgrade\\-rehearsal",
       "allow": [
         "read"

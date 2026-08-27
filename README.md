@@ -7,7 +7,7 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: early access `0.37.2`. Open-Meteo ingestion works against the local filesystem
+> Status: early access `0.38.0`. Open-Meteo ingestion works against the local filesystem
 > and MinIO. The opt-in platform profiles include PostgreSQL-backed Hive Metastore and a
 > Spark writer for S3-backed Iceberg bronze and validated silver tables. A Trino 483
 > coordinator with two workers reads the same tables through Hive Metastore. The control
@@ -15,7 +15,7 @@ observability, and performance experiments.
 > explainable, non-mutating maintenance plans.
 
 The optional observability profile exposes Prometheus readiness signals and a
-provisioned Grafana dashboard for MinIO, Hive Metastore, and Trino. See
+provisioned Grafana readiness and Trino workload dashboards. See
 [the readiness runbook](docs/runbooks/prometheus-readiness.md).
 The same profile routes sustained target failures through Alertmanager to a tested
 local webhook receiver and verifies both firing and resolved notifications.

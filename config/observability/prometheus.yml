@@ -12,6 +12,14 @@ alerting:
             - alertmanager:9093
 
 scrape_configs:
+  - job_name: trino-workload
+    metrics_path: /metrics
+    basic_auth:
+      username: lakehouse-observer
+    static_configs:
+      - targets:
+          - trino-coordinator:8080
+
   - job_name: core-http-readiness
     metrics_path: /probe
     params:
