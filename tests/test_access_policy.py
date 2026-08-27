@@ -38,6 +38,21 @@ def test_compile_escapes_subjects_and_denies_unmatched_access() -> None:
     assert policy["system_information"][-1]["allow"] == []
 
 
+def test_metrics_identity_receives_system_info_without_data_grants() -> None:
+    policy = compile_trino_policy(load_access_policy(MODEL_PATH))
+
+    observer = next(
+        rule
+        for rule in policy["system_information"]
+        if rule.get("user") == "lakehouse\\-observer"
+    )
+    assert observer["allow"] == ["read"]
+    assert all(
+        rule.get("user") != "lakehouse\\-observer" for rule in policy["catalogs"]
+    )
+    assert all(rule.get("user") != "lakehouse\\-observer" for rule in policy["tables"])
+
+
 def test_render_reports_drift_then_writes_atomically(tmp_path: Path) -> None:
     output = tmp_path / "access-control-rules.json"
     output.write_text("{}\n", encoding="utf-8")

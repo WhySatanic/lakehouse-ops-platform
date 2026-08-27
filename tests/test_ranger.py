@@ -44,6 +44,13 @@ def test_compile_ranger_policies_covers_roles_and_self_impersonation() -> None:
     self_policy = by_name["lakehouse-ops-self-impersonation"]
     assert self_policy["resources"]["trinouser"]["values"] == ["{USER}"]
     assert "data_engineer" in self_policy["policyItems"][0]["users"]
+    sysinfo = by_name["lakehouse-ops-system-information"]
+    metrics_item = next(
+        item
+        for item in sysinfo["policyItems"]
+        if item["accesses"] == [{"type": "read_sysinfo", "isAllowed": True}]
+    )
+    assert "lakehouse-observer" in metrics_item["users"]
     assert all(policy["description"] == MANAGED_DESCRIPTION for policy in policies)
     assert all(policy["service"] == "lakehouse-trino" for policy in policies)
 

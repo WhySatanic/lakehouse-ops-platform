@@ -94,6 +94,8 @@ row filtering, impersonation boundaries, and audit events.
   - [ ] Grafana dashboards for platform health and workload signals.
     - [x] Provisioned core readiness dashboard with a live datasource check.
     - [ ] Workload, maintenance, and freshness dashboards.
+      - [x] Trino workload dashboard backed by live OpenMetrics query counters.
+      - [ ] Maintenance and freshness dashboards.
   - [x] Actionable core-target alert with tested firing and resolved delivery.
 - [ ] Platform SLOs for query success, ingestion freshness, and maintenance backlog.
 - [ ] ClickHouse serving profile and a documented Iceberg/S3 integration experiment.

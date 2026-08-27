@@ -244,6 +244,8 @@ jobs:
         run: docker compose --profile observability run --rm prometheus-check
       - name: Verify Grafana readiness dashboard
         run: docker compose --profile observability run --rm grafana-check
+      - name: Verify Grafana workload dashboard
+        run: docker compose --profile observability run --rm grafana-workload-check
       - name: Rehearse Trino upgrade and rollback
         run: >-
           uv run python tests/integration/exercise_trino_upgrade_rehearsal.py

@@ -50,6 +50,7 @@ The intended roles are:
 | Role | Responsibility | Typical access |
 |---|---|---|
 | `platform_admin` | cluster and policy administration | full platform control |
+| `metrics_reader` | machine observability identity | read system metrics, no catalog or table grants |
 | `data_engineer` | pipelines and table maintenance | write bronze/silver, read all data layers |
 | `analytics_engineer` | curated models | read silver, write gold |
 | `analyst` | interactive analysis | read approved gold objects only |
@@ -65,4 +66,3 @@ alone is insufficient evidence of correct authorization.
 - CI uses deterministic fixtures and focused integration tests rather than the full stack.
 - Retention and orphan-file actions require minimum safety windows and dry-run evidence.
 - Every benchmark records dataset seed, row count, engine configuration, and query plan.
-

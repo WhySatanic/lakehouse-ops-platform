@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 CHECK_PATH = ROOT / "tests" / "integration" / "check_prometheus_targets.py"
 GRAFANA_CHECK_PATH = ROOT / "tests" / "integration" / "check_grafana_readiness.py"
+WORKLOAD_CHECK_PATH = ROOT / "tests" / "integration" / "check_grafana_workload.py"
 ALERT_CHECK_PATH = ROOT / "tests" / "integration" / "check_alert_delivery.py"
 
 
@@ -18,6 +19,14 @@ def _load_checker():
 
 def _load_grafana_checker():
     spec = importlib.util.spec_from_file_location("check_grafana_readiness", GRAFANA_CHECK_PATH)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_workload_checker():
+    spec = importlib.util.spec_from_file_location("check_grafana_workload", WORKLOAD_CHECK_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -63,6 +72,15 @@ def test_successful_targets_rejects_failed_api_response() -> None:
     assert checker.successful_targets({"status": "error"}) == set()
 
 
+def test_prometheus_scrapes_trino_workload_with_dedicated_identity() -> None:
+    config = (ROOT / "config" / "observability" / "prometheus.yml").read_text()
+
+    assert "job_name: trino-workload" in config
+    assert "metrics_path: /metrics" in config
+    assert "username: lakehouse-observer" in config
+    assert "trino-coordinator:8080" in config
+
+
 def test_grafana_dashboard_uses_provisioned_prometheus_datasource() -> None:
     checker = _load_grafana_checker()
     dashboard_path = (
@@ -90,6 +108,56 @@ def test_grafana_checker_requires_exact_provisioned_dashboard() -> None:
     assert not checker.dashboard_is_provisioned(
         [{"uid": "other", "title": "Lakehouse Core Readiness"}]
     )
+
+
+def test_grafana_workload_dashboard_uses_query_manager_metrics() -> None:
+    checker = _load_workload_checker()
+    dashboard_path = (
+        ROOT
+        / "config"
+        / "observability"
+        / "grafana"
+        / "dashboards"
+        / "trino-workload.json"
+    )
+    dashboard = json.loads(dashboard_path.read_text())
+    expressions = {
+        target["expr"] for panel in dashboard["panels"] for target in panel["targets"]
+    }
+
+    assert dashboard["uid"] == checker.DASHBOARD_UID
+    assert dashboard["title"] == checker.DASHBOARD_TITLE
+    assert {panel["type"] for panel in dashboard["panels"]} == {"stat", "timeseries"}
+    assert all(
+        panel["datasource"]["uid"] == checker.DATASOURCE_UID
+        for panel in dashboard["panels"]
+    )
+    assert {
+        "trino_execution_name_QueryManager_RunningQueries",
+        "trino_execution_name_QueryManager_QueuedQueries",
+        "trino_execution_name_QueryManager_WaitingForResourcesQueries",
+        "rate(trino_execution_name_QueryManager_StartedQueries[5m])",
+        "rate(trino_execution_name_QueryManager_CompletedQueries[5m])",
+        "rate(trino_execution_name_QueryManager_FailedQueries[5m])",
+    } <= expressions
+
+
+def test_grafana_workload_checker_requires_dashboard_and_numeric_sample() -> None:
+    checker = _load_workload_checker()
+
+    assert checker.dashboard_is_provisioned(
+        [{"uid": checker.DASHBOARD_UID, "title": checker.DASHBOARD_TITLE}]
+    )
+    assert not checker.dashboard_is_provisioned(
+        [{"uid": checker.DASHBOARD_UID, "title": "Other"}]
+    )
+    assert checker.sample_at_least(
+        {"status": "success", "data": {"result": [{"value": [1, "2"]}]}}, 1
+    )
+    assert not checker.sample_at_least(
+        {"status": "success", "data": {"result": [{"value": [1, "NaN"]}]}}, 0
+    )
+    assert not checker.sample_at_least({"status": "error"}, 0)
 
 
 def test_alert_rule_has_actionable_target_context() -> None:

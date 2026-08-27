@@ -17,6 +17,7 @@ docker compose --profile observability up -d \
   alert-webhook alertmanager blackbox-exporter prometheus grafana
 docker compose --profile observability run --rm prometheus-check
 docker compose --profile observability run --rm grafana-check
+docker compose --profile observability run --rm grafana-workload-check
 ```
 
 Prometheus is available at `http://localhost:9090` by default. Query
@@ -30,6 +31,14 @@ development credentials from `.env.example` and open the `Lakehouse` folder. The
 the aggregate readiness state and the history for each target. The Grafana checker
 requires the exact dashboard UID and verifies that the Prometheus datasource is healthy.
 
+Prometheus also scrapes Trino's native OpenMetrics endpoint with the dedicated
+`lakehouse-observer` identity. That identity can read system information but receives no
+catalog or table grants. The `Lakehouse Trino Workload` dashboard displays running,
+queued, and resource-waiting queries, five-minute started/completed/failed query rates,
+and the derived failure percentage. The workload checker requires the exact provisioned
+dashboard, a healthy datasource, an up Trino scrape target, and at least one observed
+started query. Run a normal Trino query before invoking it outside the integration flow.
+
 Prometheus evaluates `LakehouseCoreTargetDown` when any configured readiness target
 reports `probe_success == 0` for 30 seconds. Alertmanager groups the alert by target
 and delivers it to the local webhook receiver. The CI acceptance drill stops the
@@ -37,9 +46,11 @@ Trino coordinator, verifies the exact firing alert, restores Trino, verifies all
 targets are healthy again, and then requires the matching resolved notification.
 The webhook receiver is an executable local test boundary, not a production pager.
 
-This profile intentionally does not claim application-level correctness, workload
-dashboards, production paging, or SLO coverage. Use the existing Spark and Trino
-integration checks to prove data correctness. Stop the optional profile with:
+This profile intentionally does not claim application-level correctness, maintenance or
+freshness dashboards, production paging, or SLO coverage. Query counters reset whenever
+the Trino coordinator restarts, and five-minute rates need at least two Prometheus
+samples. Use the existing Spark and Trino integration checks to prove data correctness.
+Stop the optional profile with:
 
 ```bash
 docker compose --profile observability down

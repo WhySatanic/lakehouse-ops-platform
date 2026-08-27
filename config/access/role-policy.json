@@ -19,6 +19,9 @@
     "system_operator": {
       "system_information": ["read", "write"]
     },
+    "metrics_reader": {
+      "system_information": ["read"]
+    },
     "query_inspector": {
       "queries": ["execute", "view", "kill"]
     },
@@ -75,6 +78,7 @@
   "bindings": [
     {"users": ["platform_admin"], "roles": ["platform_admin"]},
     {"users": ["lakehouse-operator"], "roles": ["system_operator", "operations_reader"]},
+    {"users": ["lakehouse-observer"], "roles": ["metrics_reader"]},
     {"users": ["lakehouse-bi-inspector"], "roles": ["query_inspector", "operations_reader"]},
     {
       "users": [
