@@ -102,7 +102,8 @@ row filtering, impersonation boundaries, and audit events.
 - [ ] Recovery drill for lost worker, unavailable metastore, and restored metadata DB.
   - [x] Hive Metastore service outage and recovery with cache-disabled Trino failure,
     preserved PostgreSQL container identity, and unchanged Iceberg snapshot evidence.
-  - [ ] Abrupt worker loss with in-flight query recovery evidence.
+  - [x] Abrupt worker loss with observed in-flight task failure, degraded-cluster retry,
+    unchanged Iceberg fingerprint, and restored worker capacity evidence.
   - [ ] PostgreSQL metadata backup, loss injection, and restore with catalog reconciliation.
 
 Exit criterion: a demo script and runbooks can diagnose and recover defined incidents.
