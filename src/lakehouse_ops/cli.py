@@ -8,6 +8,7 @@ from typing import Any
 
 import boto3
 
+from lakehouse_ops import __version__
 from lakehouse_ops.access_policy import AccessPolicyError, render_trino_policy
 from lakehouse_ops.break_glass import BreakGlassError
 from lakehouse_ops.doctor import DoctorReport, check_file_landing, check_s3_bucket
@@ -47,6 +48,7 @@ from lakehouse_ops.trino_sort_experiment import (
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="lakeops")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     ingest = subparsers.add_parser("ingest-weather", help="land an Open-Meteo forecast")

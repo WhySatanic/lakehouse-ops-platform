@@ -7,7 +7,7 @@ from typing import Any, Self
 
 import pytest
 
-from lakehouse_ops import cli
+from lakehouse_ops import __version__, cli
 from lakehouse_ops.ingestion.models import Location, WeatherPayload
 
 
@@ -41,6 +41,16 @@ class FakeS3Client:
     def head_bucket(self, **kwargs: Any) -> dict[str, Any]:
         assert kwargs["Bucket"] == "lakehouse"
         return {}
+
+
+def test_version_command_reports_package_version(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as error:
+        cli.main(["--version"])
+
+    assert error.value.code == 0
+    assert capsys.readouterr().out == f"lakeops {__version__}\n"
 
 
 def test_ingest_weather_command_lands_payload(
