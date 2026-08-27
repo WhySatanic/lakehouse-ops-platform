@@ -7,7 +7,7 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: early access `0.38.0`. Open-Meteo ingestion works against the local filesystem
+> Status: early access `0.39.0`. Open-Meteo ingestion works against the local filesystem
 > and MinIO. The opt-in platform profiles include PostgreSQL-backed Hive Metastore and a
 > Spark writer for S3-backed Iceberg bronze and validated silver tables. A Trino 483
 > coordinator with two workers reads the same tables through Hive Metastore. The control
@@ -155,6 +155,11 @@ event-ID range must preserve results while reducing processed rows and object-st
 The [Trino metadata-cache experiment](docs/runbooks/trino-metadata-cache-experiment.md)
 uses three coordinator restarts and cache-disabled control runs to separate cold/warm
 metadata observations from general JVM and object-store warming.
+
+The [Hive Metastore outage recovery drill](docs/runbooks/hive-metastore-recovery.md)
+stops only the catalog service while its PostgreSQL metadata database stays online,
+proves that a cache-disabled Trino lookup fails, restores the service, and verifies the
+same Iceberg snapshot and rows through Trino.
 
 The [Trino version-upgrade rehearsal](docs/runbooks/trino-version-upgrade-rehearsal.md)
 proves a complete 482 to 483 upgrade, rollback, and target restoration while preserving

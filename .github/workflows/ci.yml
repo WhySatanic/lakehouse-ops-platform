@@ -304,6 +304,14 @@ jobs:
         run: >-
           uv run python tests/integration/check_trino_metadata_cache.py
           artifacts/trino-metadata-cache.json
+      - name: Exercise Hive Metastore outage and recovery
+        run: >-
+          uv run python tests/integration/exercise_hive_metastore_recovery.py
+          http://localhost:8080 artifacts/hive-metastore-recovery.json
+      - name: Verify Hive Metastore recovery evidence
+        run: |
+          uv run python tests/integration/check_hive_metastore_recovery.py artifacts/hive-metastore-recovery.json
+          docker compose --profile catalog run --rm metastore-schema-check
       - name: Create sort order fixture
         run: |
           touch artifacts/sort-order-fixture.json
