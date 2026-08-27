@@ -13,7 +13,8 @@ acceptance check:
 ```bash
 docker compose --profile catalog --profile compute up -d --wait minio metastore-db hive-metastore
 docker compose --profile query up -d --wait trino-coordinator trino-worker trino-worker-2
-docker compose --profile observability up -d blackbox-exporter prometheus grafana
+docker compose --profile observability up -d \
+  alert-webhook alertmanager blackbox-exporter prometheus grafana
 docker compose --profile observability run --rm prometheus-check
 docker compose --profile observability run --rm grafana-check
 ```
@@ -29,9 +30,16 @@ development credentials from `.env.example` and open the `Lakehouse` folder. The
 the aggregate readiness state and the history for each target. The Grafana checker
 requires the exact dashboard UID and verifies that the Prometheus datasource is healthy.
 
+Prometheus evaluates `LakehouseCoreTargetDown` when any configured readiness target
+reports `probe_success == 0` for 30 seconds. Alertmanager groups the alert by target
+and delivers it to the local webhook receiver. The CI acceptance drill stops the
+Trino coordinator, verifies the exact firing alert, restores Trino, verifies all
+targets are healthy again, and then requires the matching resolved notification.
+The webhook receiver is an executable local test boundary, not a production pager.
+
 This profile intentionally does not claim application-level correctness, workload
-dashboards, alert delivery, or SLO coverage. Use the existing Spark and Trino integration checks
-to prove data correctness. Stop the optional profile with:
+dashboards, production paging, or SLO coverage. Use the existing Spark and Trino
+integration checks to prove data correctness. Stop the optional profile with:
 
 ```bash
 docker compose --profile observability down

@@ -94,7 +94,7 @@ row filtering, impersonation boundaries, and audit events.
   - [ ] Grafana dashboards for platform health and workload signals.
     - [x] Provisioned core readiness dashboard with a live datasource check.
     - [ ] Workload, maintenance, and freshness dashboards.
-  - [ ] Actionable alerts with a tested delivery path.
+  - [x] Actionable core-target alert with tested firing and resolved delivery.
 - [ ] Platform SLOs for query success, ingestion freshness, and maintenance backlog.
 - [ ] ClickHouse serving profile and a documented Iceberg/S3 integration experiment.
 - [ ] Recovery drill for lost worker, unavailable metastore, and restored metadata DB.

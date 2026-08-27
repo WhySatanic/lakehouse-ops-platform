@@ -237,7 +237,7 @@ jobs:
       - name: Start Prometheus readiness collection
         run: >-
           docker compose --profile observability up -d
-          blackbox-exporter prometheus grafana
+          alert-webhook alertmanager blackbox-exporter prometheus grafana
       - name: Verify Prometheus core targets
         run: docker compose --profile observability run --rm prometheus-check
       - name: Verify Grafana readiness dashboard
@@ -615,13 +615,25 @@ jobs:
         run: >-
           uv run python tests/integration/check_orphan_removal.py
           artifacts/orphan-removal-report.json
+      - name: Exercise core target alert delivery
+        run: |
+          docker compose stop trino-coordinator
+          docker compose --profile observability run --rm alert-delivery-check
+      - name: Restore alerted core target
+        run: >-
+          docker compose --profile query up -d --wait
+          trino-coordinator trino-worker trino-worker-2
+      - name: Verify restored target and resolved alert
+        run: |
+          docker compose --profile observability run --rm prometheus-check
+          EXPECTED_ALERT_STATUS=resolved docker compose --profile observability run --rm alert-delivery-check
       - name: Show service logs
         if: failure()
         run: >-
           docker compose --profile catalog --profile compute --profile query
           --profile observability logs
           minio metastore-db hive-metastore trino-coordinator trino-worker
-          trino-worker-2 prometheus blackbox-exporter grafana
+          trino-worker-2 prometheus blackbox-exporter grafana alertmanager alert-webhook
       - name: Stop integration profile
         if: always()
         run: >-
