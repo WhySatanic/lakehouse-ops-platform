@@ -99,12 +99,13 @@ row filtering, impersonation boundaries, and audit events.
   - [x] Actionable core-target alert with tested firing and resolved delivery.
 - [ ] Platform SLOs for query success, ingestion freshness, and maintenance backlog.
 - [ ] ClickHouse serving profile and a documented Iceberg/S3 integration experiment.
-- [ ] Recovery drill for lost worker, unavailable metastore, and restored metadata DB.
+- [x] Recovery drill for lost worker, unavailable metastore, and restored metadata DB.
   - [x] Hive Metastore service outage and recovery with cache-disabled Trino failure,
     preserved PostgreSQL container identity, and unchanged Iceberg snapshot evidence.
   - [x] Abrupt worker loss with observed in-flight task failure, degraded-cluster retry,
     unchanged Iceberg fingerprint, and restored worker capacity evidence.
-  - [ ] PostgreSQL metadata backup, loss injection, and restore with catalog reconciliation.
+  - [x] PostgreSQL metadata backup, loss injection, and restore with catalog reconciliation,
+    verified backup contents, unchanged catalog manifest, and unchanged Iceberg snapshot.
 
 Exit criterion: a demo script and runbooks can diagnose and recover defined incidents.
 
