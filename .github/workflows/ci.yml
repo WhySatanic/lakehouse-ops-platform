@@ -312,6 +312,16 @@ jobs:
         run: |
           uv run python tests/integration/check_hive_metastore_recovery.py artifacts/hive-metastore-recovery.json
           docker compose --profile catalog run --rm metastore-schema-check
+      - name: Exercise PostgreSQL metadata backup and restore
+        run: >-
+          uv run python tests/integration/exercise_metadata_db_recovery.py
+          http://localhost:8080 artifacts/metadata-db-recovery.json
+          artifacts/metastore-backup.dump
+      - name: Verify restored metadata database evidence
+        run: |
+          uv run python tests/integration/check_metadata_db_recovery.py artifacts/metadata-db-recovery.json
+          docker compose --profile catalog run --rm metastore-schema-check
+          docker compose --profile query run --rm trino-query-check
       - name: Create sort order fixture
         run: |
           touch artifacts/sort-order-fixture.json
