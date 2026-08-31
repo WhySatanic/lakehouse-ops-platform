@@ -53,6 +53,33 @@ def test_compile_ranger_policies_covers_roles_and_self_impersonation() -> None:
     assert "lakehouse-observer" in metrics_item["users"]
     assert all(policy["description"] == MANAGED_DESCRIPTION for policy in policies)
     assert all(policy["service"] == "lakehouse-trino" for policy in policies)
+    row_filter = next(policy for policy in policies if policy["policyType"] == 2)
+    assert row_filter["resources"] == {
+        "catalog": {"values": ["lakehouse"], "isExcludes": False, "isRecursive": False},
+        "schema": {"values": ["silver"], "isExcludes": False, "isRecursive": False},
+        "table": {
+            "values": ["weather_hourly"],
+            "isExcludes": False,
+            "isRecursive": False,
+        },
+    }
+    assert row_filter["rowFilterPolicyItems"] == [
+        {
+            "users": ["analytics_engineer"],
+            "accesses": [{"type": "select", "isAllowed": True}],
+            "rowFilterInfo": {"filterExpr": "temperature_2m >= 19"},
+            "delegateAdmin": False,
+        }
+    ]
+    data_mask = next(policy for policy in policies if policy["policyType"] == 1)
+    assert data_mask["resources"]["column"] == {
+        "values": ["object_checksum"],
+        "isExcludes": False,
+        "isRecursive": False,
+    }
+    assert data_mask["dataMaskPolicyItems"][0]["dataMaskInfo"] == {
+        "dataMaskType": "MASK_NULL"
+    }
 
 
 class RangerState:
@@ -84,7 +111,13 @@ class RangerState:
             self.users.add(str(_json(request)["name"]))
             return httpx.Response(204)
         if request.method == "GET" and path.endswith("/lakehouse-trino/policy"):
-            return httpx.Response(200, json=self.policies)
+            return httpx.Response(
+                200,
+                json=[
+                    {key: value for key, value in policy.items() if value not in ([], None)}
+                    for policy in self.policies
+                ],
+            )
         if request.method == "POST" and path.endswith("/policy"):
             if self.inject_late_bootstrap:
                 self.inject_late_bootstrap = False

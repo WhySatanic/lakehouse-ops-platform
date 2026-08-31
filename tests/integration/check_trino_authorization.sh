@@ -4,6 +4,12 @@ set -euo pipefail
 server="${TRINO_SERVER:-http://trino-coordinator:8080}"
 report_path="${TRINO_AUTHORIZATION_REPORT_PATH:?TRINO_AUTHORIZATION_REPORT_PATH is required}"
 authorization_mode="${TRINO_AUTHORIZATION_MODE:-file}"
+expected_silver_rows=2
+expected_checksum_count=2
+if [[ "$authorization_mode" == "ranger" ]]; then
+  expected_silver_rows=1
+  expected_checksum_count=0
+fi
 
 query() {
   local user="$1"
@@ -52,8 +58,12 @@ expect_allowed platform_admin_reads_bronze platform_admin \
   "SELECT count(*) FROM lakehouse.bronze.weather_hourly" 4
 expect_allowed data_engineer_reads_bronze data_engineer \
   "SELECT count(*) FROM lakehouse.bronze.weather_hourly" 4
-expect_allowed analytics_engineer_reads_silver analytics_engineer \
-  "SELECT count(*) FROM lakehouse.silver.weather_hourly" 2
+expect_allowed analytics_engineer_silver_row_visibility analytics_engineer \
+  "SELECT count(*) FROM lakehouse.silver.weather_hourly" "$expected_silver_rows"
+expect_allowed analytics_engineer_checksum_visibility analytics_engineer \
+  "SELECT count(object_checksum) FROM lakehouse.silver.weather_hourly" "$expected_checksum_count"
+expect_allowed platform_admin_checksum_is_visible platform_admin \
+  "SELECT count(object_checksum) FROM lakehouse.silver.weather_hourly" 2
 expect_allowed operator_reads_system lakehouse-operator \
   "SELECT count(*) FROM system.runtime.nodes" 3
 
@@ -83,7 +93,9 @@ cat >"$report_path" <<EOF
   "cases": [
     {"id": "platform_admin_reads_bronze", "user": "platform_admin", "expectation": "allow", "result": "allowed"},
     {"id": "data_engineer_reads_bronze", "user": "data_engineer", "expectation": "allow", "result": "allowed"},
-    {"id": "analytics_engineer_reads_silver", "user": "analytics_engineer", "expectation": "allow", "result": "allowed"},
+    {"id": "analytics_engineer_silver_row_visibility", "user": "analytics_engineer", "expectation": "allow", "result": "allowed"},
+    {"id": "analytics_engineer_checksum_visibility", "user": "analytics_engineer", "expectation": "allow", "result": "allowed"},
+    {"id": "platform_admin_checksum_is_visible", "user": "platform_admin", "expectation": "allow", "result": "allowed"},
     {"id": "operator_reads_system", "user": "lakehouse-operator", "expectation": "allow", "result": "allowed"},
     {"id": "analytics_engineer_cannot_read_bronze", "user": "analytics_engineer", "expectation": "deny", "result": "denied"},
     {"id": "analyst_cannot_read_silver", "user": "analyst", "expectation": "deny", "result": "denied"},

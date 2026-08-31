@@ -60,6 +60,19 @@
         "schemas": ["silver", "gold"],
         "tables": ["*"],
         "privileges": ["SELECT"]
+      }],
+      "row_filters": [{
+        "catalogs": ["lakehouse"],
+        "schemas": ["silver"],
+        "tables": ["weather_hourly"],
+        "filter": "temperature_2m >= 19"
+      }],
+      "column_masks": [{
+        "catalogs": ["lakehouse"],
+        "schemas": ["silver"],
+        "tables": ["weather_hourly"],
+        "columns": ["object_checksum"],
+        "mask_type": "MASK_NULL"
       }]
     },
     "analyst": {

@@ -71,12 +71,9 @@ improvement, trade-offs, and rollback path.
     readiness evidence.
   - [x] Trino plugin configuration, policy bootstrap, and live enforcement evidence.
 - [x] Versioned role-to-resource policy model and policy deployment automation.
-- [ ] Row filters, column masking, audit delivery, and break-glass procedure.
+- [x] Row filters, column masking, audit delivery, and break-glass procedure.
   - [x] Trino allow and deny decisions delivered to the Ranger Solr audit store.
-  - [ ] Row-filter and column-mask policies with live acceptance evidence.
-    - [ ] Compatibility blocker: the Apache Ranger 2.9.0 Trino service definition does not
-      advertise row-filter or data-mask support; do not claim enforcement without a tested
-      plugin and service-definition path.
+  - [x] Row-filter and column-mask policies with live acceptance evidence.
   - [x] Reviewed break-glass grant, expiry, and revocation drill.
 - [x] S3 service-account policies aligned with engine responsibilities.
   - [x] Idempotent MinIO identities and live allow/deny matrix for ingestion, Spark, and Trino.

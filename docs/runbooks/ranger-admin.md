@@ -18,7 +18,8 @@ Ranger Admin is available at `http://localhost:6080`. The readiness check authen
 with the configured administrator account, reads Ranger's Trino service definition, and
 requires the catalog, schema, table, column, user, query, and system-information resource
 types plus the access types needed for selection, execution, impersonation, and operator
-read/write access. A reachable login page alone does not pass the check.
+read/write access. It also requires the Trino service definition's row-filter contract and
+the `MASK_NULL` data-mask type. A reachable login page alone does not pass the check.
 
 The check prints a schema-versioned JSON readiness report. Synchronize the central service,
 users, and policies before enabling the plugin:
@@ -49,6 +50,26 @@ uv run python tests/integration/check_trino_authorization.py \
 The Ranger plugin downloads only policy, role, user-store, and tag bundles without an
 Admin session. Administrative endpoints still require authentication. Live decisions are
 written to the `ranger_audits` Solr collection.
+
+## Row filtering and column masking
+
+The versioned role model gives `analytics_engineer` two centralized transformations on
+`lakehouse.silver.weather_hourly`:
+
+- `temperature_2m >= 19` limits the visible rows;
+- `MASK_NULL` hides `object_checksum` while preserving the column type.
+
+`lakeops sync-ranger-policy` publishes these as Ranger policy types 2 and 1 respectively.
+The live authorization check proves the restricted identity sees one of the two fixture
+rows and zero non-null checksum values. Its control queries prove `platform_admin` still
+sees both rows and both checksums. This distinguishes actual query rewriting from a table
+grant or an empty fixture.
+
+The contract is supported by the pinned Ranger 2.9.0
+[Trino service definition](https://github.com/apache/ranger/blob/release-ranger-2.9.0/agents-common/src/main/resources/service-defs/ranger-servicedef-trino.json)
+and exercised through the plugin's `getRowFilter` and `getColumnMask` callbacks. Changing
+an expression, mask type, target column, or identity requires updating the versioned role
+model, synchronizing Ranger, and repeating the live evidence matrix.
 
 ## Break-glass access
 
@@ -93,10 +114,6 @@ proves an initially denied user becomes allowed with an active lease, then becom
 again after expired-lease reconciliation. It does not claim production authentication or
 a highly available scheduler.
 
-The official Ranger 2.9.0 Trino service definition used here does not advertise row-filter
-or data-mask support. Those controls remain a compatibility investigation rather than an
-implemented capability.
-
 The `RANGER_ADMIN_USER` and `RANGER_ADMIN_PASSWORD` values configure only the readiness
 client. On first boot Ranger creates its documented development administrator account.
 Change that password in Ranger Admin, then put the matching client credentials in `.env`.
@@ -125,10 +142,10 @@ Keep it on a trusted local machine. Ranger provides centralized authorization he
 local Trino endpoint still trusts the supplied user header. This is enforcement evidence,
 not a production authentication boundary.
 
-## Upgrade from 0.30.0
+## Upgrade from 0.44.0
 
-No Iceberg, metastore, Ranger database, or base role-model migration is required. Existing
-sync commands keep their previous behavior. To use break-glass access, provide a reviewed
-lease with `--break-glass-lease` and arrange reconciliation at or before its expiry. Roll
-back by omitting the lease and running the synchronizer once; this removes its temporary
-role binding.
+No Iceberg, metastore, or Ranger database migration is required. Version 0.45.0 adds two
+managed policies for `analytics_engineer`. Run the synchronizer before restarting or
+recreating Trino nodes so Ranger publishes the row filter and mask. Roll back by deploying
+the previous role model and synchronizing once; the reconciler removes both managed
+transformation policies.
