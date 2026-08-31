@@ -8,8 +8,8 @@ from typing import Any
 EXPECTED_CASES = {
     "platform_admin_reads_bronze": "allowed",
     "data_engineer_reads_bronze": "allowed",
-    "analytics_engineer_reads_silver": "allowed",
-    "analytics_engineer_checksum_is_masked": "allowed",
+    "analytics_engineer_silver_row_visibility": "allowed",
+    "analytics_engineer_checksum_visibility": "allowed",
     "platform_admin_checksum_is_visible": "allowed",
     "operator_reads_system": "allowed",
     "analytics_engineer_cannot_read_bronze": "denied",
