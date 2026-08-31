@@ -19,6 +19,7 @@ docker compose --profile observability run --rm prometheus-check
 docker compose --profile observability run --rm grafana-check
 docker compose --profile observability run --rm grafana-workload-check
 docker compose --profile observability run --rm grafana-operational-check
+docker compose --profile observability run --rm platform-slo-check
 ```
 
 Prometheus is available at `http://localhost:9090` by default. Query
@@ -56,8 +57,13 @@ Trino coordinator, verifies the exact firing alert, restores Trino, verifies all
 targets are healthy again, and then requires the matching resolved notification.
 The webhook receiver is an executable local test boundary, not a production pager.
 
-This profile intentionally does not claim application-level correctness, production
-paging, or SLO coverage. The freshness age describes the most recent `ingested_at`
+The platform SLO recording rules evaluate query success, ingestion freshness, and the
+small-file maintenance backlog. The bounded acceptance checker rejects missing traffic,
+failed collection, and breached objectives. See the
+[platform SLO runbook](platform-slos.md) for targets, limitations, and PromQL queries.
+
+This profile intentionally does not claim application-level correctness or production
+paging. The freshness age describes the most recent `ingested_at`
 value, and the small-file backlog is inventory rather than an automatic maintenance
 decision. Query counters reset whenever the Trino coordinator restarts, and five-minute
 rates need at least two Prometheus samples. Use the existing Spark and Trino integration

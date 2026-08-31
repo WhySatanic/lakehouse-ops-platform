@@ -960,6 +960,7 @@ services:
     volumes:
       - ./config/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./config/observability/alerts.yml:/etc/prometheus/rules/alerts.yml:ro
+      - ./config/observability/slo.yml:/etc/prometheus/rules/slo.yml:ro
     restart: unless-stopped
 
   prometheus-check:
@@ -1037,6 +1038,19 @@ services:
     volumes:
       - ./tests/integration/check_grafana_operational.py:/checks/check_grafana_operational.py:ro
     entrypoint: ["python", "/checks/check_grafana_operational.py"]
+    restart: "no"
+
+  platform-slo-check:
+    image: python:3.12-alpine3.22
+    profiles: ["observability"]
+    depends_on:
+      prometheus:
+        condition: service_started
+    environment:
+      PROMETHEUS_SERVER: http://prometheus:9090
+    volumes:
+      - ./tests/integration/check_platform_slos.py:/checks/check_platform_slos.py:ro
+    entrypoint: ["python", "/checks/check_platform_slos.py"]
     restart: "no"
 
   alert-webhook:
