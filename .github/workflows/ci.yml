@@ -239,13 +239,16 @@ jobs:
       - name: Start Prometheus readiness collection
         run: >-
           docker compose --profile observability up -d
-          alert-webhook alertmanager blackbox-exporter prometheus grafana
+          alert-webhook alertmanager blackbox-exporter lakehouse-metrics-exporter
+          prometheus grafana
       - name: Verify Prometheus core targets
         run: docker compose --profile observability run --rm prometheus-check
       - name: Verify Grafana readiness dashboard
         run: docker compose --profile observability run --rm grafana-check
       - name: Verify Grafana workload dashboard
         run: docker compose --profile observability run --rm grafana-workload-check
+      - name: Verify Grafana maintenance and freshness dashboard
+        run: docker compose --profile observability run --rm grafana-operational-check
       - name: Rehearse Trino upgrade and rollback
         run: >-
           uv run python tests/integration/exercise_trino_upgrade_rehearsal.py
@@ -663,7 +666,8 @@ jobs:
           docker compose --profile catalog --profile compute --profile query
           --profile observability logs
           minio metastore-db hive-metastore trino-coordinator trino-worker
-          trino-worker-2 prometheus blackbox-exporter grafana alertmanager alert-webhook
+          trino-worker-2 prometheus blackbox-exporter lakehouse-metrics-exporter
+          grafana alertmanager alert-webhook
       - name: Stop integration profile
         if: always()
         run: >-

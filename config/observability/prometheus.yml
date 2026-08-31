@@ -12,6 +12,12 @@ alerting:
             - alertmanager:9093
 
 scrape_configs:
+  - job_name: lakehouse-operational
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - lakehouse-metrics-exporter:9108
+
   - job_name: trino-workload
     metrics_path: /metrics
     basic_auth:

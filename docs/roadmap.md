@@ -89,13 +89,13 @@ row filtering, impersonation boundaries, and audit events.
 
 ## Phase 5 — observability and serving
 
-- [ ] Prometheus collection, Grafana dashboards, and actionable alerts.
+- [x] Prometheus collection, Grafana dashboards, and actionable alerts.
   - [x] Prometheus black-box readiness collection for MinIO, Hive Metastore, and Trino.
-  - [ ] Grafana dashboards for platform health and workload signals.
+  - [x] Grafana dashboards for platform health and workload signals.
     - [x] Provisioned core readiness dashboard with a live datasource check.
-    - [ ] Workload, maintenance, and freshness dashboards.
+    - [x] Workload, maintenance, and freshness dashboards.
       - [x] Trino workload dashboard backed by live OpenMetrics query counters.
-      - [ ] Maintenance and freshness dashboards.
+      - [x] Maintenance and freshness dashboards backed by live Iceberg table metrics.
   - [x] Actionable core-target alert with tested firing and resolved delivery.
 - [ ] Platform SLOs for query success, ingestion freshness, and maintenance backlog.
 - [ ] ClickHouse serving profile and a documented Iceberg/S3 integration experiment.

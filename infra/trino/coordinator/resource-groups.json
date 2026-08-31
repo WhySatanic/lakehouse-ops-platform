@@ -25,6 +25,14 @@
           "jmxExport": true
         },
         {
+          "name": "operational",
+          "softMemoryLimit": "10%",
+          "hardConcurrencyLimit": 1,
+          "maxQueued": 1,
+          "schedulingWeight": 1,
+          "jmxExport": true
+        },
+        {
           "name": "adhoc",
           "softMemoryLimit": "20%",
           "hardConcurrencyLimit": 1,
@@ -43,6 +51,10 @@
     {
       "user": "lakehouse-bi(?:-.*)?",
       "group": "global.bi"
+    },
+    {
+      "user": "lakehouse-operational-metrics",
+      "group": "global.operational"
     },
     {
       "group": "global.adhoc"
