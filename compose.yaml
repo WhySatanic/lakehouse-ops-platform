@@ -37,6 +37,8 @@ services:
       MINIO_TRINO_PASSWORD: ${MINIO_TRINO_PASSWORD:-trino-development-only}
       MINIO_HMS_USER: ${MINIO_HMS_USER:-lakeops-hms}
       MINIO_HMS_PASSWORD: ${MINIO_HMS_PASSWORD:-hms-development-only}
+      MINIO_CLICKHOUSE_USER: ${MINIO_CLICKHOUSE_USER:-lakeops-clickhouse}
+      MINIO_CLICKHOUSE_PASSWORD: ${MINIO_CLICKHOUSE_PASSWORD:-clickhouse-development-only}
     volumes:
       - ./config/s3:/policies:ro
     entrypoint: ["/bin/sh", "-ec"]
@@ -46,7 +48,7 @@ services:
         "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" &&
         mc mb --ignore-existing "local/$${LAKEHOUSE_BUCKET}" &&
         mc anonymous set none "local/$${LAKEHOUSE_BUCKET}" &&
-        for identity in ingest spark trino hms; do
+        for identity in ingest spark trino hms clickhouse; do
           upper="$$(printf '%s' "$$identity" | tr '[:lower:]' '[:upper:]')";
           eval user="\$${MINIO_$${upper}_USER}";
           eval password="\$${MINIO_$${upper}_PASSWORD}";
@@ -74,6 +76,8 @@ services:
       MINIO_TRINO_PASSWORD: ${MINIO_TRINO_PASSWORD:-trino-development-only}
       MINIO_HMS_USER: ${MINIO_HMS_USER:-lakeops-hms}
       MINIO_HMS_PASSWORD: ${MINIO_HMS_PASSWORD:-hms-development-only}
+      MINIO_CLICKHOUSE_USER: ${MINIO_CLICKHOUSE_USER:-lakeops-clickhouse}
+      MINIO_CLICKHOUSE_PASSWORD: ${MINIO_CLICKHOUSE_PASSWORD:-clickhouse-development-only}
     volumes:
       - ./tests/fixtures/open_meteo_landing.json:/fixtures/probe.json:ro
     entrypoint: ["/bin/sh", "-ec"]
@@ -83,18 +87,22 @@ services:
         mc alias set spark http://minio:9000 "$${MINIO_SPARK_USER}" "$${MINIO_SPARK_PASSWORD}"
         mc alias set trino http://minio:9000 "$${MINIO_TRINO_USER}" "$${MINIO_TRINO_PASSWORD}"
         mc alias set hms http://minio:9000 "$${MINIO_HMS_USER}" "$${MINIO_HMS_PASSWORD}"
+        mc alias set clickhouse http://minio:9000 "$${MINIO_CLICKHOUSE_USER}" "$${MINIO_CLICKHOUSE_PASSWORD}"
         mc cp /fixtures/probe.json "ingest/$${LAKEHOUSE_BUCKET}/landing/_access/ingest.json"
         mc stat "spark/$${LAKEHOUSE_BUCKET}/landing/_access/ingest.json" >/dev/null
         mc cp /fixtures/probe.json "spark/$${LAKEHOUSE_BUCKET}/warehouse/_access/spark.json"
         mc stat "trino/$${LAKEHOUSE_BUCKET}/warehouse/_access/spark.json" >/dev/null
         mc cp /fixtures/probe.json "hms/$${LAKEHOUSE_BUCKET}/warehouse/_access/hms.json"
         mc rm "hms/$${LAKEHOUSE_BUCKET}/warehouse/_access/hms.json"
+        mc stat "clickhouse/$${LAKEHOUSE_BUCKET}/warehouse/_access/spark.json" >/dev/null
         if mc cp /fixtures/probe.json "ingest/$${LAKEHOUSE_BUCKET}/warehouse/_access/denied.json" >/dev/null 2>&1; then exit 1; fi
         if mc cp /fixtures/probe.json "spark/$${LAKEHOUSE_BUCKET}/landing/_access/denied.json" >/dev/null 2>&1; then exit 1; fi
         if mc cp /fixtures/probe.json "trino/$${LAKEHOUSE_BUCKET}/warehouse/_access/denied.json" >/dev/null 2>&1; then exit 1; fi
         if mc stat "trino/$${LAKEHOUSE_BUCKET}/landing/_access/ingest.json" >/dev/null 2>&1; then exit 1; fi
         if mc cp /fixtures/probe.json "hms/$${LAKEHOUSE_BUCKET}/landing/_access/denied.json" >/dev/null 2>&1; then exit 1; fi
-        printf '%s\n' '{"schema_version":"1.0","status":"ready","ingest":"landing-read-write","spark":"landing-read-warehouse-write","trino":"warehouse-read-only","hms":"warehouse-path-manage"}'
+        if mc cp /fixtures/probe.json "clickhouse/$${LAKEHOUSE_BUCKET}/warehouse/_access/denied.json" >/dev/null 2>&1; then exit 1; fi
+        if mc stat "clickhouse/$${LAKEHOUSE_BUCKET}/landing/_access/ingest.json" >/dev/null 2>&1; then exit 1; fi
+        printf '%s\n' '{"schema_version":"1.0","status":"ready","ingest":"landing-read-write","spark":"landing-read-warehouse-write","trino":"warehouse-read-only","hms":"warehouse-path-manage","clickhouse":"warehouse-read-only"}'
     restart: "no"
 
   metastore-db:
@@ -918,6 +926,51 @@ services:
     entrypoint: ["/bin/bash", "/checks/check_interrupted_write_trino.sh"]
     restart: "no"
 
+  clickhouse-server:
+    image: clickhouse/clickhouse-server:26.3.25.2
+    profiles: ["serving"]
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      CLICKHOUSE_DB: serving
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-lakeops-serving}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-serving-development-only}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "${CLICKHOUSE_HTTP_PORT:-8123}:8123"
+      - "${CLICKHOUSE_NATIVE_PORT:-9002}:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:8123/ping || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 10s
+    mem_limit: 1g
+    restart: unless-stopped
+
+  clickhouse-iceberg-check:
+    image: clickhouse/clickhouse-server:26.3.25.2
+    profiles: ["serving"]
+    depends_on:
+      clickhouse-server:
+        condition: service_healthy
+    environment:
+      CLICKHOUSE_SERVER: clickhouse-server
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-lakeops-serving}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-serving-development-only}
+      LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
+      MINIO_CLICKHOUSE_USER: ${MINIO_CLICKHOUSE_USER:-lakeops-clickhouse}
+      MINIO_CLICKHOUSE_PASSWORD: ${MINIO_CLICKHOUSE_PASSWORD:-clickhouse-development-only}
+      CLICKHOUSE_SERVING_REPORT_PATH: /artifacts/clickhouse-serving.json
+    volumes:
+      - ./artifacts:/artifacts
+      - ./tests/integration/check_clickhouse_serving.sh:/checks/check_clickhouse_serving.sh:ro
+    entrypoint: ["/bin/bash", "/checks/check_clickhouse_serving.sh"]
+    restart: "no"
+
   blackbox-exporter:
     image: prom/blackbox-exporter:v0.27.0
     profiles: ["observability"]
@@ -1100,3 +1153,4 @@ volumes:
   trino-worker-2-data:
   ranger-db-data:
   ranger-solr-data:
+  clickhouse-data:

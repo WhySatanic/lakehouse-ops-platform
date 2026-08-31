@@ -98,7 +98,7 @@ row filtering, impersonation boundaries, and audit events.
       - [x] Maintenance and freshness dashboards backed by live Iceberg table metrics.
   - [x] Actionable core-target alert with tested firing and resolved delivery.
 - [x] Platform SLOs for query success, ingestion freshness, and maintenance backlog.
-- [ ] ClickHouse serving profile and a documented Iceberg/S3 integration experiment.
+- [x] ClickHouse serving profile and a documented Iceberg/S3 integration experiment.
 - [x] Recovery drill for lost worker, unavailable metastore, and restored metadata DB.
   - [x] Hive Metastore service outage and recovery with cache-disabled Trino failure,
     preserved PostgreSQL container identity, and unchanged Iceberg snapshot evidence.
