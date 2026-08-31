@@ -17,6 +17,12 @@ def valid_service_definition() -> dict[str, object]:
         "implClass": "org.apache.ranger.services.trino.RangerServiceTrino",
         "resources": [{"name": name} for name in CHECKER.REQUIRED_RESOURCES],
         "accessTypes": [{"name": name} for name in CHECKER.REQUIRED_ACCESS_TYPES],
+        "dataMaskDef": {"maskTypes": [{"name": "MASK_NULL"}]},
+        "rowFilterDef": {
+            "resources": [
+                {"name": name} for name in ("catalog", "schema", "table")
+            ]
+        },
     }
 
 
@@ -45,3 +51,14 @@ def test_validate_rejects_non_array_contract_sections() -> None:
     document["accessTypes"] = None
 
     assert CHECKER.validate_service_definition(document) == ["resources", "accessTypes"]
+
+
+def test_validate_reports_missing_mask_and_filter_capabilities() -> None:
+    document = valid_service_definition()
+    document["dataMaskDef"] = {"maskTypes": []}
+    document["rowFilterDef"] = {"resources": []}
+
+    assert CHECKER.validate_service_definition(document) == [
+        "dataMaskDef.maskTypes",
+        "rowFilterDef.resources",
+    ]

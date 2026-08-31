@@ -46,6 +46,24 @@ def validate_service_definition(document: dict[str, Any]) -> list[str]:
         {item.get("name") for item in access_types if isinstance(item, dict)}
     ):
         errors.append("accessTypes.coverage")
+    data_mask = document.get("dataMaskDef")
+    if not isinstance(data_mask, dict):
+        errors.append("dataMaskDef")
+    else:
+        mask_types = data_mask.get("maskTypes")
+        if not isinstance(mask_types, list) or "MASK_NULL" not in {
+            item.get("name") for item in mask_types if isinstance(item, dict)
+        }:
+            errors.append("dataMaskDef.maskTypes")
+    row_filter = document.get("rowFilterDef")
+    if not isinstance(row_filter, dict):
+        errors.append("rowFilterDef")
+    else:
+        resources = row_filter.get("resources")
+        if not isinstance(resources, list) or {"catalog", "schema", "table"} != {
+            item.get("name") for item in resources if isinstance(item, dict)
+        }:
+            errors.append("rowFilterDef.resources")
     return errors
 
 
@@ -99,6 +117,8 @@ def main() -> None:
                 "service_definition": "trino",
                 "required_resources": sorted(REQUIRED_RESOURCES),
                 "required_access_types": sorted(REQUIRED_ACCESS_TYPES),
+                "data_mask": "MASK_NULL",
+                "row_filter_resources": ["catalog", "schema", "table"],
             },
             sort_keys=True,
         )

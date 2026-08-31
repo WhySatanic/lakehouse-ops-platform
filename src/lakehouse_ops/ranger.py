@@ -66,6 +66,35 @@ def compile_ranger_policies(
                     _table_accesses(grant["privileges"]),
                 )
             )
+        for index, grant in enumerate(permissions.get("row_filters", []), start=1):
+            policies.append(
+                _row_filter_policy(
+                    service_name,
+                    f"lakehouse-ops-{role_name}-row-filter-{index}",
+                    {
+                        "catalog": _resource(grant["catalogs"]),
+                        "schema": _resource(grant["schemas"]),
+                        "table": _resource(grant["tables"]),
+                    },
+                    users,
+                    grant["filter"],
+                )
+            )
+        for index, grant in enumerate(permissions.get("column_masks", []), start=1):
+            policies.append(
+                _data_mask_policy(
+                    service_name,
+                    f"lakehouse-ops-{role_name}-column-mask-{index}",
+                    {
+                        "catalog": _resource(grant["catalogs"]),
+                        "schema": _resource(grant["schemas"]),
+                        "table": _resource(grant["tables"]),
+                        "column": _resource(grant["columns"]),
+                    },
+                    users,
+                    grant["mask_type"],
+                )
+            )
         query_accesses = permissions.get("queries", [])
         if "execute" in query_accesses:
             policies.append(
@@ -107,7 +136,14 @@ def compile_ranger_policies(
             ["impersonate"],
         )
     )
-    return _merge_matching_resources(policies)
+    access_policies = [policy for policy in policies if policy["policyType"] == 0]
+    transformation_policies = [
+        policy for policy in policies if policy["policyType"] in {1, 2}
+    ]
+    return sorted(
+        [*_merge_matching_resources(access_policies), *transformation_policies],
+        key=lambda policy: policy["name"],
+    )
 
 
 class RangerAdminClient:
@@ -369,6 +405,62 @@ def _policy(
     }
 
 
+def _row_filter_policy(
+    service: str,
+    name: str,
+    resources: dict[str, dict[str, Any]],
+    users: list[str],
+    filter_expression: str,
+) -> dict[str, Any]:
+    return {
+        "service": service,
+        "name": name,
+        "description": MANAGED_DESCRIPTION,
+        "policyType": 2,
+        "isEnabled": True,
+        "isAuditEnabled": True,
+        "resources": resources,
+        "policyItems": [],
+        "rowFilterPolicyItems": [
+            {
+                "users": sorted(users),
+                "accesses": [{"type": "select", "isAllowed": True}],
+                "rowFilterInfo": {"filterExpr": filter_expression},
+                "delegateAdmin": False,
+            }
+        ],
+        "isDenyAllElse": False,
+    }
+
+
+def _data_mask_policy(
+    service: str,
+    name: str,
+    resources: dict[str, dict[str, Any]],
+    users: list[str],
+    mask_type: str,
+) -> dict[str, Any]:
+    return {
+        "service": service,
+        "name": name,
+        "description": MANAGED_DESCRIPTION,
+        "policyType": 1,
+        "isEnabled": True,
+        "isAuditEnabled": True,
+        "resources": resources,
+        "policyItems": [],
+        "dataMaskPolicyItems": [
+            {
+                "users": sorted(users),
+                "accesses": [{"type": "select", "isAllowed": True}],
+                "dataMaskInfo": {"dataMaskType": mask_type},
+                "delegateAdmin": False,
+            }
+        ],
+        "isDenyAllElse": False,
+    }
+
+
 def _resource(values: list[str]) -> dict[str, Any]:
     return {"values": values, "isExcludes": False, "isRecursive": False}
 
@@ -397,7 +489,7 @@ def _table_accesses(privileges: list[str]) -> list[str]:
 
 
 def _policy_projection(policy: dict[str, Any]) -> dict[str, Any]:
-    return {
+    projection = {
         key: policy.get(key)
         for key in (
             "service",
@@ -407,15 +499,19 @@ def _policy_projection(policy: dict[str, Any]) -> dict[str, Any]:
             "isEnabled",
             "isAuditEnabled",
             "resources",
-            "policyItems",
-            "denyPolicyItems",
-            "allowExceptions",
-            "denyExceptions",
-            "dataMaskPolicyItems",
-            "rowFilterPolicyItems",
             "isDenyAllElse",
         )
     }
+    for key in (
+        "policyItems",
+        "denyPolicyItems",
+        "allowExceptions",
+        "denyExceptions",
+        "dataMaskPolicyItems",
+        "rowFilterPolicyItems",
+    ):
+        projection[key] = policy.get(key) or []
+    return projection
 
 
 def _is_ranger_bootstrap_policy(policy: dict[str, Any], service_user: str) -> bool:

@@ -53,7 +53,11 @@ expect_allowed platform_admin_reads_bronze platform_admin \
 expect_allowed data_engineer_reads_bronze data_engineer \
   "SELECT count(*) FROM lakehouse.bronze.weather_hourly" 4
 expect_allowed analytics_engineer_reads_silver analytics_engineer \
-  "SELECT count(*) FROM lakehouse.silver.weather_hourly" 2
+  "SELECT count(*) FROM lakehouse.silver.weather_hourly" 1
+expect_allowed analytics_engineer_checksum_is_masked analytics_engineer \
+  "SELECT count(object_checksum) FROM lakehouse.silver.weather_hourly" 0
+expect_allowed platform_admin_checksum_is_visible platform_admin \
+  "SELECT count(object_checksum) FROM lakehouse.silver.weather_hourly" 2
 expect_allowed operator_reads_system lakehouse-operator \
   "SELECT count(*) FROM system.runtime.nodes" 3
 
@@ -84,6 +88,8 @@ cat >"$report_path" <<EOF
     {"id": "platform_admin_reads_bronze", "user": "platform_admin", "expectation": "allow", "result": "allowed"},
     {"id": "data_engineer_reads_bronze", "user": "data_engineer", "expectation": "allow", "result": "allowed"},
     {"id": "analytics_engineer_reads_silver", "user": "analytics_engineer", "expectation": "allow", "result": "allowed"},
+    {"id": "analytics_engineer_checksum_is_masked", "user": "analytics_engineer", "expectation": "allow", "result": "allowed"},
+    {"id": "platform_admin_checksum_is_visible", "user": "platform_admin", "expectation": "allow", "result": "allowed"},
     {"id": "operator_reads_system", "user": "lakehouse-operator", "expectation": "allow", "result": "allowed"},
     {"id": "analytics_engineer_cannot_read_bronze", "user": "analytics_engineer", "expectation": "deny", "result": "denied"},
     {"id": "analyst_cannot_read_silver", "user": "analyst", "expectation": "deny", "result": "denied"},
