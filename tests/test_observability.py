@@ -6,6 +6,9 @@ ROOT = Path(__file__).parents[1]
 CHECK_PATH = ROOT / "tests" / "integration" / "check_prometheus_targets.py"
 GRAFANA_CHECK_PATH = ROOT / "tests" / "integration" / "check_grafana_readiness.py"
 WORKLOAD_CHECK_PATH = ROOT / "tests" / "integration" / "check_grafana_workload.py"
+OPERATIONAL_CHECK_PATH = (
+    ROOT / "tests" / "integration" / "check_grafana_operational.py"
+)
 ALERT_CHECK_PATH = ROOT / "tests" / "integration" / "check_alert_delivery.py"
 
 
@@ -27,6 +30,16 @@ def _load_grafana_checker():
 
 def _load_workload_checker():
     spec = importlib.util.spec_from_file_location("check_grafana_workload", WORKLOAD_CHECK_PATH)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_operational_checker():
+    spec = importlib.util.spec_from_file_location(
+        "check_grafana_operational", OPERATIONAL_CHECK_PATH
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -79,6 +92,13 @@ def test_prometheus_scrapes_trino_workload_with_dedicated_identity() -> None:
     assert "metrics_path: /metrics" in config
     assert "username: lakehouse-observer" in config
     assert "trino-coordinator:8080" in config
+
+
+def test_prometheus_scrapes_operational_metrics_exporter() -> None:
+    config = (ROOT / "config" / "observability" / "prometheus.yml").read_text()
+
+    assert "job_name: lakehouse-operational" in config
+    assert "lakehouse-metrics-exporter:9108" in config
 
 
 def test_grafana_dashboard_uses_provisioned_prometheus_datasource() -> None:
@@ -153,6 +173,56 @@ def test_grafana_workload_checker_requires_dashboard_and_numeric_sample() -> Non
     )
     assert checker.sample_at_least(
         {"status": "success", "data": {"result": [{"value": [1, "2"]}]}}, 1
+    )
+    assert not checker.sample_at_least(
+        {"status": "success", "data": {"result": [{"value": [1, "NaN"]}]}}, 0
+    )
+    assert not checker.sample_at_least({"status": "error"}, 0)
+
+
+def test_grafana_operational_dashboard_uses_live_table_metrics() -> None:
+    checker = _load_operational_checker()
+    dashboard_path = (
+        ROOT
+        / "config"
+        / "observability"
+        / "grafana"
+        / "dashboards"
+        / "maintenance-freshness.json"
+    )
+    dashboard = json.loads(dashboard_path.read_text())
+    expressions = {
+        target["expr"] for panel in dashboard["panels"] for target in panel["targets"]
+    }
+
+    assert dashboard["uid"] == checker.DASHBOARD_UID
+    assert dashboard["title"] == checker.DASHBOARD_TITLE
+    assert {panel["type"] for panel in dashboard["panels"]} == {"stat", "timeseries"}
+    assert all(
+        panel["datasource"]["uid"] == checker.DATASOURCE_UID
+        for panel in dashboard["panels"]
+    )
+    assert {
+        "lakehouse_ingestion_freshness_age_seconds",
+        "1000 * lakehouse_ingestion_latest_timestamp_seconds",
+        "lakehouse_maintenance_data_files",
+        "lakehouse_maintenance_small_file_backlog",
+        "lakehouse_maintenance_snapshots",
+        "lakehouse_operational_collector_success",
+    } <= expressions
+
+
+def test_grafana_operational_checker_requires_live_metrics() -> None:
+    checker = _load_operational_checker()
+
+    assert checker.dashboard_is_provisioned(
+        [{"uid": checker.DASHBOARD_UID, "title": checker.DASHBOARD_TITLE}]
+    )
+    assert not checker.dashboard_is_provisioned(
+        [{"uid": checker.DASHBOARD_UID, "title": "Other"}]
+    )
+    assert checker.sample_at_least(
+        {"status": "success", "data": {"result": [{"value": [1, "1"]}]}}, 1
     )
     assert not checker.sample_at_least(
         {"status": "success", "data": {"result": [{"value": [1, "NaN"]}]}}, 0
