@@ -934,7 +934,7 @@ services:
     environment:
       PYTHONPATH: /opt/lakehouse/src
       TRINO_SERVER: http://trino-coordinator:8080
-      TRINO_USER: lakehouse-ops
+      TRINO_USER: lakehouse-operational-metrics
       LAKEHOUSE_METRICS_PORT: "9108"
       TRINO_METRICS_TIMEOUT_SECONDS: "10"
     ports:

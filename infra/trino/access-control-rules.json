@@ -6,7 +6,7 @@
       "allow": "all"
     },
     {
-      "user": "lakehouse\\-operator|lakehouse\\-bi\\-inspector|lakehouse\\-ops|lakehouse\\-ci|lakehouse\\-performance|lakehouse\\-recovery\\-drill|lakehouse\\-ingestion\\-ci|lakehouse\\-bi\\-ci|lakehouse\\-analyst|metadata\\-cache\\-readiness|upgrade\\-readiness|upgrade\\-rehearsal",
+      "user": "lakehouse\\-operator|lakehouse\\-bi\\-inspector|lakehouse\\-ops|lakehouse\\-operational\\-metrics|lakehouse\\-ci|lakehouse\\-performance|lakehouse\\-recovery\\-drill|lakehouse\\-ingestion\\-ci|lakehouse\\-bi\\-ci|lakehouse\\-analyst|metadata\\-cache\\-readiness|upgrade\\-readiness|upgrade\\-rehearsal",
       "catalog": "lakehouse|lakehouse_cache_disabled|system",
       "allow": "read-only"
     },
@@ -63,7 +63,7 @@
       ]
     },
     {
-      "user": "lakehouse\\-operator|lakehouse\\-bi\\-inspector|lakehouse\\-ops|lakehouse\\-ci|lakehouse\\-performance|lakehouse\\-recovery\\-drill|lakehouse\\-ingestion\\-ci|lakehouse\\-bi\\-ci|lakehouse\\-analyst|metadata\\-cache\\-readiness|upgrade\\-readiness|upgrade\\-rehearsal",
+      "user": "lakehouse\\-operator|lakehouse\\-bi\\-inspector|lakehouse\\-ops|lakehouse\\-operational\\-metrics|lakehouse\\-ci|lakehouse\\-performance|lakehouse\\-recovery\\-drill|lakehouse\\-ingestion\\-ci|lakehouse\\-bi\\-ci|lakehouse\\-analyst|metadata\\-cache\\-readiness|upgrade\\-readiness|upgrade\\-rehearsal",
       "catalog": "lakehouse|lakehouse_cache_disabled|system",
       "schema": ".*",
       "table": ".*",
@@ -150,7 +150,7 @@
       ]
     },
     {
-      "user": "lakehouse\\-operator|lakehouse\\-bi\\-inspector|lakehouse\\-ops|lakehouse\\-ci|lakehouse\\-performance|lakehouse\\-recovery\\-drill|lakehouse\\-ingestion\\-ci|lakehouse\\-bi\\-ci|lakehouse\\-analyst|metadata\\-cache\\-readiness|upgrade\\-readiness|upgrade\\-rehearsal",
+      "user": "lakehouse\\-operator|lakehouse\\-bi\\-inspector|lakehouse\\-ops|lakehouse\\-operational\\-metrics|lakehouse\\-ci|lakehouse\\-performance|lakehouse\\-recovery\\-drill|lakehouse\\-ingestion\\-ci|lakehouse\\-bi\\-ci|lakehouse\\-analyst|metadata\\-cache\\-readiness|upgrade\\-readiness|upgrade\\-rehearsal",
       "allow": [
         "read"
       ]

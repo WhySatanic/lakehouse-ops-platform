@@ -101,6 +101,33 @@ def test_prometheus_scrapes_operational_metrics_exporter() -> None:
     assert "lakehouse-metrics-exporter:9108" in config
 
 
+def test_operational_metrics_use_isolated_read_only_identity() -> None:
+    groups = json.loads(
+        (ROOT / "infra" / "trino" / "coordinator" / "resource-groups.json").read_text()
+    )
+    operational = next(
+        group
+        for group in groups["rootGroups"][0]["subGroups"]
+        if group["name"] == "operational"
+    )
+    selector = next(
+        selector
+        for selector in groups["selectors"]
+        if selector.get("user") == "lakehouse-operational-metrics"
+    )
+    policy = json.loads((ROOT / "config" / "access" / "role-policy.json").read_text())
+    binding = next(
+        binding
+        for binding in policy["bindings"]
+        if "lakehouse-operational-metrics" in binding["users"]
+    )
+
+    assert operational["hardConcurrencyLimit"] == 1
+    assert operational["maxQueued"] == 1
+    assert selector["group"] == "global.operational"
+    assert binding["roles"] == ["operations_reader"]
+
+
 def test_grafana_dashboard_uses_provisioned_prometheus_datasource() -> None:
     checker = _load_grafana_checker()
     dashboard_path = (

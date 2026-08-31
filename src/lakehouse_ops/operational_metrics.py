@@ -190,7 +190,7 @@ def main() -> None:
     host = os.getenv("LAKEHOUSE_METRICS_HOST", "0.0.0.0")
     port = int(os.getenv("LAKEHOUSE_METRICS_PORT", "9108"))
     server = os.getenv("TRINO_SERVER", "http://trino-coordinator:8080")
-    user = os.getenv("TRINO_USER", "lakehouse-ops")
+    user = os.getenv("TRINO_USER", "lakehouse-operational-metrics")
     timeout = float(os.getenv("TRINO_METRICS_TIMEOUT_SECONDS", "10"))
     ThreadingHTTPServer((host, port), make_handler(server, user, timeout)).serve_forever()
 

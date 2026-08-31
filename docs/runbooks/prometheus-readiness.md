@@ -46,6 +46,8 @@ data-file count, files below 128 MiB, and snapshot count for
 `lakehouse.silver.weather_hourly`. The `Lakehouse Maintenance and Freshness` dashboard
 shows those live values. Its checker requires the exact provisioned dashboard, a healthy
 datasource and exporter target, a successful collection, and non-empty table metadata.
+The exporter uses the read-only `lakehouse-operational-metrics` identity and the bounded
+`global.operational` resource group, so slow metric queries cannot fill the ad-hoc queue.
 
 Prometheus evaluates `LakehouseCoreTargetDown` when any configured readiness target
 reports `probe_success == 0` for 30 seconds. Alertmanager groups the alert by target

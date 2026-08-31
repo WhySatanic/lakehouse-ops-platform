@@ -83,6 +83,7 @@
     {
       "users": [
         "lakehouse-ops",
+        "lakehouse-operational-metrics",
         "lakehouse-ci",
         "lakehouse-performance",
         "lakehouse-recovery-drill",
