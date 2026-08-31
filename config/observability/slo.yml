@@ -1,0 +1,60 @@
+groups:
+  - name: lakehouse-platform-slo
+    interval: 5s
+    rules:
+      - record: lakehouse:slo:query_traffic_observed5m
+        expr: >-
+          sum(rate(trino_execution_name_QueryManager_StartedQueries[5m])) > bool 0
+      - record: lakehouse:slo:query_success_ratio5m
+        expr: >-
+          1 - clamp_max(
+            sum(rate(trino_execution_name_QueryManager_FailedQueries[5m]))
+            / clamp_min(
+              sum(rate(trino_execution_name_QueryManager_StartedQueries[5m])),
+              0.000001
+            ),
+            1
+          )
+      - record: lakehouse:slo:ingestion_freshness_compliant
+        expr: >-
+          min(lakehouse_operational_collector_success)
+          * min(lakehouse_ingestion_freshness_age_seconds <= bool 900)
+      - record: lakehouse:slo:maintenance_backlog_compliant
+        expr: >-
+          min(lakehouse_operational_collector_success)
+          * min(lakehouse_maintenance_small_file_backlog <= bool 10)
+      - record: lakehouse:slo:objectives_met
+        expr: >-
+          lakehouse:slo:query_traffic_observed5m
+          * (lakehouse:slo:query_success_ratio5m >= bool 0.99)
+          * lakehouse:slo:ingestion_freshness_compliant
+          * lakehouse:slo:maintenance_backlog_compliant
+      - alert: LakehouseQuerySuccessSLOBreach
+        expr: >-
+          lakehouse:slo:query_traffic_observed5m == 1
+          and lakehouse:slo:query_success_ratio5m < 0.99
+        for: 5m
+        labels:
+          severity: warning
+          component: query
+        annotations:
+          summary: Trino query success objective is breached
+          description: The five-minute query success ratio is below 99 percent.
+      - alert: LakehouseIngestionFreshnessSLOBreach
+        expr: lakehouse:slo:ingestion_freshness_compliant == 0
+        for: 5m
+        labels:
+          severity: warning
+          component: ingestion
+        annotations:
+          summary: Ingestion freshness objective is breached
+          description: The latest silver ingestion is more than 15 minutes old.
+      - alert: LakehouseMaintenanceBacklogSLOBreach
+        expr: lakehouse:slo:maintenance_backlog_compliant == 0
+        for: 15m
+        labels:
+          severity: warning
+          component: maintenance
+        annotations:
+          summary: Maintenance backlog objective is breached
+          description: More than 10 undersized Iceberg data files remain queued for maintenance.

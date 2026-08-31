@@ -249,6 +249,10 @@ jobs:
         run: docker compose --profile observability run --rm grafana-workload-check
       - name: Verify Grafana maintenance and freshness dashboard
         run: docker compose --profile observability run --rm grafana-operational-check
+      - name: Verify live platform SLOs
+        env:
+          EXPECTED_INGESTION_FRESHNESS_COMPLIANT: "0"
+        run: docker compose --profile observability run --rm platform-slo-check
       - name: Rehearse Trino upgrade and rollback
         run: >-
           uv run python tests/integration/exercise_trino_upgrade_rehearsal.py

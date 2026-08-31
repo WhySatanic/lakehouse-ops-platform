@@ -2,6 +2,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).parents[1]
 CHECK_PATH = ROOT / "tests" / "integration" / "check_prometheus_targets.py"
 GRAFANA_CHECK_PATH = ROOT / "tests" / "integration" / "check_grafana_readiness.py"
@@ -10,6 +12,7 @@ OPERATIONAL_CHECK_PATH = (
     ROOT / "tests" / "integration" / "check_grafana_operational.py"
 )
 ALERT_CHECK_PATH = ROOT / "tests" / "integration" / "check_alert_delivery.py"
+SLO_CHECK_PATH = ROOT / "tests" / "integration" / "check_platform_slos.py"
 
 
 def _load_checker():
@@ -48,6 +51,14 @@ def _load_operational_checker():
 
 def _load_alert_checker():
     spec = importlib.util.spec_from_file_location("check_alert_delivery", ALERT_CHECK_PATH)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_slo_checker():
+    spec = importlib.util.spec_from_file_location("check_platform_slos", SLO_CHECK_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -290,3 +301,67 @@ def test_alert_checker_matches_exact_status_and_target() -> None:
     assert checker.has_matching_alert(events, "firing", checker.DEFAULT_TARGET)
     assert not checker.has_matching_alert(events, "resolved", checker.DEFAULT_TARGET)
     assert not checker.has_matching_alert(events, "firing", "http://other:8080/v1/info")
+
+
+def test_platform_slo_rules_cover_declared_objectives() -> None:
+    rules = (ROOT / "config" / "observability" / "slo.yml").read_text()
+    compose = (ROOT / "compose.yaml").read_text()
+
+    assert "lakehouse:slo:query_success_ratio5m" in rules
+    assert "sum(rate(trino_execution_name_QueryManager_FailedQueries[5m]))" in rules
+    assert "min(lakehouse_ingestion_freshness_age_seconds <= bool 900)" in rules
+    assert "min(lakehouse_maintenance_small_file_backlog <= bool 10)" in rules
+    assert "lakehouse:slo:objectives_met" in rules
+    assert "./config/observability/slo.yml:/etc/prometheus/rules/slo.yml:ro" in compose
+    assert "platform-slo-check:" in compose
+
+
+def test_platform_slo_checker_requires_finite_in_range_samples() -> None:
+    checker = _load_slo_checker()
+    passing = {"status": "success", "data": {"result": [{"value": [1, "0.995"]}]}}
+    missing = {"status": "success", "data": {"result": []}}
+    invalid = {"status": "success", "data": {"result": [{"value": [1, "NaN"]}]}}
+
+    assert checker.metric_values(passing) == [0.995]
+    assert checker.objective_is_met(passing, 0.99, 1.0)
+    assert not checker.objective_is_met(passing, 1.0, 1.0)
+    assert not checker.objective_is_met(missing, 0.0, 1.0)
+    assert not checker.objective_is_met(invalid, 0.0, 1.0)
+
+
+def test_platform_slo_checker_can_require_expected_fixture_breach() -> None:
+    checker = _load_slo_checker()
+
+    passing = checker.objective_ranges(1)
+    stale_fixture = checker.objective_ranges(0)
+
+    assert passing["lakehouse:slo:ingestion_freshness_compliant"] == (1.0, 1.0)
+    assert passing["lakehouse:slo:objectives_met"] == (1.0, 1.0)
+    assert stale_fixture["lakehouse:slo:ingestion_freshness_compliant"] == (0.0, 0.0)
+    assert stale_fixture["lakehouse:slo:objectives_met"] == (0.0, 0.0)
+
+
+def test_platform_slo_checker_accepts_declared_stale_fixture_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checker = _load_slo_checker()
+    samples = {
+        "lakehouse:slo:query_traffic_observed5m": 1.0,
+        "lakehouse:slo:query_success_ratio5m": 1.0,
+        "lakehouse:slo:ingestion_freshness_compliant": 0.0,
+        "lakehouse:slo:maintenance_backlog_compliant": 1.0,
+        "lakehouse:slo:objectives_met": 0.0,
+    }
+
+    monkeypatch.setenv("EXPECTED_INGESTION_FRESHNESS_COMPLIANT", "0")
+    monkeypatch.setenv("SLO_CHECK_ATTEMPTS", "1")
+    monkeypatch.setattr(
+        checker,
+        "_query",
+        lambda server, expression: {
+            "status": "success",
+            "data": {"result": [{"value": [1, str(samples[expression])]}]},
+        },
+    )
+
+    assert checker.main() == 0
