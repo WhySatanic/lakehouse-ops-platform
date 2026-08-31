@@ -38,6 +38,17 @@ def test_trino_policy_is_warehouse_read_only() -> None:
     assert all("landing" not in value for value in _values(policy, "Resource"))
 
 
+def test_clickhouse_policy_is_warehouse_read_only() -> None:
+    policy = _policy("clickhouse")
+    assert _values(policy, "Action") == {
+        "s3:GetBucketLocation",
+        "s3:ListBucket",
+        "s3:GetObject",
+    }
+    assert "arn:aws:s3:::__BUCKET__/warehouse" in _values(policy, "Resource")
+    assert all("landing" not in value for value in _values(policy, "Resource"))
+
+
 def test_hms_policy_manages_only_warehouse_paths() -> None:
     policy = _policy("hms")
     assert {"s3:PutObject", "s3:GetObject", "s3:DeleteObject"} <= _values(policy, "Action")
@@ -46,7 +57,7 @@ def test_hms_policy_manages_only_warehouse_paths() -> None:
 
 
 def test_policies_do_not_grant_wildcards() -> None:
-    for name in ("ingest", "spark", "trino", "hms"):
+    for name in ("ingest", "spark", "trino", "hms", "clickhouse"):
         policy = _policy(name)
         assert "*" not in _values(policy, "Action")
         assert "*" not in _values(policy, "Resource")
@@ -64,6 +75,8 @@ def test_runtime_services_do_not_use_minio_root_credentials() -> None:
         "trino-coordinator",
         "trino-worker",
         "trino-worker-2",
+        "clickhouse-server",
+        "clickhouse-iceberg-check",
     )
 
     for index, service in enumerate(runtime_services):

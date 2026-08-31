@@ -7,7 +7,7 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: early access `0.43.0`. Open-Meteo ingestion works against the local filesystem
+> Status: early access `0.44.0`. Open-Meteo ingestion works against the local filesystem
 > and MinIO. The opt-in platform profiles include PostgreSQL-backed Hive Metastore and a
 > Spark writer for S3-backed Iceberg bronze and validated silver tables. A Trino 483
 > coordinator with two workers reads the same tables through Hive Metastore. The control
@@ -53,11 +53,16 @@ flowchart LR
     CONTROL --> METRICS
 ```
 
-The planned stack is Trino, Spark, MinIO as an S3-compatible object store, Apache
+The reference stack is Trino, Spark, MinIO as an S3-compatible object store, Apache
 Iceberg, Hive Metastore backed by PostgreSQL, Ranger, Prometheus, Grafana, and an
 optional ClickHouse serving path. Everything runs locally with free/open-source
 software. Open-Meteo is used only for a non-commercial portfolio workload under its
 free API terms; deterministic fixtures keep CI independent of the external service.
+
+The optional [ClickHouse serving experiment](docs/runbooks/clickhouse-serving.md) uses a
+dedicated read-only MinIO identity to query the Spark-written silver and reject Iceberg
+tables in place. Its executable evidence reconciles row counts, duplicate keys, and the
+selected survivor without importing the data into ClickHouse native storage.
 
 ## First working slice
 
