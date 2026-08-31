@@ -1048,6 +1048,7 @@ services:
         condition: service_started
     environment:
       PROMETHEUS_SERVER: http://prometheus:9090
+      EXPECTED_INGESTION_FRESHNESS_COMPLIANT: ${EXPECTED_INGESTION_FRESHNESS_COMPLIANT:-1}
     volumes:
       - ./tests/integration/check_platform_slos.py:/checks/check_platform_slos.py:ro
     entrypoint: ["python", "/checks/check_platform_slos.py"]

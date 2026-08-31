@@ -24,8 +24,9 @@ Start the core and observability profiles after producing the silver table, then
 docker compose --profile observability run --rm platform-slo-check
 ```
 
-The checker waits for the recording rules to see live Trino traffic and exits zero only
-when all three objectives are currently met. Inspect individual results with these
+By default, the checker waits for the recording rules to see live Trino traffic and
+exits zero only when all three objectives are currently met. Inspect individual results
+with these
 Prometheus expressions:
 
 ```promql
@@ -45,3 +46,10 @@ Counter resets after a Trino coordinator restart can make the rolling query indi
 temporarily unobserved. Wait for two Prometheus samples and new query traffic before
 interpreting the result. The freshness objective describes pipeline recency, not source
 event time or end-to-end correctness.
+
+The deterministic CI fixture intentionally retains its checked-in `2026-08-06`
+ingestion timestamp. CI sets `EXPECTED_INGESTION_FRESHNESS_COMPLIANT=0` and requires
+the live freshness rule plus the combined objective to report a breach while query
+success and maintenance backlog remain compliant. This proves stale-data detection
+without rewriting evidence to the current date. Normal operator runs keep the default
+value of `1` and therefore require all objectives to be met.

@@ -2,6 +2,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).parents[1]
 CHECK_PATH = ROOT / "tests" / "integration" / "check_prometheus_targets.py"
 GRAFANA_CHECK_PATH = ROOT / "tests" / "integration" / "check_grafana_readiness.py"
@@ -325,3 +327,41 @@ def test_platform_slo_checker_requires_finite_in_range_samples() -> None:
     assert not checker.objective_is_met(passing, 1.0, 1.0)
     assert not checker.objective_is_met(missing, 0.0, 1.0)
     assert not checker.objective_is_met(invalid, 0.0, 1.0)
+
+
+def test_platform_slo_checker_can_require_expected_fixture_breach() -> None:
+    checker = _load_slo_checker()
+
+    passing = checker.objective_ranges(1)
+    stale_fixture = checker.objective_ranges(0)
+
+    assert passing["lakehouse:slo:ingestion_freshness_compliant"] == (1.0, 1.0)
+    assert passing["lakehouse:slo:objectives_met"] == (1.0, 1.0)
+    assert stale_fixture["lakehouse:slo:ingestion_freshness_compliant"] == (0.0, 0.0)
+    assert stale_fixture["lakehouse:slo:objectives_met"] == (0.0, 0.0)
+
+
+def test_platform_slo_checker_accepts_declared_stale_fixture_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checker = _load_slo_checker()
+    samples = {
+        "lakehouse:slo:query_traffic_observed5m": 1.0,
+        "lakehouse:slo:query_success_ratio5m": 1.0,
+        "lakehouse:slo:ingestion_freshness_compliant": 0.0,
+        "lakehouse:slo:maintenance_backlog_compliant": 1.0,
+        "lakehouse:slo:objectives_met": 0.0,
+    }
+
+    monkeypatch.setenv("EXPECTED_INGESTION_FRESHNESS_COMPLIANT", "0")
+    monkeypatch.setenv("SLO_CHECK_ATTEMPTS", "1")
+    monkeypatch.setattr(
+        checker,
+        "_query",
+        lambda server, expression: {
+            "status": "success",
+            "data": {"result": [{"value": [1, str(samples[expression])]}]},
+        },
+    )
+
+    assert checker.main() == 0

@@ -8,13 +8,31 @@ import time
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
-OBJECTIVES = {
-    "lakehouse:slo:query_traffic_observed5m": (1.0, 1.0),
-    "lakehouse:slo:query_success_ratio5m": (0.99, 1.0),
-    "lakehouse:slo:ingestion_freshness_compliant": (1.0, 1.0),
-    "lakehouse:slo:maintenance_backlog_compliant": (1.0, 1.0),
-    "lakehouse:slo:objectives_met": (1.0, 1.0),
-}
+METRICS = (
+    "lakehouse:slo:query_traffic_observed5m",
+    "lakehouse:slo:query_success_ratio5m",
+    "lakehouse:slo:ingestion_freshness_compliant",
+    "lakehouse:slo:maintenance_backlog_compliant",
+    "lakehouse:slo:objectives_met",
+)
+
+
+def objective_ranges(expected_freshness: int) -> dict[str, tuple[float, float]]:
+    if expected_freshness not in {0, 1}:
+        raise ValueError("expected freshness must be 0 or 1")
+    return {
+        "lakehouse:slo:query_traffic_observed5m": (1.0, 1.0),
+        "lakehouse:slo:query_success_ratio5m": (0.99, 1.0),
+        "lakehouse:slo:ingestion_freshness_compliant": (
+            float(expected_freshness),
+            float(expected_freshness),
+        ),
+        "lakehouse:slo:maintenance_backlog_compliant": (1.0, 1.0),
+        "lakehouse:slo:objectives_met": (
+            float(expected_freshness),
+            float(expected_freshness),
+        ),
+    }
 
 
 def metric_values(payload: object) -> list[float]:
@@ -57,26 +75,29 @@ def main() -> int:
     server = os.getenv("PROMETHEUS_SERVER", "http://prometheus:9090").rstrip("/")
     attempts = int(os.getenv("SLO_CHECK_ATTEMPTS", "24"))
     delay = float(os.getenv("SLO_CHECK_DELAY_SECONDS", "5"))
+    expected_freshness = int(
+        os.getenv("EXPECTED_INGESTION_FRESHNESS_COMPLIANT", "1")
+    )
+    objectives = objective_ranges(expected_freshness)
     last_status: dict[str, object] = {}
 
     for _ in range(attempts):
         try:
-            last_status = {
-                metric: _query(server, metric) for metric in OBJECTIVES
-            }
+            last_status = {metric: _query(server, metric) for metric in METRICS}
             if all(
                 objective_is_met(last_status[metric], minimum, maximum)
-                for metric, (minimum, maximum) in OBJECTIVES.items()
+                for metric, (minimum, maximum) in objectives.items()
             ):
-                print("Platform query, freshness, and maintenance SLOs are met")
+                print(
+                    "Platform SLO state matches the expected query, freshness, "
+                    "and maintenance result"
+                )
                 return 0
         except (OSError, ValueError, KeyError, TypeError) as error:
             last_status = {"error": str(error)}
         time.sleep(delay)
 
-    observed = {
-        metric: metric_values(last_status.get(metric)) for metric in OBJECTIVES
-    }
+    observed = {metric: metric_values(last_status.get(metric)) for metric in METRICS}
     print(f"Platform SLO check failed: {observed}", file=sys.stderr)
     return 1
 
