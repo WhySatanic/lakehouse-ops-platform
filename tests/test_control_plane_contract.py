@@ -19,9 +19,21 @@ def test_repository_contract_matches_public_cli() -> None:
     report = verify_control_plane_contract(CONTRACT, build_parser())
 
     assert report["status"] == "compatible"
-    assert report["commands_verified"] == 15
-    assert report["outputs_verified"] == 8
+    assert report["commands_verified"] == 16
+    assert report["outputs_verified"] == 9
     assert len(report["contract_sha256"]) == 64
+
+
+def test_contract_digest_is_stable_across_checkout_line_endings(tmp_path: Path) -> None:
+    content = CONTRACT.read_text(encoding="utf-8").replace("\r\n", "\n")
+    candidate = tmp_path / "contract.json"
+    candidate.write_bytes(content.encode())
+    lf_report = verify_control_plane_contract(candidate, build_parser())
+    candidate.write_bytes(content.replace("\n", "\r\n").encode())
+
+    crlf_report = verify_control_plane_contract(candidate, build_parser())
+
+    assert crlf_report["contract_sha256"] == lf_report["contract_sha256"]
 
 
 def test_removed_command_is_rejected(tmp_path: Path) -> None:

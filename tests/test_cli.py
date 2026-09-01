@@ -768,6 +768,68 @@ def test_verify_control_plane_contract_command(
     assert observed["parser"].prog == "lakeops"
 
 
+def test_build_release_candidate_command(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    report = {"schema_version": "1.0", "status": "ready"}
+    observed: dict[str, object] = {}
+
+    def fake_build(**kwargs: object) -> dict[str, str]:
+        observed.update(kwargs)
+        return report
+
+    monkeypatch.setattr(cli, "build_release_candidate", fake_build)
+    paths = {
+        name: tmp_path / name
+        for name in (
+            "evidence",
+            "attestation",
+            "readiness",
+            "control",
+            "upgrade-report",
+            "upgrade-plan",
+            "output",
+        )
+    }
+
+    exit_code = cli.main(
+        [
+            "build-release-candidate",
+            "--evidence-root",
+            str(paths["evidence"]),
+            "--attestation",
+            str(paths["attestation"]),
+            "--readiness-contract",
+            str(paths["readiness"]),
+            "--control-plane-contract",
+            str(paths["control"]),
+            "--upgrade-report",
+            str(paths["upgrade-report"]),
+            "--upgrade-plan",
+            str(paths["upgrade-plan"]),
+            "--source-revision",
+            "a" * 40,
+            "--output",
+            str(paths["output"]),
+        ]
+    )
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == report
+    assert observed == {
+        "evidence_root": paths["evidence"],
+        "attestation_path": paths["attestation"],
+        "readiness_contract_path": paths["readiness"],
+        "control_plane_contract_path": paths["control"],
+        "upgrade_report_path": paths["upgrade-report"],
+        "upgrade_plan_path": paths["upgrade-plan"],
+        "source_revision": "a" * 40,
+        "output_path": paths["output"],
+    }
+
+
 def test_plan_iceberg_maintenance_command(
     capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:

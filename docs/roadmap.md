@@ -112,7 +112,7 @@ Exit criterion: a demo script and runbooks can diagnose and recover defined inci
   artifact digests, semantic validation, and shared Iceberg snapshot invariants.
 - [x] Stable public control-plane CLI and JSON compatibility policy with executable
   backward-compatibility checks.
-- [ ] Clean-checkout release-candidate rehearsal that preserves the complete attestation
+- [x] Clean-checkout release-candidate rehearsal that preserves the complete attestation
   and upgrade/rollback evidence for publication.
 
 Exit criterion: a release candidate created from a clean checkout has a stable public

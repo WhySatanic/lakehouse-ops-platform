@@ -29,6 +29,10 @@ from lakehouse_ops.ingestion.models import Location, WeatherPayload
 from lakehouse_ops.ingestion.open_meteo import OpenMeteoClient
 from lakehouse_ops.ingestion.s3_landing import S3LandingZone
 from lakehouse_ops.ranger import RangerAdminClient, RangerAdminError
+from lakehouse_ops.release_candidate import (
+    ReleaseCandidateError,
+    build_release_candidate,
+)
 from lakehouse_ops.release_readiness import (
     ReleaseReadinessError,
     verify_release_readiness,
@@ -202,6 +206,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="verify the public CLI and JSON compatibility baseline",
     )
     compatibility.add_argument("--contract", required=True, type=Path)
+
+    release_candidate = subparsers.add_parser(
+        "build-release-candidate",
+        help="build a digest-bound release-candidate evidence archive",
+    )
+    release_candidate.add_argument("--evidence-root", required=True, type=Path)
+    release_candidate.add_argument("--attestation", required=True, type=Path)
+    release_candidate.add_argument("--readiness-contract", required=True, type=Path)
+    release_candidate.add_argument("--control-plane-contract", required=True, type=Path)
+    release_candidate.add_argument("--upgrade-report", required=True, type=Path)
+    release_candidate.add_argument("--upgrade-plan", required=True, type=Path)
+    release_candidate.add_argument("--source-revision", required=True)
+    release_candidate.add_argument("--output", required=True, type=Path)
 
     plan = subparsers.add_parser(
         "plan-iceberg-maintenance", help="create an explainable Iceberg maintenance plan"
@@ -395,6 +412,22 @@ def main(argv: list[str] | None = None) -> int:
         try:
             report = verify_control_plane_contract(args.contract, parser)
         except ControlPlaneContractError as error:
+            parser.error(str(error))
+        print(json.dumps(report, sort_keys=True))
+        return 0
+    if args.command == "build-release-candidate":
+        try:
+            report = build_release_candidate(
+                evidence_root=args.evidence_root,
+                attestation_path=args.attestation,
+                readiness_contract_path=args.readiness_contract,
+                control_plane_contract_path=args.control_plane_contract,
+                upgrade_report_path=args.upgrade_report,
+                upgrade_plan_path=args.upgrade_plan,
+                source_revision=args.source_revision,
+                output_path=args.output,
+            )
+        except ReleaseCandidateError as error:
             parser.error(str(error))
         print(json.dumps(report, sort_keys=True))
         return 0
