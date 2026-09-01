@@ -106,6 +106,19 @@ row filtering, impersonation boundaries, and audit events.
 
 Exit criterion: a demo script and runbooks can diagnose and recover defined incidents.
 
+## Phase 6 — 1.0 release hardening
+
+- [x] Cross-profile release-readiness attestation with versioned evidence inventory,
+  artifact digests, semantic validation, and shared Iceberg snapshot invariants.
+- [ ] Stable public control-plane CLI and JSON compatibility policy with executable
+  backward-compatibility checks.
+- [ ] Clean-checkout release-candidate rehearsal that preserves the complete attestation
+  and upgrade/rollback evidence for publication.
+
+Exit criterion: a release candidate created from a clean checkout has a stable public
+contract and one reproducible, retained evidence bundle covering the complete core path,
+centralized authorization, observability, and recovery.
+
 ## Sustainable contribution rhythm
 
 A strong week contains one or two complete changes, not a fixed number of cosmetic

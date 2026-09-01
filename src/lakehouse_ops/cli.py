@@ -25,6 +25,11 @@ from lakehouse_ops.ingestion.models import Location, WeatherPayload
 from lakehouse_ops.ingestion.open_meteo import OpenMeteoClient
 from lakehouse_ops.ingestion.s3_landing import S3LandingZone
 from lakehouse_ops.ranger import RangerAdminClient, RangerAdminError
+from lakehouse_ops.release_readiness import (
+    ReleaseReadinessError,
+    verify_release_readiness,
+    write_attestation,
+)
 from lakehouse_ops.trino import TrinoClient
 from lakehouse_ops.trino_baseline import (
     QueryCorpusError,
@@ -178,6 +183,15 @@ def build_parser() -> argparse.ArgumentParser:
     sort_order.add_argument("--range-start", type=int, default=30_000)
     sort_order.add_argument("--range-size", type=int, default=128)
     sort_order.add_argument("--repetitions", type=int, default=3)
+
+    readiness = subparsers.add_parser(
+        "verify-release-readiness",
+        help="validate and attest the cross-profile 1.0 release evidence bundle",
+    )
+    readiness.add_argument("--contract", required=True, type=Path)
+    readiness.add_argument("--evidence-root", required=True, type=Path)
+    readiness.add_argument("--source-revision", required=True)
+    readiness.add_argument("--output", required=True, type=Path)
 
     plan = subparsers.add_parser(
         "plan-iceberg-maintenance", help="create an explainable Iceberg maintenance plan"
@@ -352,6 +366,18 @@ def main(argv: list[str] | None = None) -> int:
                     repetitions=args.repetitions,
                 )
         except SortExperimentError as error:
+            parser.error(str(error))
+        print(json.dumps(report, sort_keys=True))
+        return 0
+    if args.command == "verify-release-readiness":
+        try:
+            report = verify_release_readiness(
+                args.contract,
+                args.evidence_root,
+                source_revision=args.source_revision,
+            )
+            write_attestation(report, args.output)
+        except ReleaseReadinessError as error:
             parser.error(str(error))
         print(json.dumps(report, sort_keys=True))
         return 0

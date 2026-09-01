@@ -282,6 +282,9 @@ rules.
 See [Architecture](docs/architecture.md), [Roadmap](docs/roadmap.md), and the
 [Release policy](docs/release-policy.md). Architecture choices are recorded as ADRs,
 starting with [Hive Metastore first](docs/adr/0001-hive-metastore-first.md).
+The [release-readiness runbook](docs/runbooks/release-readiness.md) explains how CI
+combines independently validated profile reports into one digest-bound `1.0.0`
+attestation and which release gates intentionally remain open.
 
 ## Project principles
 

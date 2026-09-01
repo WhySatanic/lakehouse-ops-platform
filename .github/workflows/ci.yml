@@ -84,6 +84,13 @@ jobs:
         run: >-
           uv run python tests/integration/check_clickhouse_serving.py
           artifacts/clickhouse-serving.json
+      - name: Upload serving evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: serving-evidence
+          path: artifacts/clickhouse-serving.json
+          if-no-files-found: error
+          overwrite: true
       - name: Show serving logs
         if: failure()
         run: >-
@@ -208,6 +215,17 @@ jobs:
             sleep 5
           done
           uv run python tests/integration/check_ranger_audit.py artifacts/ranger-audit.json
+      - name: Upload Ranger evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ranger-evidence
+          path: |
+            artifacts/ranger-policy-sync.json
+            artifacts/ranger-policy-resync.json
+            artifacts/trino-authorization-report.json
+            artifacts/ranger-audit.json
+          if-no-files-found: error
+          overwrite: true
       - name: Show Ranger logs
         if: failure()
         run: >-
@@ -314,7 +332,9 @@ jobs:
       - name: Verify live platform SLOs
         env:
           EXPECTED_INGESTION_FRESHNESS_COMPLIANT: "0"
-        run: docker compose --profile observability run --rm platform-slo-check
+        run: |
+          mkdir -p artifacts
+          docker compose --profile observability run --rm platform-slo-check
       - name: Rehearse Trino upgrade and rollback
         run: >-
           uv run python tests/integration/exercise_trino_upgrade_rehearsal.py
@@ -490,15 +510,15 @@ jobs:
           uv run lakeops collect-iceberg-metadata
           --server http://localhost:8080
           --catalog lakehouse --schema silver --table weather_hourly
-          > iceberg-metadata-report.json
+          > artifacts/iceberg-metadata-report.json
       - name: Verify Iceberg metadata report
         run: >-
           uv run python tests/integration/check_iceberg_metadata_report.py
-          iceberg-metadata-report.json
+          artifacts/iceberg-metadata-report.json
       - name: Plan Iceberg maintenance
         run: >-
           uv run lakeops plan-iceberg-maintenance
-          --input iceberg-metadata-report.json
+          --input artifacts/iceberg-metadata-report.json
           > iceberg-maintenance-plan.json
       - name: Verify Iceberg maintenance plan
         run: >-
@@ -726,6 +746,19 @@ jobs:
         run: |
           docker compose --profile observability run --rm prometheus-check
           EXPECTED_ALERT_STATUS=resolved docker compose --profile observability run --rm alert-delivery-check
+      - name: Upload core and recovery evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: lakehouse-evidence
+          path: |
+            artifacts/iceberg-metadata-report.json
+            artifacts/trino-authorization-report.json
+            artifacts/hive-metastore-recovery.json
+            artifacts/metadata-db-recovery.json
+            artifacts/trino-worker-recovery.json
+            artifacts/platform-slos.json
+          if-no-files-found: error
+          overwrite: true
       - name: Show service logs
         if: failure()
         run: >-
@@ -740,3 +773,36 @@ jobs:
           docker compose --profile catalog --profile compute --profile query
           --profile observability
           down --volumes
+
+  release-readiness:
+    needs: [quality, serving-integration, ranger-integration, lakehouse-integration]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install uv
+        run: python -m pip install uv
+      - name: Install dependencies
+        run: uv sync --frozen --dev
+      - name: Download cross-profile evidence
+        uses: actions/download-artifact@v4
+        with:
+          path: evidence
+      - name: Verify and attest 1.0 release readiness
+        run: >-
+          uv run lakeops verify-release-readiness
+          --contract config/release/readiness-contract.json
+          --evidence-root evidence
+          --source-revision "$GITHUB_SHA"
+          --output artifacts/release-readiness.json
+      - name: Upload release readiness attestation
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-readiness-attestation
+          path: artifacts/release-readiness.json
+          if-no-files-found: error
+          overwrite: true

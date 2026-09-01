@@ -5,6 +5,7 @@ import math
 import os
 import sys
 import time
+from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
@@ -88,10 +89,29 @@ def main() -> int:
                 objective_is_met(last_status[metric], minimum, maximum)
                 for metric, (minimum, maximum) in objectives.items()
             ):
-                print(
-                    "Platform SLO state matches the expected query, freshness, "
-                    "and maintenance result"
-                )
+                report = {
+                    "schema_version": "1.0",
+                    "status": "ready",
+                    "expected_ingestion_freshness_compliant": expected_freshness,
+                    "objectives": {
+                        metric: {
+                            "minimum": minimum,
+                            "maximum": maximum,
+                            "samples": metric_values(last_status[metric]),
+                            "met": True,
+                        }
+                        for metric, (minimum, maximum) in objectives.items()
+                    },
+                }
+                report_path = os.getenv("PLATFORM_SLO_REPORT_PATH")
+                if report_path:
+                    path = Path(report_path)
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(
+                        json.dumps(report, indent=2, sort_keys=True) + "\n",
+                        encoding="utf-8",
+                    )
+                print(json.dumps(report, sort_keys=True))
                 return 0
         except (OSError, ValueError, KeyError, TypeError) as error:
             last_status = {"error": str(error)}

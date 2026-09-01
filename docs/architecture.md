@@ -38,6 +38,13 @@ The control plane follows a planner/executor split:
 The split allows planner logic to be unit-tested without a running cluster and supports
 a dry-run mode for every destructive maintenance operation.
 
+The cross-profile release boundary is declared in
+`config/release/readiness-contract.json`. CI validates each report close to its producer,
+then a final control-plane command revalidates the downloaded bundle and binds its
+digests, source revision, core snapshot, and recovery invariants into one attestation.
+This makes release readiness a machine-readable contract instead of an inference from
+independent green jobs.
+
 ## Security model
 
 Authentication and authorization are distinct. The local profile begins with explicit

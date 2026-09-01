@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "target_release": "1.0.0",
+  "evidence": [
+    {
+      "key": "core_metadata",
+      "path": "lakehouse-evidence/iceberg-metadata-report.json",
+      "validator": "iceberg_metadata"
+    },
+    {
+      "key": "file_authorization",
+      "path": "lakehouse-evidence/trino-authorization-report.json",
+      "validator": "trino_file_authorization"
+    },
+    {
+      "key": "hive_metastore_recovery",
+      "path": "lakehouse-evidence/hive-metastore-recovery.json",
+      "validator": "hive_metastore_recovery"
+    },
+    {
+      "key": "metadata_db_recovery",
+      "path": "lakehouse-evidence/metadata-db-recovery.json",
+      "validator": "metadata_db_recovery"
+    },
+    {
+      "key": "trino_worker_recovery",
+      "path": "lakehouse-evidence/trino-worker-recovery.json",
+      "validator": "trino_worker_recovery"
+    },
+    {
+      "key": "platform_slos",
+      "path": "lakehouse-evidence/platform-slos.json",
+      "validator": "platform_slos"
+    },
+    {
+      "key": "ranger_authorization",
+      "path": "ranger-evidence/trino-authorization-report.json",
+      "validator": "trino_ranger_authorization"
+    },
+    {
+      "key": "clickhouse_serving",
+      "path": "serving-evidence/clickhouse-serving.json",
+      "validator": "clickhouse_serving"
+    }
+  ]
+}
