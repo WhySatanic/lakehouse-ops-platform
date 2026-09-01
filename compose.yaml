@@ -1102,8 +1102,10 @@ services:
     environment:
       PROMETHEUS_SERVER: http://prometheus:9090
       EXPECTED_INGESTION_FRESHNESS_COMPLIANT: ${EXPECTED_INGESTION_FRESHNESS_COMPLIANT:-1}
+      PLATFORM_SLO_REPORT_PATH: /artifacts/platform-slos.json
     volumes:
       - ./tests/integration/check_platform_slos.py:/checks/check_platform_slos.py:ro
+      - ./artifacts:/artifacts
     entrypoint: ["python", "/checks/check_platform_slos.py"]
     restart: "no"
 

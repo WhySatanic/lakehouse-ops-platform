@@ -343,6 +343,7 @@ def test_platform_slo_checker_can_require_expected_fixture_breach() -> None:
 
 def test_platform_slo_checker_accepts_declared_stale_fixture_state(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     checker = _load_slo_checker()
     samples = {
@@ -355,6 +356,8 @@ def test_platform_slo_checker_accepts_declared_stale_fixture_state(
 
     monkeypatch.setenv("EXPECTED_INGESTION_FRESHNESS_COMPLIANT", "0")
     monkeypatch.setenv("SLO_CHECK_ATTEMPTS", "1")
+    report_path = tmp_path / "platform-slos.json"
+    monkeypatch.setenv("PLATFORM_SLO_REPORT_PATH", str(report_path))
     monkeypatch.setattr(
         checker,
         "_query",
@@ -365,3 +368,9 @@ def test_platform_slo_checker_accepts_declared_stale_fixture_state(
     )
 
     assert checker.main() == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["schema_version"] == "1.0"
+    assert report["status"] == "ready"
+    assert report["expected_ingestion_freshness_compliant"] == 0
+    assert len(report["objectives"]) == 5
+    assert all(objective["met"] is True for objective in report["objectives"].values())

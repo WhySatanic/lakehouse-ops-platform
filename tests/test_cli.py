@@ -694,6 +694,53 @@ def test_capture_trino_sort_order_command(
     }
 
 
+def test_verify_release_readiness_command_writes_attestation(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    contract = tmp_path / "contract.json"
+    evidence = tmp_path / "evidence"
+    output = tmp_path / "attestation.json"
+    report = {"schema_version": "1.0", "status": "ready"}
+    observed: dict[str, object] = {}
+
+    def fake_verify(
+        contract_path: Path, evidence_root: Path, *, source_revision: str
+    ) -> dict[str, str]:
+        observed.update(
+            contract=contract_path,
+            evidence_root=evidence_root,
+            source_revision=source_revision,
+        )
+        return report
+
+    monkeypatch.setattr(cli, "verify_release_readiness", fake_verify)
+
+    exit_code = cli.main(
+        [
+            "verify-release-readiness",
+            "--contract",
+            str(contract),
+            "--evidence-root",
+            str(evidence),
+            "--source-revision",
+            "abc123",
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == report
+    assert json.loads(output.read_text(encoding="utf-8")) == report
+    assert observed == {
+        "contract": contract,
+        "evidence_root": evidence,
+        "source_revision": "abc123",
+    }
+
+
 def test_plan_iceberg_maintenance_command(
     capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:

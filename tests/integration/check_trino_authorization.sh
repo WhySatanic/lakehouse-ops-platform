@@ -80,6 +80,13 @@ expect_denied unknown_user_cannot_read_system untrusted_user \
 expect_denied data_engineer_cannot_create_schema data_engineer \
   "CREATE SCHEMA lakehouse.authorization_test"
 
+analytics_visible_rows="$(query analytics_engineer \
+  "SELECT count(*) FROM lakehouse.silver.weather_hourly")"
+analytics_visible_checksums="$(query analytics_engineer \
+  "SELECT count(object_checksum) FROM lakehouse.silver.weather_hourly")"
+admin_visible_checksums="$(query platform_admin \
+  "SELECT count(object_checksum) FROM lakehouse.silver.weather_hourly")"
+
 cat >"$report_path" <<EOF
 {
   "schema_version": "1.0",
@@ -89,6 +96,11 @@ cat >"$report_path" <<EOF
     "mode": "$authorization_mode",
     "default": "deny",
     "authentication_enforced": false
+  },
+  "transformations": {
+    "analytics_engineer_visible_rows": $analytics_visible_rows,
+    "analytics_engineer_visible_checksums": $analytics_visible_checksums,
+    "platform_admin_visible_checksums": $admin_visible_checksums
   },
   "cases": [
     {"id": "platform_admin_reads_bronze", "user": "platform_admin", "expectation": "allow", "result": "allowed"},

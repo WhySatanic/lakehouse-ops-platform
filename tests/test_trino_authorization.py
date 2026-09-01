@@ -32,6 +32,11 @@ def valid_report() -> dict[str, object]:
             "default": "deny",
             "authentication_enforced": False,
         },
+        "transformations": {
+            "analytics_engineer_visible_rows": 2,
+            "analytics_engineer_visible_checksums": 2,
+            "platform_admin_visible_checksums": 2,
+        },
         "cases": cases,
     }
 

@@ -41,6 +41,14 @@ def validate(report: dict[str, Any], *, expected_mode: str = "file") -> list[str
         if policy.get("authentication_enforced") is not False:
             errors.append("policy.authentication_enforced")
 
+    expected_transformations = {
+        "analytics_engineer_visible_rows": 1 if expected_mode == "ranger" else 2,
+        "analytics_engineer_visible_checksums": 0 if expected_mode == "ranger" else 2,
+        "platform_admin_visible_checksums": 2,
+    }
+    if report.get("transformations") != expected_transformations:
+        errors.append("transformations")
+
     cases = report.get("cases")
     if not isinstance(cases, list):
         return [*errors, "cases"]
