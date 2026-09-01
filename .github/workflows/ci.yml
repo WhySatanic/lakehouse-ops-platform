@@ -793,11 +793,13 @@ jobs:
         with:
           path: evidence
       - name: Verify and attest 1.0 release readiness
+        env:
+          SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
         run: >-
           uv run lakeops verify-release-readiness
           --contract config/release/readiness-contract.json
           --evidence-root evidence
-          --source-revision "$GITHUB_SHA"
+          --source-revision "$SOURCE_REVISION"
           --output artifacts/release-readiness.json
       - name: Upload release readiness attestation
         uses: actions/upload-artifact@v4
