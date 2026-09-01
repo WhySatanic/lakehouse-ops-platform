@@ -41,8 +41,8 @@ artifacts with a release candidate.
 
 - The attestation proves the deterministic single-node development profiles exercised by
   CI. It is not production capacity, high-availability, TLS, or multi-region evidence.
-- GitHub artifact retention is controlled by repository settings. Attach the final
-  attestation and evidence bundle to the eventual `1.0.0` release if longer retention is
-  required.
-- A green attestation is necessary for `1.0.0`, but the public control-plane compatibility
-  policy and clean-checkout release-candidate rehearsal remain separate gates.
+- GitHub artifact retention is controlled by repository settings. The downstream
+  clean-checkout rehearsal packages the attestation and its inputs for attachment to the
+  eventual `1.0.0` release.
+- A green attestation is necessary for `1.0.0`; the downstream release-candidate job is
+  the publication rehearsal and runs only on a push to `main`.

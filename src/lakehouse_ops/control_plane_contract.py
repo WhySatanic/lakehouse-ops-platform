@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 from typing import Any
+
+from lakehouse_ops.digests import normalized_text_digest
 
 
 class ControlPlaneContractError(RuntimeError):
@@ -62,7 +63,7 @@ def verify_control_plane_contract(
         "schema_version": "1.0",
         "status": "compatible",
         "contract_version": "1.0.0",
-        "contract_sha256": hashlib.sha256(contract_path.read_bytes()).hexdigest(),
+        "contract_sha256": normalized_text_digest(contract_path),
         "commands_verified": len(commands),
         "outputs_verified": len(outputs),
     }

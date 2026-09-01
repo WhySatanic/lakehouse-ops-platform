@@ -142,6 +142,18 @@ def test_verify_release_readiness_attests_cross_profile_invariants(tmp_path: Pat
     assert json.loads(output.read_text(encoding="utf-8")) == report
 
 
+def test_contract_digest_is_stable_across_checkout_line_endings(tmp_path: Path) -> None:
+    contract, root = write_bundle(tmp_path, evidence_reports())
+    content = json.loads(contract.read_text(encoding="utf-8"))
+    contract.write_bytes((json.dumps(content, indent=2) + "\n").encode())
+    lf_report = verify_release_readiness(contract, root, source_revision="abc123")
+    contract.write_bytes(contract.read_bytes().replace(b"\n", b"\r\n"))
+
+    crlf_report = verify_release_readiness(contract, root, source_revision="abc123")
+
+    assert crlf_report["contract_sha256"] == lf_report["contract_sha256"]
+
+
 def test_verify_release_readiness_rejects_cross_recovery_snapshot_drift(
     tmp_path: Path,
 ) -> None:

@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from lakehouse_ops.digests import normalized_text_digest
 from lakehouse_ops.metadata_db_recovery import validate_metadata_db_recovery_report
 from lakehouse_ops.metastore_recovery import validate_metastore_recovery_report
 from lakehouse_ops.trino_worker_recovery import validate_trino_worker_recovery_report
@@ -110,7 +111,7 @@ def verify_release_readiness(
         "target_release": target_release,
         "source_revision": source_revision,
         "generated_at": now().astimezone(UTC).isoformat(),
-        "contract_sha256": hashlib.sha256(contract_path.read_bytes()).hexdigest(),
+        "contract_sha256": normalized_text_digest(contract_path),
         "evidence": verified,
         "invariants": {
             "core_snapshot_id": next(iter(snapshot_ids.values())),

@@ -287,6 +287,8 @@ combines independently validated profile reports into one digest-bound `1.0.0`
 attestation and which release gates intentionally remain open.
 The [control-plane compatibility policy](docs/control-plane-compatibility.md) freezes
 the supported CLI and versioned JSON output surface and documents its executable gate.
+The [release-candidate runbook](docs/runbooks/release-candidate.md) describes the clean
+checkout and deterministic evidence bundle required before publishing `1.0.0`.
 
 ## Project principles
 
