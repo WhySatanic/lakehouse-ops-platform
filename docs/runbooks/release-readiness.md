@@ -43,6 +43,6 @@ artifacts with a release candidate.
   CI. It is not production capacity, high-availability, TLS, or multi-region evidence.
 - GitHub artifact retention is controlled by repository settings. The downstream
   clean-checkout rehearsal packages the attestation and its inputs for attachment to the
-  eventual `1.0.0` release.
+  stable release.
 - A green attestation is necessary for `1.0.0`; the downstream release-candidate job is
   the publication rehearsal and runs only on a push to `main`.

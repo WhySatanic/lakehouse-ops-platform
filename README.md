@@ -2,17 +2,17 @@
 
 [![CI](https://github.com/WhySatanic/lakehouse-ops-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/WhySatanic/lakehouse-ops-platform/actions/workflows/ci.yml)
 
-A production-like reference platform for operating an Apache Iceberg lakehouse—not
+A production-like reference platform for operating an Apache Iceberg lakehouse, not
 just starting containers. The project combines a reproducible local data platform
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: early access `0.45.0`. Open-Meteo ingestion works against the local filesystem
-> and MinIO. The opt-in platform profiles include PostgreSQL-backed Hive Metastore and a
-> Spark writer for S3-backed Iceberg bronze and validated silver tables. A Trino 483
-> coordinator with two workers reads the same tables through Hive Metastore. The control
-> plane collects Iceberg metadata, manages centralized Ranger policies, and creates
-> explainable, non-mutating maintenance plans.
+> Status: stable `1.0.0` control-plane contract and reproducible reference stack.
+> Open-Meteo ingestion works against the local filesystem and MinIO. Spark writes
+> S3-backed Iceberg bronze and validated silver tables registered in PostgreSQL-backed
+> Hive Metastore, and a Trino 483 coordinator with two workers reads the same tables.
+> Centralized Ranger authorization, observability, maintenance, recovery drills, and
+> clean-checkout release evidence are exercised by CI.
 
 The optional observability profile exposes Prometheus readiness and live table signals,
 plus provisioned Grafana readiness, Trino workload, maintenance, and freshness
@@ -24,9 +24,9 @@ SLOs require 99% five-minute Trino query success, ingestion no older than 15 min
 and at most 10 undersized files in the demo table. See the
 [platform SLO runbook](docs/runbooks/platform-slos.md).
 
-This repository follows an **early-access, always-runnable** model. Releases stay in
-the `0.x` line while interfaces evolve, but every version has a documented working
-path. Planned components never masquerade as implemented features.
+The `1.x` line follows a stable public CLI and JSON compatibility contract. Additive
+capabilities ship in minor releases; removals or incompatible behavior require a new
+major release. Planned components never masquerade as implemented features.
 
 ## Why this project exists
 
@@ -268,7 +268,7 @@ rules.
 
 ## Engineering scope
 
-| Capability | Evidence planned in this repository |
+| Capability | Evidence in this repository |
 |---|---|
 | Trino operations | coordinator/worker topology, resource groups, query analysis, safe upgrades |
 | Iceberg operations | partition evolution, compaction, snapshot expiration, time travel, schema evolution |
@@ -288,7 +288,9 @@ attestation and which release gates intentionally remain open.
 The [control-plane compatibility policy](docs/control-plane-compatibility.md) freezes
 the supported CLI and versioned JSON output surface and documents its executable gate.
 The [release-candidate runbook](docs/runbooks/release-candidate.md) describes the clean
-checkout and deterministic evidence bundle required before publishing `1.0.0`.
+checkout and deterministic evidence bundle retained with stable releases.
+The [1.0.0 acceptance manifest](docs/releases/1.0.0.md) maps the stable release promise
+to its executable CI evidence and documented limitations.
 
 ## Project principles
 

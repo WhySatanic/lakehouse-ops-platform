@@ -65,4 +65,4 @@ writers for the drill, and avoid snapshot expiration until the restored state is
 
 This is a reproducible single-table recovery exercise, not automated incident orchestration.
 It does not coordinate concurrent writers, select a target from business evidence, restore
-deleted objects, or replace the full platform recovery drill required for 1.0.0.
+deleted objects, or replace the complete platform recovery drill exercised by CI.

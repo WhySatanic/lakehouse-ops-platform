@@ -35,8 +35,8 @@ uv run lakeops build-release-candidate \
   --output artifacts/lakehouse-ops-1.0.0-rc-evidence.tar.gz
 ```
 
-Retain both the archive and `release-candidate.json`. Before publishing `1.0.0`, attach
-them to the GitHub Release and confirm its tag resolves to `source_revision`.
+Retain both the archive and `release-candidate.json`. Attach them to the GitHub Release
+and confirm its tag resolves to `source_revision` before publishing any stable release.
 
 ## Failure policy
 
