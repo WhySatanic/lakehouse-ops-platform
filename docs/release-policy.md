@@ -1,10 +1,11 @@
-# Early-access release policy
+# Release policy
 
 ## Product contract
 
-Lakehouse Ops Platform is deliberately developed in public as an early-access product.
-It is never expected to become “finished”; it is expected to remain usable while its
-operational surface grows.
+Lakehouse Ops Platform is developed in public as a stable reference product. Version
+`1.0.0` freezes the public control-plane contract while the operational surface keeps
+growing. Stable does not mean production capacity or a managed service; limitations stay
+explicit and every supported path remains executable.
 
 At every merge to `main`:
 
@@ -17,11 +18,17 @@ At every merge to `main`:
 
 ## Versioning
 
-The project uses semantic versioning with a `0.y.z` early-access line:
+The project uses semantic versioning:
 
-- patch (`0.y.z+1`): fixes, tests, documentation, and compatible operational changes;
-- minor (`0.y+1.0`): a new working capability or a deliberately changed interface;
-- `1.0.0`: reserved for a stable control-plane contract and a complete core recovery drill.
+- patch (`1.y.z+1`): fixes, tests, documentation, and compatible operational changes;
+- minor (`1.y+1.0`): additive working capabilities and deprecations that preserve the
+  stable contract;
+- major (`2.0.0`): an intentionally incompatible CLI or JSON contract change with
+  migration and rollback guidance.
+
+The historical `0.y.z` line was early access. Version `1.0.0` requires the stable
+control-plane contract, complete core and authorization paths, observability, recovery
+drills, and a retained clean-checkout release-candidate evidence bundle.
 
 Every tagged release includes a short capability matrix, known limitations, verification
 commands, and upgrade notes. A roadmap checkbox does not make a release; executable

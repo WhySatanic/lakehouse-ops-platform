@@ -108,6 +108,8 @@ Exit criterion: a demo script and runbooks can diagnose and recover defined inci
 
 ## Phase 6 — 1.0 release hardening
 
+Acceptance is recorded in the [1.0.0 release manifest](releases/1.0.0.md).
+
 - [x] Cross-profile release-readiness attestation with versioned evidence inventory,
   artifact digests, semantic validation, and shared Iceberg snapshot invariants.
 - [x] Stable public control-plane CLI and JSON compatibility policy with executable

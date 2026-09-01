@@ -58,5 +58,5 @@ query returns the original rows and snapshot.
 
 This is a deliberate Hive Metastore process outage, not metadata-database disaster
 recovery. It does not delete or corrupt PostgreSQL data, restore a backup, rebuild table
-registrations from object storage, or prove an RPO/RTO. Those actions remain the separate
-restored-metadata-DB milestone required before 1.0.0.
+registrations from object storage, or prove an RPO/RTO. PostgreSQL backup and restore is
+covered by the separate metadata-database recovery drill.
