@@ -11,6 +11,10 @@ import boto3
 from lakehouse_ops import __version__
 from lakehouse_ops.access_policy import AccessPolicyError, render_trino_policy
 from lakehouse_ops.break_glass import BreakGlassError
+from lakehouse_ops.control_plane_contract import (
+    ControlPlaneContractError,
+    verify_control_plane_contract,
+)
 from lakehouse_ops.doctor import DoctorReport, check_file_landing, check_s3_bucket
 from lakehouse_ops.iceberg.metadata import IcebergMetadataCollector
 from lakehouse_ops.iceberg.planner import IcebergMaintenancePlanner, MaintenancePolicy
@@ -192,6 +196,12 @@ def build_parser() -> argparse.ArgumentParser:
     readiness.add_argument("--evidence-root", required=True, type=Path)
     readiness.add_argument("--source-revision", required=True)
     readiness.add_argument("--output", required=True, type=Path)
+
+    compatibility = subparsers.add_parser(
+        "verify-control-plane-contract",
+        help="verify the public CLI and JSON compatibility baseline",
+    )
+    compatibility.add_argument("--contract", required=True, type=Path)
 
     plan = subparsers.add_parser(
         "plan-iceberg-maintenance", help="create an explainable Iceberg maintenance plan"
@@ -378,6 +388,13 @@ def main(argv: list[str] | None = None) -> int:
             )
             write_attestation(report, args.output)
         except ReleaseReadinessError as error:
+            parser.error(str(error))
+        print(json.dumps(report, sort_keys=True))
+        return 0
+    if args.command == "verify-control-plane-contract":
+        try:
+            report = verify_control_plane_contract(args.contract, parser)
+        except ControlPlaneContractError as error:
             parser.error(str(error))
         print(json.dumps(report, sort_keys=True))
         return 0

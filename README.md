@@ -285,6 +285,8 @@ starting with [Hive Metastore first](docs/adr/0001-hive-metastore-first.md).
 The [release-readiness runbook](docs/runbooks/release-readiness.md) explains how CI
 combines independently validated profile reports into one digest-bound `1.0.0`
 attestation and which release gates intentionally remain open.
+The [control-plane compatibility policy](docs/control-plane-compatibility.md) freezes
+the supported CLI and versioned JSON output surface and documents its executable gate.
 
 ## Project principles
 

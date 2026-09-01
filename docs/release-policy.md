@@ -27,6 +27,10 @@ Every tagged release includes a short capability matrix, known limitations, veri
 commands, and upgrade notes. A roadmap checkbox does not make a release; executable
 acceptance evidence does.
 
+The public CLI and versioned JSON reports follow the
+[control-plane compatibility policy](control-plane-compatibility.md). CI compares the
+current parser with contract `1.0.0`; a breaking change requires a new product major.
+
 ## Expansion seams
 
 The architecture remains open through stable boundaries rather than speculative code:
@@ -44,4 +48,3 @@ Prefer one complete vertical slice over several activity-only commits. A change 
 small, but it must improve behavior, safety, evidence, or understanding. The public
 history should tell the real story of the product: decisions, experiments, failures,
 measurements, and corrections.
-
