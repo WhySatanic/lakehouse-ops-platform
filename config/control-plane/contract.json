@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "contract_version": "1.0.0",
+  "commands": {
+    "ingest-weather": ["--backend", "--forecast-days", "--latitude", "--longitude", "--name", "--output", "--s3-bucket", "--s3-endpoint-url", "--s3-prefix", "--s3-region"],
+    "ingest-weather-batch": ["--backend", "--forecast-days", "--locations", "--max-workers", "--output", "--s3-bucket", "--s3-endpoint-url", "--s3-prefix", "--s3-region"],
+    "doctor": ["--backend", "--output", "--s3-bucket", "--s3-endpoint-url", "--s3-prefix", "--s3-region"],
+    "audit-landing": ["--output"],
+    "render-trino-access-policy": ["--check", "--model", "--output"],
+    "sync-ranger-policy": ["--break-glass-lease", "--model", "--service-name", "--service-user", "--trino-jdbc-url", "--url", "--username"],
+    "collect-iceberg-metadata": ["--catalog", "--schema", "--server", "--table", "--user"],
+    "capture-trino-baseline": ["--corpus", "--server", "--user"],
+    "capture-trino-compaction": ["--catalog", "--phase", "--repetitions", "--schema", "--server", "--table", "--user"],
+    "compare-trino-compaction": ["--after", "--before", "--execution"],
+    "capture-trino-partition-pruning": ["--catalog", "--partitioned-table", "--repetitions", "--schema", "--server", "--target-day", "--unpartitioned-table", "--user"],
+    "capture-trino-sort-order": ["--baseline-table", "--catalog", "--range-size", "--range-start", "--repetitions", "--schema", "--server", "--sorted-table", "--user"],
+    "verify-release-readiness": ["--contract", "--evidence-root", "--output", "--source-revision"],
+    "verify-control-plane-contract": ["--contract"],
+    "plan-iceberg-maintenance": ["--enable-orphan-inspection", "--input", "--max-manifests-per-data-file", "--max-orphan-files", "--max-snapshots-to-expire", "--min-data-files", "--min-manifest-count", "--min-snapshots-to-keep", "--orphan-retention-hours", "--small-file-ratio", "--snapshot-retention-hours", "--target-file-size-bytes"]
+  },
+  "outputs": [
+    {"name": "iceberg_metadata", "producer": "collect-iceberg-metadata", "schema_version": "1.0"},
+    {"name": "maintenance_plan", "producer": "plan-iceberg-maintenance", "schema_version": "1.0"},
+    {"name": "trino_baseline", "producer": "capture-trino-baseline", "schema_version": "1.0"},
+    {"name": "compaction_experiment", "producer": "compare-trino-compaction", "schema_version": "1.0"},
+    {"name": "partition_pruning_experiment", "producer": "capture-trino-partition-pruning", "schema_version": "1.0"},
+    {"name": "sort_order_experiment", "producer": "capture-trino-sort-order", "schema_version": "1.1"},
+    {"name": "ranger_policy_sync", "producer": "sync-ranger-policy", "schema_version": "1.0"},
+    {"name": "release_readiness_attestation", "producer": "verify-release-readiness", "schema_version": "1.0"}
+  ]
+}

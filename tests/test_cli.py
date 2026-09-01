@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 from types import TracebackType
@@ -739,6 +740,32 @@ def test_verify_release_readiness_command_writes_attestation(
         "evidence_root": evidence,
         "source_revision": "abc123",
     }
+
+
+def test_verify_control_plane_contract_command(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    contract = tmp_path / "contract.json"
+    report = {"schema_version": "1.0", "status": "compatible"}
+    observed: dict[str, object] = {}
+
+    def fake_verify(path: Path, parser: argparse.ArgumentParser) -> dict[str, str]:
+        observed.update(path=path, parser=parser)
+        return report
+
+    monkeypatch.setattr(cli, "verify_control_plane_contract", fake_verify)
+
+    exit_code = cli.main(
+        ["verify-control-plane-contract", "--contract", str(contract)]
+    )
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == report
+    assert observed["path"] == contract
+    assert isinstance(observed["parser"], argparse.ArgumentParser)
+    assert observed["parser"].prog == "lakeops"
 
 
 def test_plan_iceberg_maintenance_command(

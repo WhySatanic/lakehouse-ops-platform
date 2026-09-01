@@ -30,6 +30,10 @@ jobs:
           --model config/access/role-policy.json
           --output infra/trino/access-control-rules.json
           --check
+      - name: Verify stable control-plane contract
+        run: >-
+          uv run lakeops verify-control-plane-contract
+          --contract config/control-plane/contract.json
       - name: Test
         run: uv run pytest
 
