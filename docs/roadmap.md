@@ -125,6 +125,8 @@ centralized authorization, observability, and recovery.
 
 - [x] Digest-pin every external Compose runtime, Dockerfile base, and Trino upgrade image
   with a versioned lock and executable coverage verification.
+- [x] Run CI actions on Node 24 with reviewed commit pins and fail-closed artifact
+  digest checks for cross-profile readiness and release-candidate evidence.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.
