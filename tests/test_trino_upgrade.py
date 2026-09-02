@@ -125,6 +125,20 @@ def test_load_upgrade_plan_pins_adjacent_versions(tmp_path: Path) -> None:
     assert len(plan["plan_sha256"]) == 64
 
 
+def test_load_upgrade_plan_accepts_digest_pinned_images(tmp_path: Path) -> None:
+    path = tmp_path / "plan.json"
+    write_plan(path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["source"]["image"] += "@sha256:" + "a" * 64
+    payload["target"]["image"] += "@sha256:" + "b" * 64
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    plan = load_upgrade_plan(path)
+
+    assert plan["source"]["image"].endswith("a" * 64)
+    assert plan["target"]["image"].endswith("b" * 64)
+
+
 @pytest.mark.parametrize(
     "source, target, message",
     [

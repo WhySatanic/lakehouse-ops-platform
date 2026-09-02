@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -10,6 +11,9 @@ from typing import Any, Protocol
 from lakehouse_ops.trino import TrinoQueryResult
 
 PHASES = ("baseline", "upgraded", "rolled_back", "restored")
+PINNED_TRINO_IMAGE = re.compile(
+    r"trinodb/trino:(?P<version>[0-9]+)@sha256:[0-9a-f]{64}"
+)
 EXPECTED_WORKLOAD = {
     "bronze_rows": 4,
     "silver_rows": 2,
@@ -327,7 +331,10 @@ def _version_spec(value: Any, name: str) -> dict[str, str]:
     image = value.get("image")
     if not isinstance(version, str) or not version.isdigit():
         raise UpgradeRehearsalError(f"{name} version must be numeric")
-    if image != f"trinodb/trino:{version}":
+    pinned = PINNED_TRINO_IMAGE.fullmatch(image) if isinstance(image, str) else None
+    if image != f"trinodb/trino:{version}" and (
+        pinned is None or pinned.group("version") != version
+    ):
         raise UpgradeRehearsalError(f"{name} image must match its version")
     return {"version": version, "image": image}
 
