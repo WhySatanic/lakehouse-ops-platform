@@ -158,12 +158,7 @@ def run_upgrade_rehearsal(
 def validate_upgrade_report(report: dict[str, Any], plan: dict[str, Any]) -> None:
     source = _version_spec(plan.get("source"), "source")
     target = _version_spec(plan.get("target"), "target")
-    expected_versions = (
-        source["version"],
-        target["version"],
-        source["version"],
-        target["version"],
-    )
+    expected_specs = (source, target, source, target)
     if report.get("schema_version") != "1.0" or report.get("status") != "ready":
         raise UpgradeRehearsalError("upgrade report is not ready schema 1.0 evidence")
     if report.get("experiment") != "trino_version_upgrade_rehearsal":
@@ -181,8 +176,8 @@ def validate_upgrade_report(report: dict[str, Any], plan: dict[str, Any]) -> Non
     phases = report.get("phases")
     if not isinstance(phases, list) or len(phases) != len(PHASES):
         raise UpgradeRehearsalError("upgrade report must contain four phases")
-    for phase, label, version in zip(phases, PHASES, expected_versions, strict=True):
-        _validate_phase(phase, label, version)
+    for phase, label, spec in zip(phases, PHASES, expected_specs, strict=True):
+        _validate_phase(phase, label, spec)
 
     fingerprints = [phase["data_fingerprint"] for phase in phases]
     if len(set(fingerprints)) != 1:
@@ -265,12 +260,13 @@ def _capture_phase(
     }
 
 
-def _validate_phase(phase: Any, label: str, version: str) -> None:
+def _validate_phase(phase: Any, label: str, spec: dict[str, str]) -> None:
     if not isinstance(phase, dict):
         raise UpgradeRehearsalError("upgrade phase must be an object")
+    version = spec["version"]
     if phase.get("phase") != label or phase.get("expected_version") != version:
         raise UpgradeRehearsalError("upgrade phase order or version changed")
-    if phase.get("image") != f"trinodb/trino:{version}":
+    if phase.get("image") != spec["image"]:
         raise UpgradeRehearsalError("upgrade phase image does not match its version")
     transition = phase.get("transition")
     if (
