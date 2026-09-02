@@ -12,7 +12,8 @@ observability, and performance experiments.
 > S3-backed Iceberg bronze and validated silver tables registered in PostgreSQL-backed
 > Hive Metastore, and a Trino 483 coordinator with two workers reads the same tables.
 > Centralized Ranger authorization, observability, maintenance, recovery drills, and
-> clean-checkout release evidence are exercised by CI.
+> clean-checkout release evidence are exercised by CI. External runtime and build-base
+> images are pinned by manifest digest and checked against a versioned lock.
 
 The optional observability profile exposes Prometheus readiness and live table signals,
 plus provisioned Grafana readiness, Trino workload, maintenance, and freshness
@@ -27,6 +28,11 @@ and at most 10 undersized files in the demo table. See the
 The `1.x` line follows a stable public CLI and JSON compatibility contract. Additive
 capabilities ship in minor releases; removals or incompatible behavior require a new
 major release. Planned components never masquerade as implemented features.
+
+Container provenance is documented in the
+[image digest lock runbook](docs/runbooks/container-image-digest-lock.md). The quality
+gate rejects any external Compose, Dockerfile, or upgrade image that is unpinned,
+missing from the lock, or bound to a different digest.
 
 ## Why this project exists
 

@@ -52,7 +52,7 @@ Create the normal bronze and silver fixture, then start the query cluster on the
 version:
 
 ```bash
-TRINO_SERVER_IMAGE=trinodb/trino:482 \
+TRINO_SERVER_IMAGE=trinodb/trino:482@sha256:90b35b7c603eaa1f889bf03981a62b75f998ee6c0f851d9f4e341b49a57022b6 \
   docker compose --profile query up -d --wait \
   trino-coordinator trino-worker trino-worker-2
 docker compose --profile query run --rm trino-query-check
@@ -82,7 +82,7 @@ image and recreate all server nodes:
 ```bash
 docker compose stop trino-worker trino-worker-2
 docker compose stop trino-coordinator
-TRINO_SERVER_IMAGE=trinodb/trino:482 \
+TRINO_SERVER_IMAGE=trinodb/trino:482@sha256:90b35b7c603eaa1f889bf03981a62b75f998ee6c0f851d9f4e341b49a57022b6 \
   docker compose --profile query up -d --force-recreate \
   trino-coordinator trino-worker trino-worker-2
 ```
@@ -96,8 +96,9 @@ Never remove the metastore, MinIO, or Trino data volumes during this procedure.
 - The drill does not test draining long-running queries or mixed-version membership.
 - Ranger and custom plugin compatibility are not covered.
 - Only the adjacent 482 to 483 transition is approved by this evidence.
-- Container tags are paired with recorded runtime image IDs, but registry digest pinning
-  remains future supply-chain work.
+- Image references retain readable tags and are pinned to the reviewed manifest digests
+  in `config/images.lock.json`. An ad hoc `TRINO_SERVER_IMAGE` value can bypass the
+  default, so operators must use a reference already present in that lock.
 
 See the official Trino 483
 [release notes](https://trino.io/docs/current/release/release-483.html),

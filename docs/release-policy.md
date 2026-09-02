@@ -47,7 +47,9 @@ The architecture remains open through stable boundaries rather than speculative 
 - maintenance planners are separate from Spark executors;
 - authorization policy is versioned independently from the Ranger deployment;
 - optional Compose profiles add observability, security, and serving components;
-- collectors emit normalized observations so new engines can be added later.
+- collectors emit normalized observations so new engines can be added later;
+- the image lock separates reviewed upstream tag changes from immutable runtime and
+  build-base digests.
 
 ## Merge discipline
 
