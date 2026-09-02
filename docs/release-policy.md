@@ -38,6 +38,9 @@ The public CLI and versioned JSON reports follow the
 [control-plane compatibility policy](control-plane-compatibility.md). CI compares the
 current parser with contract `1.0.0`; a breaking change requires a new product major.
 
+CI action upgrades follow the [action upgrade runbook](runbooks/ci-action-upgrades.md):
+reviewed commit pins, compatible runner runtimes, and strict evidence download hashes.
+
 ## Expansion seams
 
 The architecture remains open through stable boundaries rather than speculative code:

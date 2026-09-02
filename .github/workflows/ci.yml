@@ -13,8 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           cache: pip
@@ -43,8 +43,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           cache: pip
@@ -91,8 +91,9 @@ jobs:
           uv run python tests/integration/check_clickhouse_serving.py
           artifacts/clickhouse-serving.json
       - name: Upload serving evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
+          archive: true
           name: serving-evidence
           path: artifacts/clickhouse-serving.json
           if-no-files-found: error
@@ -116,8 +117,8 @@ jobs:
       TRINO_ACCESS_CONTROL_PROPERTIES: ./infra/trino/ranger-access-control.properties
       TRINO_AUTHORIZATION_MODE: ranger
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           cache: pip
@@ -222,8 +223,9 @@ jobs:
           done
           uv run python tests/integration/check_ranger_audit.py artifacts/ranger-audit.json
       - name: Upload Ranger evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
+          archive: true
           name: ranger-evidence
           path: |
             artifacts/ranger-policy-sync.json
@@ -247,8 +249,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           cache: pip
@@ -753,8 +755,9 @@ jobs:
           docker compose --profile observability run --rm prometheus-check
           EXPECTED_ALERT_STATUS=resolved docker compose --profile observability run --rm alert-delivery-check
       - name: Upload core and recovery evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
+          archive: true
           name: lakehouse-evidence
           path: |
             artifacts/iceberg-metadata-report.json
@@ -786,8 +789,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           cache: pip
@@ -796,8 +799,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --dev
       - name: Download cross-profile evidence
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
+          digest-mismatch: error
           path: evidence
       - name: Verify and attest 1.0 release readiness
         env:
@@ -809,8 +813,9 @@ jobs:
           --source-revision "$SOURCE_REVISION"
           --output artifacts/release-readiness.json
       - name: Upload release readiness attestation
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
+          archive: true
           name: release-readiness-attestation
           path: artifacts/release-readiness.json
           if-no-files-found: error
@@ -824,7 +829,7 @@ jobs:
     env:
       SOURCE_REVISION: ${{ github.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           clean: true
@@ -833,7 +838,7 @@ jobs:
         run: |
           test -z "$(git status --porcelain --untracked-files=all)"
           test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           cache: pip
@@ -842,8 +847,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --dev
       - name: Download verified evidence
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
+          digest-mismatch: error
           path: ${{ runner.temp }}/evidence
       - name: Build deterministic release-candidate bundle
         run: |
@@ -861,8 +867,9 @@ jobs:
       - name: Verify checkout remained clean
         run: test -z "$(git status --porcelain --untracked-files=all)"
       - name: Upload release-candidate evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
+          archive: true
           name: release-candidate-evidence
           path: |
             artifacts/lakehouse-ops-1.0.0-rc-evidence.tar.gz
