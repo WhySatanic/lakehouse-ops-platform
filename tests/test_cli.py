@@ -768,6 +768,55 @@ def test_verify_control_plane_contract_command(
     assert observed["parser"].prog == "lakeops"
 
 
+def test_verify_image_lock_command(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    report = {"schema_version": "1.0", "status": "ready"}
+    observed: dict[str, object] = {}
+
+    def fake_verify(
+        lock: Path, compose: Path, dockerfiles: list[Path], upgrade_plan: Path
+    ) -> dict[str, str]:
+        observed.update(
+            lock=lock,
+            compose=compose,
+            dockerfiles=dockerfiles,
+            upgrade_plan=upgrade_plan,
+        )
+        return report
+
+    monkeypatch.setattr(cli, "verify_image_lock", fake_verify)
+    lock = tmp_path / "images.lock.json"
+    compose = tmp_path / "compose.yaml"
+    dockerfile = tmp_path / "Dockerfile"
+    upgrade = tmp_path / "upgrade.json"
+
+    exit_code = cli.main(
+        [
+            "verify-image-lock",
+            "--lock",
+            str(lock),
+            "--compose",
+            str(compose),
+            "--dockerfile",
+            str(dockerfile),
+            "--upgrade-plan",
+            str(upgrade),
+        ]
+    )
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == report
+    assert observed == {
+        "lock": lock,
+        "compose": compose,
+        "dockerfiles": [dockerfile],
+        "upgrade_plan": upgrade,
+    }
+
+
 def test_build_release_candidate_command(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

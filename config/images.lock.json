@@ -1,0 +1,69 @@
+{
+  "schema_version": "1.0",
+  "images": [
+    {
+      "tag": "apache/hive:4.0.0",
+      "digest": "sha256:c0b241c544d341c16a6d8cafcb801a071be9b02054a5add255e9a0e826095e88"
+    },
+    {
+      "tag": "apache/ranger-db:2.9.0",
+      "digest": "sha256:eff45c4dcbd3681efec039b1ad2586f60e74f7d531ad5b544efe56fbb3cb0897"
+    },
+    {
+      "tag": "apache/ranger-solr:2.9.0",
+      "digest": "sha256:3a03a1c2e5d0d8b27680d86ab9890b6c8e7a1ecba4e4bf61f7bb6c0411839902"
+    },
+    {
+      "tag": "apache/ranger:2.9.0",
+      "digest": "sha256:f55eb8b17df1ff68e7cec47d51a50cfc5b09806ae5b22c1ea62407bd0d0fdea7"
+    },
+    {
+      "tag": "apache/spark:3.5.9-scala2.12-java17-python3-ubuntu",
+      "digest": "sha256:f3d6eaa8bab8ec2e38f3c3918a5b2f8b253c95bcb19f9e87ad0e0cdacf9df2d5"
+    },
+    {
+      "tag": "clickhouse/clickhouse-server:26.3.25.2",
+      "digest": "sha256:1b6d698b24b681d97d1ddefb4c54dc075030a704b2b7ea5255932480125efdf2"
+    },
+    {
+      "tag": "grafana/grafana:12.1.1",
+      "digest": "sha256:a1701c2180249361737a99a01bc770db39381640e4d631825d38ff4535efa47d"
+    },
+    {
+      "tag": "postgres:17.10-alpine3.23",
+      "digest": "sha256:8189a1f6e40904781fc9e2612687877791d21679866db58b1de996b31fc312e4"
+    },
+    {
+      "tag": "prom/alertmanager:v0.28.1",
+      "digest": "sha256:27c475db5fb156cab31d5c18a4251ac7ed567746a2483ff264516437a39b15ba"
+    },
+    {
+      "tag": "prom/blackbox-exporter:v0.27.0",
+      "digest": "sha256:a50c4c0eda297baa1678cd4dc4712a67fdea713b832d43ce7fcc5f9bea05094d"
+    },
+    {
+      "tag": "prom/prometheus:v3.5.0",
+      "digest": "sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996"
+    },
+    {
+      "tag": "python:3.12-alpine3.22",
+      "digest": "sha256:a190708a2dec1bd18b1decb539f8e8f5407abaa9bf39cacda583f7f8c11db322"
+    },
+    {
+      "tag": "quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z",
+      "digest": "sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727"
+    },
+    {
+      "tag": "quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z",
+      "digest": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e"
+    },
+    {
+      "tag": "trinodb/trino:482",
+      "digest": "sha256:90b35b7c603eaa1f889bf03981a62b75f998ee6c0f851d9f4e341b49a57022b6"
+    },
+    {
+      "tag": "trinodb/trino:483",
+      "digest": "sha256:db58cc93e593a2706553745f276bb119c9810e69918be56ecde088ba7ccb0534"
+    }
+  ]
+}

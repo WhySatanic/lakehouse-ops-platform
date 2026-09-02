@@ -125,6 +125,20 @@ def test_load_upgrade_plan_pins_adjacent_versions(tmp_path: Path) -> None:
     assert len(plan["plan_sha256"]) == 64
 
 
+def test_load_upgrade_plan_accepts_digest_pinned_images(tmp_path: Path) -> None:
+    path = tmp_path / "plan.json"
+    write_plan(path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["source"]["image"] += "@sha256:" + "a" * 64
+    payload["target"]["image"] += "@sha256:" + "b" * 64
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    plan = load_upgrade_plan(path)
+
+    assert plan["source"]["image"].endswith("a" * 64)
+    assert plan["target"]["image"].endswith("b" * 64)
+
+
 @pytest.mark.parametrize(
     "source, target, message",
     [
@@ -189,6 +203,33 @@ def test_run_upgrade_rehearsal_proves_upgrade_and_rollback(tmp_path: Path) -> No
     assert len({phase["data_fingerprint"] for phase in report["phases"]}) == 1
     assert report["compatibility"]["rollback"] == "passed"
     assert report["collected_at"] == "2026-08-25T09:00:00+00:00"
+
+
+def test_run_upgrade_rehearsal_accepts_digest_pinned_phase_images(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "plan.json"
+    write_plan(path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["source"]["image"] += "@sha256:" + "a" * 64
+    payload["target"]["image"] += "@sha256:" + "b" * 64
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    plan = load_upgrade_plan(path)
+    current = {"version": "482"}
+
+    def switch(spec: dict[str, str]) -> dict[str, Any]:
+        current["version"] = spec["version"]
+        return transition_evidence(spec)
+
+    report = run_upgrade_rehearsal(
+        lambda: FakeClient(current["version"]),
+        switch,
+        transition_evidence(plan["source"], 0),
+        plan,
+    )
+
+    assert report["phases"][0]["image"] == plan["source"]["image"]
+    assert report["phases"][1]["image"] == plan["target"]["image"]
 
 
 def test_run_upgrade_rehearsal_restores_target_after_failure(tmp_path: Path) -> None:

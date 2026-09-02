@@ -19,8 +19,8 @@ def test_repository_contract_matches_public_cli() -> None:
     report = verify_control_plane_contract(CONTRACT, build_parser())
 
     assert report["status"] == "compatible"
-    assert report["commands_verified"] == 16
-    assert report["outputs_verified"] == 9
+    assert report["commands_verified"] == 17
+    assert report["outputs_verified"] == 10
     assert len(report["contract_sha256"]) == 64
 
 

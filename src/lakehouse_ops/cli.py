@@ -18,6 +18,7 @@ from lakehouse_ops.control_plane_contract import (
 from lakehouse_ops.doctor import DoctorReport, check_file_landing, check_s3_bucket
 from lakehouse_ops.iceberg.metadata import IcebergMetadataCollector
 from lakehouse_ops.iceberg.planner import IcebergMaintenancePlanner, MaintenancePolicy
+from lakehouse_ops.image_lock import ImageLockError, verify_image_lock
 from lakehouse_ops.ingestion.audit import audit_file_landing
 from lakehouse_ops.ingestion.batch import (
     LocationManifestError,
@@ -206,6 +207,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="verify the public CLI and JSON compatibility baseline",
     )
     compatibility.add_argument("--contract", required=True, type=Path)
+
+    image_lock = subparsers.add_parser(
+        "verify-image-lock",
+        help="verify digest coverage for external container images",
+    )
+    image_lock.add_argument(
+        "--lock", type=Path, default=Path("config/images.lock.json")
+    )
+    image_lock.add_argument("--compose", type=Path, default=Path("compose.yaml"))
+    image_lock.add_argument("--dockerfile", action="append", type=Path)
+    image_lock.add_argument(
+        "--upgrade-plan",
+        type=Path,
+        default=Path("config/trino/upgrade-rehearsal.json"),
+    )
 
     release_candidate = subparsers.add_parser(
         "build-release-candidate",
@@ -412,6 +428,22 @@ def main(argv: list[str] | None = None) -> int:
         try:
             report = verify_control_plane_contract(args.contract, parser)
         except ControlPlaneContractError as error:
+            parser.error(str(error))
+        print(json.dumps(report, sort_keys=True))
+        return 0
+    if args.command == "verify-image-lock":
+        dockerfiles = args.dockerfile or [
+            Path("infra/hive-metastore/Dockerfile"),
+            Path("infra/spark/Dockerfile"),
+        ]
+        try:
+            report = verify_image_lock(
+                args.lock,
+                args.compose,
+                dockerfiles,
+                args.upgrade_plan,
+            )
+        except ImageLockError as error:
             parser.error(str(error))
         print(json.dumps(report, sort_keys=True))
         return 0

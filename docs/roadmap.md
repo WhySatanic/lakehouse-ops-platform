@@ -121,6 +121,14 @@ Exit criterion: a release candidate created from a clean checkout has a stable p
 contract and one reproducible, retained evidence bundle covering the complete core path,
 centralized authorization, observability, and recovery.
 
+## Phase 7 — sustainable 1.x operations
+
+- [x] Digest-pin every external Compose runtime, Dockerfile base, and Trino upgrade image
+  with a versioned lock and executable coverage verification.
+
+Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
+refresh procedure, and a CI check that rejects silent source drift.
+
 ## Sustainable contribution rhythm
 
 A strong week contains one or two complete changes, not a fixed number of cosmetic

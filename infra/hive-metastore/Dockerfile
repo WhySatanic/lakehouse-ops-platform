@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM apache/hive:4.0.0
+FROM apache/hive:4.0.0@sha256:c0b241c544d341c16a6d8cafcb801a071be9b02054a5add255e9a0e826095e88
 
 USER root
 ADD --checksum=sha256:6e0e4cc2d8cae902084f8a2b18728b073a6fd9d1f87c9d8bff8f298c18185b93 \

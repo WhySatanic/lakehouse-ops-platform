@@ -34,6 +34,8 @@ jobs:
         run: >-
           uv run lakeops verify-control-plane-contract
           --contract config/control-plane/contract.json
+      - name: Verify external image digest lock
+        run: uv run lakeops verify-image-lock
       - name: Test
         run: uv run pytest
 

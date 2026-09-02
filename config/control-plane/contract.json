@@ -16,6 +16,7 @@
     "capture-trino-sort-order": ["--baseline-table", "--catalog", "--range-size", "--range-start", "--repetitions", "--schema", "--server", "--sorted-table", "--user"],
     "verify-release-readiness": ["--contract", "--evidence-root", "--output", "--source-revision"],
     "verify-control-plane-contract": ["--contract"],
+    "verify-image-lock": ["--compose", "--dockerfile", "--lock", "--upgrade-plan"],
     "build-release-candidate": ["--attestation", "--control-plane-contract", "--evidence-root", "--output", "--readiness-contract", "--source-revision", "--upgrade-plan", "--upgrade-report"],
     "plan-iceberg-maintenance": ["--enable-orphan-inspection", "--input", "--max-manifests-per-data-file", "--max-orphan-files", "--max-snapshots-to-expire", "--min-data-files", "--min-manifest-count", "--min-snapshots-to-keep", "--orphan-retention-hours", "--small-file-ratio", "--snapshot-retention-hours", "--target-file-size-bytes"]
   },
@@ -28,6 +29,7 @@
     {"name": "sort_order_experiment", "producer": "capture-trino-sort-order", "schema_version": "1.1"},
     {"name": "ranger_policy_sync", "producer": "sync-ranger-policy", "schema_version": "1.0"},
     {"name": "release_readiness_attestation", "producer": "verify-release-readiness", "schema_version": "1.0"},
-    {"name": "release_candidate_bundle_report", "producer": "build-release-candidate", "schema_version": "1.0"}
+    {"name": "release_candidate_bundle_report", "producer": "build-release-candidate", "schema_version": "1.0"},
+    {"name": "image_lock_verification", "producer": "verify-image-lock", "schema_version": "1.0"}
   ]
 }

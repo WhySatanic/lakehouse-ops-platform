@@ -1,4 +1,4 @@
-FROM apache/spark:3.5.9-scala2.12-java17-python3-ubuntu
+FROM apache/spark:3.5.9-scala2.12-java17-python3-ubuntu@sha256:f3d6eaa8bab8ec2e38f3c3918a5b2f8b253c95bcb19f9e87ad0e0cdacf9df2d5
 
 ARG ICEBERG_VERSION=1.11.0
 

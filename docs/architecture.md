@@ -45,6 +45,10 @@ digests, source revision, core snapshot, and recovery invariants into one attest
 This makes release readiness a machine-readable contract instead of an inference from
 independent green jobs.
 
+External container inputs are separately bound by `config/images.lock.json`. CI verifies
+that Compose runtimes, Dockerfile bases, and both Trino upgrade endpoints retain a tag
+and the matching multi-platform manifest digest.
+
 ## Security model
 
 Authentication and authorization are distinct. The local profile begins with explicit
