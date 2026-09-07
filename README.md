@@ -7,7 +7,8 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: stable `1.0.0` control-plane contract and reproducible reference stack.
+> Status: version `1.1.0`, stable `1.0.0` control-plane contract, and reproducible
+> reference stack.
 > Open-Meteo ingestion works against the local filesystem and MinIO. Spark writes
 > S3-backed Iceberg bronze and validated silver tables registered in PostgreSQL-backed
 > Hive Metastore, and a Trino 483 coordinator with two workers reads the same tables.
