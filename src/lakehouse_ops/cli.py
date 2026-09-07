@@ -19,7 +19,7 @@ from lakehouse_ops.doctor import DoctorReport, check_file_landing, check_s3_buck
 from lakehouse_ops.iceberg.metadata import IcebergMetadataCollector
 from lakehouse_ops.iceberg.planner import IcebergMaintenancePlanner, MaintenancePolicy
 from lakehouse_ops.image_lock import ImageLockError, verify_image_lock
-from lakehouse_ops.ingestion.audit import audit_file_landing
+from lakehouse_ops.ingestion.audit import audit_file_landing, audit_s3_landing
 from lakehouse_ops.ingestion.batch import (
     LocationManifestError,
     load_location_manifest,
@@ -83,8 +83,8 @@ def build_parser() -> argparse.ArgumentParser:
     doctor = subparsers.add_parser("doctor", help="check landing backend readiness")
     _add_landing_arguments(doctor)
 
-    audit = subparsers.add_parser("audit-landing", help="verify landed file integrity")
-    audit.add_argument("--output", type=Path, default=Path("data/landing"))
+    audit = subparsers.add_parser("audit-landing", help="verify landed object integrity")
+    _add_landing_arguments(audit)
 
     access_policy = subparsers.add_parser(
         "render-trino-access-policy",
@@ -310,7 +310,16 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report.as_dict(), sort_keys=True))
         return 0 if report.healthy else 1
     if args.command == "audit-landing":
-        report = audit_file_landing(args.output)
+        if args.backend == "file":
+            report = audit_file_landing(args.output)
+        else:
+            if not args.s3_bucket:
+                parser.error("--s3-bucket is required when --backend=s3")
+            report = audit_s3_landing(
+                _create_s3_client(args),
+                bucket=args.s3_bucket,
+                prefix=args.s3_prefix,
+            )
         print(json.dumps(report.as_dict(), sort_keys=True))
         return 0 if report.healthy else 1
     if args.command == "render-trino-access-policy":

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from lakehouse_ops.ingestion.audit import audit_file_landing
+from lakehouse_ops.ingestion.audit import audit_file_landing, audit_s3_landing
 from lakehouse_ops.ingestion.landing import FileLandingZone
 from lakehouse_ops.ingestion.models import Location, WeatherPayload
 
@@ -94,3 +95,71 @@ def test_audit_rejects_empty_or_missing_landing(tmp_path: Path) -> None:
     assert empty.as_dict()["status"] == "failed"
     assert missing.healthy is False
     assert missing.items == ()
+
+
+class FakeS3AuditClient:
+    def __init__(self, objects: dict[str, tuple[bytes, dict[str, str]]]) -> None:
+        self.objects = objects
+        self.list_requests: list[dict[str, Any]] = []
+
+    def list_objects_v2(self, **kwargs: Any) -> dict[str, Any]:
+        self.list_requests.append(kwargs)
+        keys = sorted(key for key in self.objects if key.startswith(kwargs.get("Prefix", "")))
+        if "ContinuationToken" not in kwargs and len(keys) > 1:
+            return {
+                "Contents": [{"Key": keys[0]}],
+                "IsTruncated": True,
+                "NextContinuationToken": "page-2",
+            }
+        page = keys[1:] if "ContinuationToken" in kwargs else keys
+        return {"Contents": [{"Key": key} for key in page], "IsTruncated": False}
+
+    def get_object(self, **kwargs: Any) -> dict[str, Any]:
+        body, metadata = self.objects[kwargs["Key"]]
+        return {"Body": BytesIO(body), "Metadata": metadata}
+
+
+def test_audit_s3_landing_reads_paginated_prefix(
+    tmp_path: Path, valid_source_payload: dict[str, Any]
+) -> None:
+    first = land_payload(tmp_path, valid_source_payload)
+    document = json.loads(first.read_text(encoding="utf-8"))
+    checksum = document["ingestion"]["object_checksum"]
+    key = f"landing/{first.relative_to(tmp_path).as_posix()}"
+    client = FakeS3AuditClient(
+        {
+            "landing/ignored.txt": (b"ignored", {}),
+            key: (first.read_bytes(), {"sha256": checksum}),
+        }
+    )
+
+    report = audit_s3_landing(client, bucket="lakehouse", prefix="/landing/")
+
+    assert report.healthy is True
+    assert report.root == "s3://lakehouse/landing"
+    assert report.items[0].path == first.relative_to(tmp_path).as_posix()
+    assert len(client.list_requests) == 2
+    assert client.list_requests[1]["ContinuationToken"] == "page-2"
+
+
+@pytest.mark.parametrize(
+    ("metadata", "expected_error"),
+    [
+        ({}, "object metadata checksum is missing"),
+        ({"sha256": "wrong"}, "object metadata checksum does not match payload"),
+    ],
+)
+def test_audit_s3_landing_validates_checksum_metadata(
+    tmp_path: Path,
+    valid_source_payload: dict[str, Any],
+    metadata: dict[str, str],
+    expected_error: str,
+) -> None:
+    path = land_payload(tmp_path, valid_source_payload)
+    key = f"landing/{path.relative_to(tmp_path).as_posix()}"
+    client = FakeS3AuditClient({key: (path.read_bytes(), metadata)})
+
+    report = audit_s3_landing(client, bucket="lakehouse", prefix="landing")
+
+    assert report.healthy is False
+    assert expected_error in report.items[0].errors

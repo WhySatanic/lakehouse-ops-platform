@@ -127,6 +127,8 @@ centralized authorization, observability, and recovery.
   with a versioned lock and executable coverage verification.
 - [x] Run CI actions on Node 24 with reviewed commit pins and fail-closed artifact
   digest checks for cross-profile readiness and release-candidate evidence.
+- [x] Audit paginated S3-compatible landing prefixes with payload, path, and object
+  metadata checksum validation.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.
