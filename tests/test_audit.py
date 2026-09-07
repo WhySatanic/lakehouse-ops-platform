@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from lakehouse_ops.ingestion.audit import audit_file_landing
 from lakehouse_ops.ingestion.landing import FileLandingZone
 from lakehouse_ops.ingestion.models import Location, WeatherPayload
@@ -31,6 +33,26 @@ def test_audit_accepts_consistent_landing_object(
     assert report.invalid == 0
     assert report.items[0].path == path.relative_to(tmp_path).as_posix()
     assert report.items[0].errors == ()
+
+
+@pytest.mark.parametrize("name", [None, 42, True, [], {}])
+def test_audit_reports_invalid_location_name_and_continues(
+    tmp_path: Path, valid_source_payload: dict[str, Any], name: object
+) -> None:
+    path = land_payload(tmp_path, valid_source_payload)
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document["ingestion"]["location"]["name"] = name
+    damaged = path.with_name("damaged.json")
+    damaged.write_text(json.dumps(document), encoding="utf-8")
+
+    report = audit_file_landing(tmp_path)
+
+    assert report.healthy is False
+    assert report.valid == 1
+    assert report.invalid == 1
+    item = next(item for item in report.items if item.status == "invalid")
+    assert item.errors == ("invalid weather payload: ingestion location name must be a string",)
+    assert damaged.read_text(encoding="utf-8") == json.dumps(document)
 
 
 def test_audit_detects_payload_checksum_mismatch(
