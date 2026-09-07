@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from io import BytesIO
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Self
@@ -34,14 +35,35 @@ class FakeOpenMeteoClient:
 class FakeS3Client:
     def __init__(self) -> None:
         self.objects: dict[tuple[str, str], bytes] = {}
+        self.metadata: dict[tuple[str, str], dict[str, str]] = {}
 
     def put_object(self, **kwargs: Any) -> dict[str, Any]:
-        self.objects[(kwargs["Bucket"], kwargs["Key"])] = kwargs["Body"]
+        object_id = (kwargs["Bucket"], kwargs["Key"])
+        self.objects[object_id] = kwargs["Body"]
+        self.metadata[object_id] = kwargs["Metadata"]
         return {"ETag": '"test"'}
 
     def head_bucket(self, **kwargs: Any) -> dict[str, Any]:
         assert kwargs["Bucket"] == "lakehouse"
         return {}
+
+    def list_objects_v2(self, **kwargs: Any) -> dict[str, Any]:
+        prefix = kwargs.get("Prefix", "")
+        return {
+            "Contents": [
+                {"Key": key}
+                for bucket, key in sorted(self.objects)
+                if bucket == kwargs["Bucket"] and key.startswith(prefix)
+            ],
+            "IsTruncated": False,
+        }
+
+    def get_object(self, **kwargs: Any) -> dict[str, Any]:
+        object_id = (kwargs["Bucket"], kwargs["Key"])
+        return {
+            "Body": BytesIO(self.objects[object_id]),
+            "Metadata": self.metadata[object_id],
+        }
 
 
 def test_version_command_reports_package_version(
@@ -272,6 +294,47 @@ def test_audit_landing_command_fails_for_empty_root(
     report = json.loads(capsys.readouterr().out)
     assert exit_code == 1
     assert report["status"] == "failed"
+
+
+def test_audit_landing_command_checks_s3_objects(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    valid_source_payload: dict[str, Any],
+) -> None:
+    FakeOpenMeteoClient.payload = valid_source_payload
+    s3_client = FakeS3Client()
+    monkeypatch.setattr(cli, "OpenMeteoClient", FakeOpenMeteoClient)
+    monkeypatch.setattr(cli.boto3, "client", lambda *_, **__: s3_client)
+    landing_args = [
+        "--backend",
+        "s3",
+        "--s3-bucket",
+        "lakehouse",
+        "--s3-prefix",
+        "landing",
+    ]
+    cli.main(
+        [
+            "ingest-weather",
+            "--name",
+            "Moscow",
+            "--latitude",
+            "55.7558",
+            "--longitude",
+            "37.6173",
+            "--forecast-days",
+            "2",
+            *landing_args,
+        ]
+    )
+    capsys.readouterr()
+
+    exit_code = cli.main(["audit-landing", *landing_args])
+
+    report = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert report["root"] == "s3://lakehouse/landing"
+    assert report["valid"] == 1
 
 
 def test_render_trino_access_policy_command_detects_drift(

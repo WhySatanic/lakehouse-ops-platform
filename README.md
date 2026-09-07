@@ -127,6 +127,9 @@ filename partitions agree with the payload:
 uv run lakeops audit-landing --output data/landing
 ```
 
+Use the same audit against MinIO or S3 with `--backend s3`, `--s3-bucket`, and the
+landing prefix. It also verifies the checksum stored in S3 object metadata.
+
 See the [landing integrity runbook](docs/runbooks/landing-integrity.md) for failure
 handling and the checksum trust boundary.
 
