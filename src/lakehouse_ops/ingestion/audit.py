@@ -110,6 +110,8 @@ def _validate_document(
     try:
         if not isinstance(location_data, dict):
             raise ValueError("ingestion location must be an object")
+        if not isinstance(location_data.get("name"), str):
+            raise ValueError("ingestion location name must be a string")
         location = Location(
             location_data["name"],
             location_data["latitude"],
