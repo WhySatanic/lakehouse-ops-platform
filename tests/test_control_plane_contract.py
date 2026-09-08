@@ -20,6 +20,7 @@ def test_repository_contract_matches_public_cli() -> None:
 
     assert report["status"] == "compatible"
     assert report["commands_verified"] == 17
+    assert report["option_semantics_verified"] == 26
     assert report["outputs_verified"] == 10
     assert len(report["contract_sha256"]) == 64
 
@@ -52,6 +53,45 @@ def test_removed_option_is_rejected(tmp_path: Path) -> None:
         verify_control_plane_contract(_write_contract(tmp_path, contract), build_parser())
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("required", True),
+        ("type", "int"),
+        ("default", 8),
+        ("choices", ["file"]),
+    ],
+)
+def test_changed_option_semantics_are_rejected(tmp_path: Path, field: str, value: object) -> None:
+    contract = _load_contract()
+    semantics = contract["option_semantics"]["ingest-weather"]["--backend"]
+    semantics[field] = value
+
+    with pytest.raises(ControlPlaneContractError, match="option semantics changed"):
+        verify_control_plane_contract(_write_contract(tmp_path, contract), build_parser())
+
+
+def test_uncontracted_semantic_option_is_rejected(tmp_path: Path) -> None:
+    contract = _load_contract()
+    contract["option_semantics"]["audit-landing"]["--missing"] = {
+        "required": False,
+        "type": "str",
+        "default": None,
+        "choices": [],
+    }
+
+    with pytest.raises(ControlPlaneContractError, match="uncontracted option"):
+        verify_control_plane_contract(_write_contract(tmp_path, contract), build_parser())
+
+
+def test_malformed_option_semantics_are_rejected(tmp_path: Path) -> None:
+    contract = _load_contract()
+    del contract["option_semantics"]["doctor"]["--backend"]["choices"]
+
+    with pytest.raises(ControlPlaneContractError, match="invalid option semantics"):
+        verify_control_plane_contract(_write_contract(tmp_path, contract), build_parser())
+
+
 def test_incompatible_output_major_is_rejected(tmp_path: Path) -> None:
     contract = _load_contract()
     contract["outputs"][0]["schema_version"] = "2.0"
@@ -80,9 +120,7 @@ def test_unknown_output_producer_is_rejected(tmp_path: Path) -> None:
         ),
         (lambda contract: contract.update(outputs=[]), "non-empty array"),
         (
-            lambda contract: contract["outputs"].append(
-                dict(contract["outputs"][0])
-            ),
+            lambda contract: contract["outputs"].append(dict(contract["outputs"][0])),
             "names must be unique",
         ),
     ],
