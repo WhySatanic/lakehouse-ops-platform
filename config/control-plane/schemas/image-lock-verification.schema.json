@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/WhySatanic/lakehouse-ops-platform/schemas/image-lock-verification-1.0.json",
+  "title": "Image lock verification report",
+  "type": "object",
+  "required": ["schema_version", "status", "images", "uses", "sources", "lock_sha256"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "status": {"const": "ready"},
+    "images": {"type": "integer", "minimum": 1},
+    "uses": {"type": "integer", "minimum": 1},
+    "sources": {
+      "type": "object",
+      "required": ["compose", "dockerfile", "upgrade"],
+      "properties": {
+        "compose": {"type": "integer", "minimum": 0},
+        "dockerfile": {"type": "integer", "minimum": 0},
+        "upgrade": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "lock_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "additionalProperties": false
+}
