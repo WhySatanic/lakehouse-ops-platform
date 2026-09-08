@@ -133,6 +133,8 @@ centralized authorization, observability, and recovery.
   recovery invariant is absent.
 - [x] Audit retained S3 landing object versions and inventory delete markers through
   the scoped ingestion identity.
+- [x] Freeze critical CLI option semantics and reject required/default/type/choice drift
+  across every public control-plane command.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.

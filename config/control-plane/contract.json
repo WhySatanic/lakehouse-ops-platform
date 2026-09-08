@@ -4,8 +4,8 @@
   "commands": {
     "ingest-weather": ["--backend", "--forecast-days", "--latitude", "--longitude", "--name", "--output", "--s3-bucket", "--s3-endpoint-url", "--s3-prefix", "--s3-region"],
     "ingest-weather-batch": ["--backend", "--forecast-days", "--locations", "--max-workers", "--output", "--s3-bucket", "--s3-endpoint-url", "--s3-prefix", "--s3-region"],
-    "doctor": ["--backend", "--output", "--s3-bucket", "--s3-endpoint-url", "--s3-prefix", "--s3-region"],
-    "audit-landing": ["--output"],
+    "doctor": ["--backend", "--output", "--require-versioning", "--s3-bucket", "--s3-endpoint-url", "--s3-prefix", "--s3-region"],
+    "audit-landing": ["--backend", "--include-versions", "--output", "--s3-bucket", "--s3-endpoint-url", "--s3-prefix", "--s3-region"],
     "render-trino-access-policy": ["--check", "--model", "--output"],
     "sync-ranger-policy": ["--break-glass-lease", "--model", "--service-name", "--service-user", "--trino-jdbc-url", "--url", "--username"],
     "collect-iceberg-metadata": ["--catalog", "--schema", "--server", "--table", "--user"],
@@ -19,6 +19,68 @@
     "verify-image-lock": ["--compose", "--dockerfile", "--lock", "--upgrade-plan"],
     "build-release-candidate": ["--attestation", "--control-plane-contract", "--evidence-root", "--output", "--readiness-contract", "--source-revision", "--upgrade-plan", "--upgrade-report"],
     "plan-iceberg-maintenance": ["--enable-orphan-inspection", "--input", "--max-manifests-per-data-file", "--max-orphan-files", "--max-snapshots-to-expire", "--min-data-files", "--min-manifest-count", "--min-snapshots-to-keep", "--orphan-retention-hours", "--small-file-ratio", "--snapshot-retention-hours", "--target-file-size-bytes"]
+  },
+  "option_semantics": {
+    "ingest-weather": {
+      "--name": {"required": true, "type": "str", "default": null, "choices": []},
+      "--forecast-days": {"required": false, "type": "int", "default": 3, "choices": []},
+      "--backend": {"required": false, "type": "str", "default": "file", "choices": ["file", "s3"]}
+    },
+    "ingest-weather-batch": {
+      "--locations": {"required": true, "type": "path", "default": null, "choices": []},
+      "--max-workers": {"required": false, "type": "int", "default": 4, "choices": []},
+      "--backend": {"required": false, "type": "str", "default": "file", "choices": ["file", "s3"]}
+    },
+    "doctor": {
+      "--backend": {"required": false, "type": "str", "default": "file", "choices": ["file", "s3"]},
+      "--require-versioning": {"required": false, "type": "boolean", "default": false, "choices": []}
+    },
+    "audit-landing": {
+      "--backend": {"required": false, "type": "str", "default": "file", "choices": ["file", "s3"]},
+      "--include-versions": {"required": false, "type": "boolean", "default": false, "choices": []}
+    },
+    "render-trino-access-policy": {
+      "--model": {"required": true, "type": "path", "default": null, "choices": []},
+      "--check": {"required": false, "type": "boolean", "default": false, "choices": []}
+    },
+    "sync-ranger-policy": {
+      "--service-name": {"required": false, "type": "str", "default": "lakehouse-trino", "choices": []}
+    },
+    "collect-iceberg-metadata": {
+      "--catalog": {"required": false, "type": "str", "default": "lakehouse", "choices": []}
+    },
+    "capture-trino-baseline": {
+      "--corpus": {"required": true, "type": "path", "default": null, "choices": []}
+    },
+    "capture-trino-compaction": {
+      "--phase": {"required": true, "type": "str", "default": null, "choices": ["before", "after"]}
+    },
+    "compare-trino-compaction": {
+      "--before": {"required": true, "type": "path", "default": null, "choices": []}
+    },
+    "capture-trino-partition-pruning": {
+      "--target-day": {"required": false, "type": "str", "default": "2026-01-16", "choices": []}
+    },
+    "capture-trino-sort-order": {
+      "--range-size": {"required": false, "type": "int", "default": 128, "choices": []}
+    },
+    "verify-release-readiness": {
+      "--source-revision": {"required": true, "type": "str", "default": null, "choices": []}
+    },
+    "verify-control-plane-contract": {
+      "--contract": {"required": true, "type": "path", "default": null, "choices": []}
+    },
+    "verify-image-lock": {
+      "--lock": {"required": false, "type": "path", "default": "config/images.lock.json", "choices": []}
+    },
+    "build-release-candidate": {
+      "--source-revision": {"required": true, "type": "str", "default": null, "choices": []}
+    },
+    "plan-iceberg-maintenance": {
+      "--input": {"required": true, "type": "path", "default": null, "choices": []},
+      "--small-file-ratio": {"required": false, "type": "float", "default": 0.5, "choices": []},
+      "--enable-orphan-inspection": {"required": false, "type": "boolean", "default": false, "choices": []}
+    }
   },
   "outputs": [
     {"name": "iceberg_metadata", "producer": "collect-iceberg-metadata", "schema_version": "1.0"},

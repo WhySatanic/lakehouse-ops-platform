@@ -7,7 +7,7 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: version `1.3.0`, stable `1.0.0` control-plane contract, and reproducible
+> Status: version `1.3.1`, stable `1.0.0` control-plane contract, and reproducible
 > reference stack.
 > Open-Meteo ingestion works against the local filesystem and MinIO. Spark writes
 > S3-backed Iceberg bronze and validated silver tables registered in PostgreSQL-backed
@@ -305,8 +305,8 @@ The [release-candidate runbook](docs/runbooks/release-candidate.md) describes th
 checkout and deterministic evidence bundle retained with stable releases.
 The [1.0.0 acceptance manifest](docs/releases/1.0.0.md) maps the stable release promise
 to its executable CI evidence and documented limitations.
-The [1.3.0 release notes](docs/releases/1.3.0.md) describe the S3 landing history audit
-and its upgrade path.
+The [1.3.1 release notes](docs/releases/1.3.1.md) describe executable CLI option
+semantics and the compatibility upgrade path.
 
 ## Project principles
 

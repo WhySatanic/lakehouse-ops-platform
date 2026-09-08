@@ -12,9 +12,10 @@ uv run lakeops verify-control-plane-contract \
   --contract config/control-plane/contract.json
 ```
 
-The command exits non-zero if a baseline command or long option no longer exists, an
-output references an unknown producer, or an output leaves schema major `1`. New
-commands and options are compatible additions and do not require consumers to upgrade.
+The command exits non-zero if a baseline command or long option no longer exists, a
+frozen option changes its required flag, type, default, or choices, an output references
+an unknown producer, or an output leaves schema major `1`. New commands and options are
+compatible additions and do not require consumers to upgrade.
 
 ## CLI policy
 
@@ -23,6 +24,12 @@ renaming one, changing its meaning, or making an optional argument required is a
 breaking change. A replacement must first ship additively, remain available for at
 least one minor release with a migration note, and only be removed in a new product
 major release.
+
+The machine-readable `option_semantics` baseline covers at least one critical option
+for every public command. Each entry freezes whether the option is required, its parsed
+type, its default, and its allowed choices. Environment-backed defaults are deliberately
+excluded because deployment configuration is expected to vary; their option names and
+documented meaning remain stable under the same policy.
 
 ## JSON policy
 
@@ -39,6 +46,7 @@ surface.
 
 ## Upgrade notes
 
-Version `0.47.0` adds the verifier and freezes contract `1.0.0`. It does not remove or
-rename any existing command, option, or JSON field. Automation should run the verifier
-before deployment and retain its JSON output with other release evidence.
+Version `1.3.1` extends the existing contract `1.0.0` baseline with critical option
+semantics and freezes the previously additive `--require-versioning` and
+`--include-versions` options. It does not change CLI behavior. Automation should run
+the verifier before deployment and retain its JSON output with other release evidence.
