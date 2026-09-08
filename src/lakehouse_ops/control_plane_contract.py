@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from lakehouse_ops.digests import normalized_text_digest
+from lakehouse_ops.report_schema import ReportSchemaError, validate_report_schema
 
 
 class ControlPlaneContractError(RuntimeError):
@@ -87,7 +88,7 @@ def verify_control_plane_contract(
         if not isinstance(version, str) or version.split(".", 1)[0] != "1":
             raise ControlPlaneContractError(f"output {name} must remain on schema major 1")
 
-    return {
+    report = {
         "schema_version": "1.0",
         "status": "compatible",
         "contract_version": "1.0.0",
@@ -96,6 +97,24 @@ def verify_control_plane_contract(
         "option_semantics_verified": semantics_verified,
         "outputs_verified": len(outputs),
     }
+    verifier_output = next(
+        (output for output in outputs if output["name"] == "control_plane_contract_verification"),
+        None,
+    )
+    if verifier_output is None:
+        raise ControlPlaneContractError(
+            "control_plane_contract_verification output contract is required"
+        )
+    schema_path = verifier_output.get("schema_path")
+    if not isinstance(schema_path, str) or not schema_path:
+        raise ControlPlaneContractError(
+            "control_plane_contract_verification must declare schema_path"
+        )
+    try:
+        validate_report_schema(report, contract_path.parent / schema_path)
+    except ReportSchemaError as error:
+        raise ControlPlaneContractError(str(error)) from error
+    return report
 
 
 def _cli_surface(parser: argparse.ArgumentParser) -> dict[str, set[str]]:
