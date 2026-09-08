@@ -21,10 +21,11 @@ MinIO exposes its S3 endpoint on `http://localhost:9000` and its console on
 
 ## Smoke test
 
-Verify credentials and bucket access before writing data:
+Verify credentials, bucket access, and the recovery-oriented versioning invariant before
+writing data:
 
 ```bash
-uv run --env-file .env lakeops doctor --backend s3
+uv run --env-file .env lakeops doctor --backend s3 --require-versioning
 ```
 
 The report must contain `"status": "ready"`. A failed check exits with status code 1,
@@ -54,8 +55,8 @@ docker compose exec minio sh -c \
 ```
 
 The bootstrap command is safe to repeat because bucket creation uses
-`mc mb --ignore-existing`. It also reconciles three development identities and their
-versioned policies from `config/s3`:
+`mc mb --ignore-existing`. It enables versioning on both new and existing buckets and
+reconciles the development identities and their versioned policies from `config/s3`:
 
 | Identity | Allowed | Boundary |
 | --- | --- | --- |
@@ -76,6 +77,14 @@ Add `MINIO_HMS_USER` and `MINIO_HMS_PASSWORD` from `.env.example`, run `minio-in
 then run `minio-access-check`. Recreate Hive Metastore so it receives the dedicated
 identity. Existing bucket and catalog data are unchanged. Roll back by restoring the
 0.33 Compose file and recreating Hive Metastore with the previous bootstrap credentials.
+
+## Upgrade from 1.1.0
+
+Run `minio-init` once to enable versioning and grant the ingestion identity permission to
+read the versioning state. Existing objects remain current objects and are not duplicated.
+Verify the change with `lakeops doctor --backend s3 --require-versioning`. Suspending
+versioning is the rollback, but it reduces recovery options and makes the required check
+fail by design.
 
 ## Stop
 

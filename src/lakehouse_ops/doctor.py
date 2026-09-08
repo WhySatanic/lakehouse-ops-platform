@@ -9,7 +9,11 @@ from typing import Any, Protocol
 
 
 class BucketClient(Protocol):
-    def head_bucket(self, **kwargs: Any) -> dict[str, Any]: ...
+    def get_bucket_location(self, **kwargs: Any) -> dict[str, Any]: ...
+
+
+class VersioningClient(Protocol):
+    def get_bucket_versioning(self, **kwargs: Any) -> dict[str, Any]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +74,7 @@ def check_file_landing(root: Path) -> CheckResult:
 def check_s3_bucket(client: BucketClient, bucket: str) -> CheckResult:
     target = f"s3://{bucket}"
     try:
-        client.head_bucket(Bucket=bucket)
+        client.get_bucket_location(Bucket=bucket)
     except Exception as error:
         return CheckResult(
             name="s3_bucket_access",
@@ -84,4 +88,32 @@ def check_s3_bucket(client: BucketClient, bucket: str) -> CheckResult:
         status="passed",
         target=target,
         message="bucket exists and credentials permit access",
+    )
+
+
+def check_s3_versioning(client: VersioningClient, bucket: str) -> CheckResult:
+    target = f"s3://{bucket}"
+    try:
+        response = client.get_bucket_versioning(Bucket=bucket)
+    except Exception as error:
+        return CheckResult(
+            name="s3_bucket_versioning",
+            status="failed",
+            target=target,
+            message=f"{type(error).__name__}: {error}",
+        )
+
+    status = response.get("Status")
+    if status != "Enabled":
+        return CheckResult(
+            name="s3_bucket_versioning",
+            status="failed",
+            target=target,
+            message=f"bucket versioning is not enabled (status={status or 'unset'})",
+        )
+    return CheckResult(
+        name="s3_bucket_versioning",
+        status="passed",
+        target=target,
+        message="bucket versioning is enabled",
     )
