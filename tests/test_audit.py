@@ -8,7 +8,11 @@ from typing import Any
 
 import pytest
 
-from lakehouse_ops.ingestion.audit import audit_file_landing, audit_s3_landing
+from lakehouse_ops.ingestion.audit import (
+    audit_file_landing,
+    audit_s3_landing,
+    audit_s3_landing_versions,
+)
 from lakehouse_ops.ingestion.landing import FileLandingZone
 from lakehouse_ops.ingestion.models import Location, WeatherPayload
 
@@ -163,3 +167,71 @@ def test_audit_s3_landing_validates_checksum_metadata(
 
     assert report.healthy is False
     assert expected_error in report.items[0].errors
+
+
+class FakeS3VersionAuditClient:
+    def __init__(self, key: str, body: bytes, checksum: str) -> None:
+        self.key = key
+        self.body = body
+        self.checksum = checksum
+        self.list_requests: list[dict[str, Any]] = []
+        self.get_requests: list[dict[str, Any]] = []
+
+    def list_object_versions(self, **kwargs: Any) -> dict[str, Any]:
+        self.list_requests.append(kwargs)
+        if "KeyMarker" not in kwargs:
+            return {
+                "Versions": [
+                    {"Key": self.key, "VersionId": "v2", "IsLatest": True},
+                    {"Key": "landing/ignored.txt", "VersionId": "ignored"},
+                ],
+                "IsTruncated": True,
+                "NextKeyMarker": self.key,
+                "NextVersionIdMarker": "v2",
+            }
+        return {
+            "Versions": [{"Key": self.key, "VersionId": "v1", "IsLatest": False}],
+            "DeleteMarkers": [
+                {"Key": self.key, "VersionId": "deleted", "IsLatest": False}
+            ],
+            "IsTruncated": False,
+        }
+
+    def get_object(self, **kwargs: Any) -> dict[str, Any]:
+        self.get_requests.append(kwargs)
+        metadata = {"sha256": self.checksum}
+        if kwargs["VersionId"] == "v1":
+            metadata = {"sha256": "damaged"}
+        return {"Body": BytesIO(self.body), "Metadata": metadata}
+
+
+def test_audit_s3_landing_versions_reads_history_and_delete_markers(
+    tmp_path: Path, valid_source_payload: dict[str, Any]
+) -> None:
+    path = land_payload(tmp_path, valid_source_payload)
+    document = json.loads(path.read_text(encoding="utf-8"))
+    checksum = document["ingestion"]["object_checksum"]
+    key = f"landing/{path.relative_to(tmp_path).as_posix()}"
+    client = FakeS3VersionAuditClient(key, path.read_bytes(), checksum)
+
+    report = audit_s3_landing_versions(client, bucket="lakehouse", prefix="/landing/")
+
+    assert report.healthy is False
+    assert report.valid == 1
+    assert report.invalid == 1
+    assert report.as_dict()["delete_marker_count"] == 1
+    assert report.delete_markers[0].version_id == "deleted"
+    assert report.items[0].version_id == "v1"
+    assert report.items[1].version_id == "v2"
+    assert client.list_requests[1]["KeyMarker"] == key
+    assert client.list_requests[1]["VersionIdMarker"] == "v2"
+    assert {request["VersionId"] for request in client.get_requests} == {"v1", "v2"}
+
+
+def test_audit_s3_landing_versions_rejects_broken_pagination() -> None:
+    class BrokenClient:
+        def list_object_versions(self, **kwargs: Any) -> dict[str, Any]:
+            return {"IsTruncated": True}
+
+    with pytest.raises(ValueError, match="next key marker"):
+        audit_s3_landing_versions(BrokenClient(), bucket="lakehouse")

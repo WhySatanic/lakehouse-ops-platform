@@ -24,7 +24,11 @@ from lakehouse_ops.doctor import (
 from lakehouse_ops.iceberg.metadata import IcebergMetadataCollector
 from lakehouse_ops.iceberg.planner import IcebergMaintenancePlanner, MaintenancePolicy
 from lakehouse_ops.image_lock import ImageLockError, verify_image_lock
-from lakehouse_ops.ingestion.audit import audit_file_landing, audit_s3_landing
+from lakehouse_ops.ingestion.audit import (
+    audit_file_landing,
+    audit_s3_landing,
+    audit_s3_landing_versions,
+)
 from lakehouse_ops.ingestion.batch import (
     LocationManifestError,
     load_location_manifest,
@@ -95,6 +99,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     audit = subparsers.add_parser("audit-landing", help="verify landed object integrity")
     _add_landing_arguments(audit)
+    audit.add_argument(
+        "--include-versions",
+        action="store_true",
+        help="audit every S3 object version and inventory delete markers",
+    )
 
     access_policy = subparsers.add_parser(
         "render-trino-access-policy",
@@ -326,14 +335,17 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if report.healthy else 1
     if args.command == "audit-landing":
         if args.backend == "file":
+            if args.include_versions:
+                parser.error("--include-versions requires --backend=s3")
             report = audit_file_landing(args.output)
         else:
             if not args.s3_bucket:
                 parser.error("--s3-bucket is required when --backend=s3")
-            report = audit_s3_landing(
-                _create_s3_client(args),
-                bucket=args.s3_bucket,
-                prefix=args.s3_prefix,
+            audit_function = (
+                audit_s3_landing_versions if args.include_versions else audit_s3_landing
+            )
+            report = audit_function(
+                _create_s3_client(args), bucket=args.s3_bucket, prefix=args.s3_prefix
             )
         print(json.dumps(report.as_dict(), sort_keys=True))
         return 0 if report.healthy else 1
