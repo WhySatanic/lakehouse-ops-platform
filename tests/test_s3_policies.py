@@ -20,6 +20,8 @@ def test_ingest_policy_is_limited_to_landing() -> None:
     policy = _policy("ingest")
     assert "s3:PutObject" in _values(policy, "Action")
     assert "s3:GetBucketVersioning" in _values(policy, "Action")
+    assert "s3:ListBucketVersions" in _values(policy, "Action")
+    assert "s3:GetObjectVersion" in _values(policy, "Action")
     assert "arn:aws:s3:::__BUCKET__/landing/*" in _values(policy, "Resource")
     assert all("warehouse" not in value for value in _values(policy, "Resource"))
 

@@ -131,6 +131,8 @@ centralized authorization, observability, and recovery.
   metadata checksum validation.
 - [x] Enable MinIO bucket versioning idempotently and fail readiness checks when the
   recovery invariant is absent.
+- [x] Audit retained S3 landing object versions and inventory delete markers through
+  the scoped ingestion identity.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.

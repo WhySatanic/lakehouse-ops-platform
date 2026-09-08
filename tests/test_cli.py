@@ -62,6 +62,17 @@ class FakeS3Client:
             "IsTruncated": False,
         }
 
+    def list_object_versions(self, **kwargs: Any) -> dict[str, Any]:
+        prefix = kwargs.get("Prefix", "")
+        return {
+            "Versions": [
+                {"Key": key, "VersionId": "v1", "IsLatest": True}
+                for bucket, key in sorted(self.objects)
+                if bucket == kwargs["Bucket"] and key.startswith(prefix)
+            ],
+            "IsTruncated": False,
+        }
+
     def get_object(self, **kwargs: Any) -> dict[str, Any]:
         object_id = (kwargs["Bucket"], kwargs["Key"])
         return {
@@ -373,6 +384,55 @@ def test_audit_landing_command_checks_s3_objects(
     assert exit_code == 0
     assert report["root"] == "s3://lakehouse/landing"
     assert report["valid"] == 1
+
+
+def test_audit_landing_command_checks_s3_version_history(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    valid_source_payload: dict[str, Any],
+) -> None:
+    FakeOpenMeteoClient.payload = valid_source_payload
+    s3_client = FakeS3Client()
+    monkeypatch.setattr(cli, "OpenMeteoClient", FakeOpenMeteoClient)
+    monkeypatch.setattr(cli.boto3, "client", lambda *_, **__: s3_client)
+    landing_args = [
+        "--backend",
+        "s3",
+        "--s3-bucket",
+        "lakehouse",
+        "--s3-prefix",
+        "landing",
+    ]
+    cli.main(
+        [
+            "ingest-weather",
+            "--name",
+            "Moscow",
+            "--latitude",
+            "55.7558",
+            "--longitude",
+            "37.6173",
+            "--forecast-days",
+            "2",
+            *landing_args,
+        ]
+    )
+    capsys.readouterr()
+
+    exit_code = cli.main(["audit-landing", *landing_args, "--include-versions"])
+
+    report = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert report["status"] == "healthy"
+    assert report["total_versions"] == 1
+    assert report["items"][0]["version_id"] == "v1"
+
+
+def test_audit_landing_command_rejects_versions_for_file_backend() -> None:
+    with pytest.raises(SystemExit) as error:
+        cli.main(["audit-landing", "--include-versions"])
+
+    assert error.value.code == 2
 
 
 def test_render_trino_access_policy_command_detects_drift(

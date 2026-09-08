@@ -289,6 +289,14 @@ jobs:
         run: docker compose --profile catalog run --rm metastore-schema-check
       - name: Land deterministic fixture
         run: docker compose --profile compute run --rm landing-fixture
+      - name: Audit landing object version history
+        env:
+          AWS_ACCESS_KEY_ID: lakeops-ingest
+          AWS_SECRET_ACCESS_KEY: ingest-development-only
+        run: >-
+          uv run lakeops audit-landing --backend s3 --s3-bucket lakehouse
+          --s3-prefix landing
+          --s3-endpoint-url http://localhost:9000 --include-versions
       - name: Sync bronze input
         run: docker compose --profile compute run --rm bronze-input-sync
       - name: Write Iceberg bronze table

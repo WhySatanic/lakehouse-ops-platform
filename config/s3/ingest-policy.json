@@ -8,13 +8,18 @@
     },
     {
       "Effect": "Allow",
-      "Action": ["s3:ListBucket"],
+      "Action": ["s3:ListBucket", "s3:ListBucketVersions"],
       "Resource": ["arn:aws:s3:::__BUCKET__"],
       "Condition": {"StringLike": {"s3:prefix": ["landing", "landing/*"]}}
     },
     {
       "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
       "Resource": ["arn:aws:s3:::__BUCKET__/landing/*"]
     }
   ]

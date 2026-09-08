@@ -45,6 +45,18 @@ uv run --env-file .env lakeops ingest-weather \
 Run the same command twice. The first response must contain `"created": true`; the
 second must return the same checksum with `"created": false`.
 
+Audit every retained JSON version before a recovery and inventory delete markers:
+
+```bash
+uv run --env-file .env lakeops audit-landing --backend s3 --include-versions
+```
+
+The command reads version history with the scoped ingestion identity. It fails when the
+history is empty or any retained JSON version has an invalid payload, path, or metadata
+checksum. Delete markers are reported separately because they are recovery evidence,
+not payload corruption. Run the regular `audit-landing --backend s3` command as well
+when the current visible landing state must be verified.
+
 ## Diagnose
 
 ```bash
@@ -85,6 +97,13 @@ read the versioning state. Existing objects remain current objects and are not d
 Verify the change with `lakeops doctor --backend s3 --require-versioning`. Suspending
 versioning is the rollback, but it reduces recovery options and makes the required check
 fail by design.
+
+## Upgrade from 1.2.0
+
+Version-history audit requires `s3:ListBucketVersions` and `s3:GetObjectVersion` on the
+existing landing boundary. Rerun `minio-init` to apply those scoped permissions. No
+object migration is required. Roll back by restoring the previous ingestion policy; the
+current-object audit and ingestion path remain available, but history inspection stops.
 
 ## Stop
 

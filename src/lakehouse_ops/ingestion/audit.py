@@ -47,8 +47,57 @@ class LandingAuditReport:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class S3VersionAuditItem:
+    path: str
+    version_id: str
+    is_latest: bool
+    status: str
+    errors: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class S3DeleteMarker:
+    path: str
+    version_id: str
+    is_latest: bool
+
+
+@dataclass(frozen=True, slots=True)
+class S3VersionAuditReport:
+    root: str
+    items: tuple[S3VersionAuditItem, ...]
+    delete_markers: tuple[S3DeleteMarker, ...]
+
+    @property
+    def valid(self) -> int:
+        return sum(item.status == "valid" for item in self.items)
+
+    @property
+    def invalid(self) -> int:
+        return sum(item.status == "invalid" for item in self.items)
+
+    @property
+    def healthy(self) -> bool:
+        return bool(self.items) and self.invalid == 0
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "status": "healthy" if self.healthy else "failed",
+            "root": self.root,
+            "total_versions": len(self.items),
+            "valid": self.valid,
+            "invalid": self.invalid,
+            "delete_marker_count": len(self.delete_markers),
+            "items": [asdict(item) for item in self.items],
+            "delete_markers": [asdict(marker) for marker in self.delete_markers],
+        }
+
+
 class S3AuditClient(Protocol):
     def list_objects_v2(self, **kwargs: Any) -> dict[str, Any]: ...
+
+    def list_object_versions(self, **kwargs: Any) -> dict[str, Any]: ...
 
     def get_object(self, **kwargs: Any) -> dict[str, Any]: ...
 
@@ -85,6 +134,39 @@ def audit_s3_landing(
     return LandingAuditReport(root, items)
 
 
+def audit_s3_landing_versions(
+    client: S3AuditClient, *, bucket: str, prefix: str = ""
+) -> S3VersionAuditReport:
+    if not bucket:
+        raise ValueError("bucket must not be empty")
+
+    normalized_prefix = prefix.strip("/")
+    versions, markers = _list_s3_json_versions(
+        client, bucket=bucket, prefix=normalized_prefix
+    )
+    items = tuple(
+        _audit_s3_version(
+            client,
+            bucket=bucket,
+            key=version["key"],
+            version_id=version["version_id"],
+            is_latest=version["is_latest"],
+            relative_key=_relative_s3_key(version["key"], normalized_prefix),
+        )
+        for version in versions
+    )
+    delete_markers = tuple(
+        S3DeleteMarker(
+            path=_relative_s3_key(marker["key"], normalized_prefix),
+            version_id=marker["version_id"],
+            is_latest=marker["is_latest"],
+        )
+        for marker in markers
+    )
+    root = f"s3://{bucket}/{normalized_prefix}" if normalized_prefix else f"s3://{bucket}"
+    return S3VersionAuditReport(root, items, delete_markers)
+
+
 def _audit_object(root: Path, path: Path) -> AuditItem:
     relative = path.relative_to(root)
 
@@ -119,6 +201,41 @@ def _audit_s3_object(
         path=item.path,
         status="invalid",
         errors=(*item.errors, "object metadata checksum is missing"),
+    )
+
+
+def _audit_s3_version(
+    client: S3AuditClient,
+    *,
+    bucket: str,
+    key: str,
+    version_id: str,
+    is_latest: bool,
+    relative_key: str,
+) -> S3VersionAuditItem:
+    relative = Path(relative_key)
+    try:
+        response = client.get_object(Bucket=bucket, Key=key, VersionId=version_id)
+        body = response["Body"].read()
+    except (ClientError, KeyError, OSError, UnicodeError) as error:
+        errors = _validate_layout(relative)
+        errors.append(f"cannot read object version: {error}")
+        return S3VersionAuditItem(
+            relative_key, version_id, is_latest, "invalid", tuple(errors)
+        )
+
+    metadata = response.get("Metadata")
+    metadata_checksum = metadata.get("sha256") if isinstance(metadata, dict) else None
+    item = _audit_content(relative, body, metadata_checksum=metadata_checksum)
+    errors = item.errors
+    if metadata_checksum is None:
+        errors = (*errors, "object metadata checksum is missing")
+    return S3VersionAuditItem(
+        path=item.path,
+        version_id=version_id,
+        is_latest=is_latest,
+        status="valid" if not errors else "invalid",
+        errors=errors,
     )
 
 
@@ -241,6 +358,49 @@ def _list_s3_json_keys(
         if not isinstance(token, str) or not token:
             raise ValueError("truncated S3 listing has no continuation token")
         request["ContinuationToken"] = token
+
+
+def _list_s3_json_versions(
+    client: S3AuditClient, *, bucket: str, prefix: str
+) -> tuple[tuple[dict[str, Any], ...], tuple[dict[str, Any], ...]]:
+    request: dict[str, Any] = {"Bucket": bucket}
+    if prefix:
+        request["Prefix"] = f"{prefix}/"
+
+    versions: list[dict[str, Any]] = []
+    markers: list[dict[str, Any]] = []
+    while True:
+        response = client.list_object_versions(**request)
+        versions.extend(_normalize_s3_version_entries(response.get("Versions")))
+        markers.extend(_normalize_s3_version_entries(response.get("DeleteMarkers")))
+        if not response.get("IsTruncated"):
+            return (
+                tuple(sorted(versions, key=lambda item: (item["key"], item["version_id"]))),
+                tuple(sorted(markers, key=lambda item: (item["key"], item["version_id"]))),
+            )
+        key_marker = response.get("NextKeyMarker")
+        if not isinstance(key_marker, str) or not key_marker:
+            raise ValueError("truncated S3 version listing has no next key marker")
+        request["KeyMarker"] = key_marker
+        version_marker = response.get("NextVersionIdMarker")
+        if isinstance(version_marker, str) and version_marker:
+            request["VersionIdMarker"] = version_marker
+        else:
+            request.pop("VersionIdMarker", None)
+
+
+def _normalize_s3_version_entries(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [
+        {"key": key, "version_id": version_id, "is_latest": item.get("IsLatest") is True}
+        for item in value
+        if isinstance(item, dict)
+        and isinstance((key := item.get("Key")), str)
+        and key.endswith(".json")
+        and isinstance((version_id := item.get("VersionId")), str)
+        and version_id
+    ]
 
 
 def _relative_s3_key(key: str, prefix: str) -> str:

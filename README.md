@@ -126,7 +126,11 @@ filename partitions agree with the payload:
 
 ```bash
 uv run lakeops audit-landing --output data/landing
+uv run --env-file .env lakeops audit-landing --backend s3 --include-versions
 ```
+
+The S3 history mode validates every retained JSON object version through the scoped
+ingestion identity and inventories delete markers for recovery decisions.
 
 Use the same audit against MinIO or S3 with `--backend s3`, `--s3-bucket`, and the
 landing prefix. It also verifies the checksum stored in S3 object metadata.
