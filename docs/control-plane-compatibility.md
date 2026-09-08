@@ -39,8 +39,9 @@ must not remove or rename fields, change their types or meaning, or make previou
 valid values invalid. Such changes require a new schema major and a product major
 release. Existing producer tests remain the executable field and type specification;
 the compatibility gate prevents an unnoticed major-version escape. Producers can now
-also declare a Draft 2020-12 JSON Schema through `schema_path`; the verifier report is
-the first output validated this way, establishing the migration path for other reports.
+also declare a Draft 2020-12 JSON Schema through `schema_path`. The control-plane and
+image-lock verifiers validate their emitted reports this way, establishing the migration
+path for other reports.
 
 The contract digest in the verifier output identifies the exact baseline used by CI.
 Release evidence should record this digest so a report can be tied to the supported
@@ -48,7 +49,6 @@ surface.
 
 ## Upgrade notes
 
-Version `1.4.0` adds a standalone schema for the verifier report and validates every
-emitted verifier result before returning success. It preserves contract `1.0.0` and
-does not change existing fields. Automation should retain the validated report with
-other release evidence.
+Version `1.5.0` adds runtime schema validation to the image-lock verifier. It preserves
+contract `1.0.0` and does not change existing report fields. Automation may override the
+schema path explicitly and should retain the validated report with release evidence.

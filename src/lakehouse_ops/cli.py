@@ -235,6 +235,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--lock", type=Path, default=Path("config/images.lock.json")
     )
     image_lock.add_argument("--compose", type=Path, default=Path("compose.yaml"))
+    image_lock.add_argument(
+        "--schema",
+        type=Path,
+        default=Path("config/control-plane/schemas/image-lock-verification.schema.json"),
+    )
     image_lock.add_argument("--dockerfile", action="append", type=Path)
     image_lock.add_argument(
         "--upgrade-plan",
@@ -478,6 +483,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.compose,
                 dockerfiles,
                 args.upgrade_plan,
+                args.schema,
             )
         except ImageLockError as error:
             parser.error(str(error))

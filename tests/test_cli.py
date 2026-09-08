@@ -938,13 +938,18 @@ def test_verify_image_lock_command(
     observed: dict[str, object] = {}
 
     def fake_verify(
-        lock: Path, compose: Path, dockerfiles: list[Path], upgrade_plan: Path
+        lock: Path,
+        compose: Path,
+        dockerfiles: list[Path],
+        upgrade_plan: Path,
+        schema: Path,
     ) -> dict[str, str]:
         observed.update(
             lock=lock,
             compose=compose,
             dockerfiles=dockerfiles,
             upgrade_plan=upgrade_plan,
+            schema=schema,
         )
         return report
 
@@ -953,6 +958,7 @@ def test_verify_image_lock_command(
     compose = tmp_path / "compose.yaml"
     dockerfile = tmp_path / "Dockerfile"
     upgrade = tmp_path / "upgrade.json"
+    schema = tmp_path / "report.schema.json"
 
     exit_code = cli.main(
         [
@@ -965,6 +971,8 @@ def test_verify_image_lock_command(
             str(dockerfile),
             "--upgrade-plan",
             str(upgrade),
+            "--schema",
+            str(schema),
         ]
     )
 
@@ -975,6 +983,7 @@ def test_verify_image_lock_command(
         "compose": compose,
         "dockerfiles": [dockerfile],
         "upgrade_plan": upgrade,
+        "schema": schema,
     }
 
 

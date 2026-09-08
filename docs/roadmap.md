@@ -137,6 +137,8 @@ centralized authorization, observability, and recovery.
   across every public control-plane command.
 - [x] Introduce Draft 2020-12 JSON Schema validation for the control-plane verifier
   report as the migration path for all public reports.
+- [x] Validate the image-lock supply-chain report against its versioned JSON Schema at
+  runtime and expose an auditable schema override.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.

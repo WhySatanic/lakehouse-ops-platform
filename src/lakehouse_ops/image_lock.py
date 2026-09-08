@@ -7,12 +7,14 @@ from pathlib import Path
 from typing import Any
 
 from lakehouse_ops.digests import normalized_text_digest
+from lakehouse_ops.report_schema import ReportSchemaError, validate_report_schema
 
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 COMPOSE_IMAGE = re.compile(r"^\s*image:\s*(?P<reference>\S+)\s*$")
 VARIABLE_DEFAULT = re.compile(r"^\$\{[^:}]+:-(?P<default>[^}]+)}$")
 FROM_IMAGE = re.compile(r"^\s*FROM\s+(?:--platform=\S+\s+)?(?P<reference>\S+)", re.I)
 LOCAL_PREFIX = "lakehouse-ops/"
+DEFAULT_REPORT_SCHEMA = Path("config/control-plane/schemas/image-lock-verification.schema.json")
 
 
 class ImageLockError(ValueError):
@@ -24,6 +26,7 @@ def verify_image_lock(
     compose_path: Path,
     dockerfiles: list[Path],
     upgrade_plan_path: Path,
+    schema_path: Path = DEFAULT_REPORT_SCHEMA,
 ) -> dict[str, Any]:
     locked = _load_lock(lock_path)
     uses = [
@@ -47,7 +50,7 @@ def verify_image_lock(
         raise ImageLockError(f"lock contains unused images: {', '.join(stale)}")
 
     source_counts = Counter(use["kind"] for use in uses)
-    return {
+    report = {
         "schema_version": "1.0",
         "status": "ready",
         "images": len(used_tags),
@@ -55,6 +58,11 @@ def verify_image_lock(
         "sources": dict(sorted(source_counts.items())),
         "lock_sha256": normalized_text_digest(lock_path),
     }
+    try:
+        validate_report_schema(report, schema_path)
+    except ReportSchemaError as error:
+        raise ImageLockError(str(error)) from error
+    return report
 
 
 def _load_lock(path: Path) -> dict[str, str]:

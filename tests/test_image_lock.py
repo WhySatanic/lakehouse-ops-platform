@@ -57,6 +57,18 @@ def test_verify_image_lock_covers_external_sources(tmp_path: Path) -> None:
     assert len(report["lock_sha256"]) == 64
 
 
+def test_verify_image_lock_rejects_report_schema_drift(tmp_path: Path) -> None:
+    paths = write_fixture(tmp_path)
+    source = Path("config/control-plane/schemas/image-lock-verification.schema.json")
+    schema = json.loads(source.read_text(encoding="utf-8"))
+    schema["properties"]["status"] = {"const": "broken"}
+    candidate = tmp_path / "image-lock.schema.json"
+    candidate.write_text(json.dumps(schema), encoding="utf-8")
+
+    with pytest.raises(ImageLockError, match="report schema validation failed"):
+        verify_image_lock(*paths, schema_path=candidate)
+
+
 def test_verify_image_lock_supports_compose_variable_default(tmp_path: Path) -> None:
     lock, compose, dockerfiles, upgrade = write_fixture(tmp_path)
     compose.write_text(
