@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from collections.abc import Callable
 from pathlib import Path
 
@@ -21,13 +22,14 @@ def test_repository_contract_matches_public_cli() -> None:
     assert report["status"] == "compatible"
     assert report["commands_verified"] == 17
     assert report["option_semantics_verified"] == 26
-    assert report["outputs_verified"] == 10
+    assert report["outputs_verified"] == 11
     assert len(report["contract_sha256"]) == 64
 
 
 def test_contract_digest_is_stable_across_checkout_line_endings(tmp_path: Path) -> None:
     content = CONTRACT.read_text(encoding="utf-8").replace("\r\n", "\n")
     candidate = tmp_path / "contract.json"
+    _copy_schemas(tmp_path)
     candidate.write_bytes(content.encode())
     lf_report = verify_control_plane_contract(candidate, build_parser())
     candidate.write_bytes(content.replace("\n", "\r\n").encode())
@@ -108,6 +110,18 @@ def test_unknown_output_producer_is_rejected(tmp_path: Path) -> None:
         verify_control_plane_contract(_write_contract(tmp_path, contract), build_parser())
 
 
+def test_report_schema_drift_is_rejected(tmp_path: Path) -> None:
+    contract = _load_contract()
+    path = _write_contract(tmp_path, contract)
+    schema_path = tmp_path / "schemas" / "control-plane-contract-verification.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema["properties"]["status"] = {"const": "broken"}
+    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+
+    with pytest.raises(ControlPlaneContractError, match="report schema validation failed"):
+        verify_control_plane_contract(path, build_parser())
+
+
 @pytest.mark.parametrize(
     ("mutation", "message"),
     [
@@ -148,6 +162,13 @@ def _load_contract() -> dict[str, object]:
 
 
 def _write_contract(tmp_path: Path, contract: dict[str, object]) -> Path:
+    _copy_schemas(tmp_path)
     path = tmp_path / "contract.json"
     path.write_text(json.dumps(contract), encoding="utf-8")
     return path
+
+
+def _copy_schemas(tmp_path: Path) -> None:
+    target = tmp_path / "schemas"
+    if not target.exists():
+        shutil.copytree(CONTRACT.parent / "schemas", target)

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/WhySatanic/lakehouse-ops-platform/schemas/control-plane-contract-verification-1.0.json",
+  "title": "Control-plane contract verification report",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "contract_version",
+    "contract_sha256",
+    "commands_verified",
+    "option_semantics_verified",
+    "outputs_verified"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "status": {"const": "compatible"},
+    "contract_version": {"const": "1.0.0"},
+    "contract_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "commands_verified": {"type": "integer", "minimum": 1},
+    "option_semantics_verified": {"type": "integer", "minimum": 1},
+    "outputs_verified": {"type": "integer", "minimum": 1}
+  },
+  "additionalProperties": false
+}

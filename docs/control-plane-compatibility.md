@@ -38,7 +38,9 @@ fields and enum values. Consumers must ignore fields they do not understand. Pro
 must not remove or rename fields, change their types or meaning, or make previously
 valid values invalid. Such changes require a new schema major and a product major
 release. Existing producer tests remain the executable field and type specification;
-the compatibility gate prevents an unnoticed major-version escape.
+the compatibility gate prevents an unnoticed major-version escape. Producers can now
+also declare a Draft 2020-12 JSON Schema through `schema_path`; the verifier report is
+the first output validated this way, establishing the migration path for other reports.
 
 The contract digest in the verifier output identifies the exact baseline used by CI.
 Release evidence should record this digest so a report can be tied to the supported
@@ -46,7 +48,7 @@ surface.
 
 ## Upgrade notes
 
-Version `1.3.1` extends the existing contract `1.0.0` baseline with critical option
-semantics and freezes the previously additive `--require-versioning` and
-`--include-versions` options. It does not change CLI behavior. Automation should run
-the verifier before deployment and retain its JSON output with other release evidence.
+Version `1.4.0` adds a standalone schema for the verifier report and validates every
+emitted verifier result before returning success. It preserves contract `1.0.0` and
+does not change existing fields. Automation should retain the validated report with
+other release evidence.

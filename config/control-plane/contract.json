@@ -92,6 +92,7 @@
     {"name": "ranger_policy_sync", "producer": "sync-ranger-policy", "schema_version": "1.0"},
     {"name": "release_readiness_attestation", "producer": "verify-release-readiness", "schema_version": "1.0"},
     {"name": "release_candidate_bundle_report", "producer": "build-release-candidate", "schema_version": "1.0"},
-    {"name": "image_lock_verification", "producer": "verify-image-lock", "schema_version": "1.0"}
+    {"name": "image_lock_verification", "producer": "verify-image-lock", "schema_version": "1.0"},
+    {"name": "control_plane_contract_verification", "producer": "verify-control-plane-contract", "schema_version": "1.0", "schema_path": "schemas/control-plane-contract-verification.schema.json"}
   ]
 }
