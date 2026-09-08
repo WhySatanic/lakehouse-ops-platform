@@ -117,7 +117,7 @@ JSON failure report when the directory is not writable or the S3 bucket is unava
 
 ```bash
 uv run lakeops doctor --output data/landing
-uv run --env-file .env lakeops doctor --backend s3
+uv run --env-file .env lakeops doctor --backend s3 --require-versioning
 ```
 
 Audit filesystem landing objects before replay or recovery. The audit validates the

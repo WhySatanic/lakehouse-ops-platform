@@ -3,7 +3,7 @@
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": ["s3:GetBucketLocation"],
+      "Action": ["s3:GetBucketLocation", "s3:GetBucketVersioning"],
       "Resource": ["arn:aws:s3:::__BUCKET__"]
     },
     {

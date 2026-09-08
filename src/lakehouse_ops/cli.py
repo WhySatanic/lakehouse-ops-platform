@@ -15,7 +15,12 @@ from lakehouse_ops.control_plane_contract import (
     ControlPlaneContractError,
     verify_control_plane_contract,
 )
-from lakehouse_ops.doctor import DoctorReport, check_file_landing, check_s3_bucket
+from lakehouse_ops.doctor import (
+    DoctorReport,
+    check_file_landing,
+    check_s3_bucket,
+    check_s3_versioning,
+)
 from lakehouse_ops.iceberg.metadata import IcebergMetadataCollector
 from lakehouse_ops.iceberg.planner import IcebergMaintenancePlanner, MaintenancePolicy
 from lakehouse_ops.image_lock import ImageLockError, verify_image_lock
@@ -82,6 +87,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     doctor = subparsers.add_parser("doctor", help="check landing backend readiness")
     _add_landing_arguments(doctor)
+    doctor.add_argument(
+        "--require-versioning",
+        action="store_true",
+        help="fail unless S3 bucket versioning is enabled",
+    )
 
     audit = subparsers.add_parser("audit-landing", help="verify landed object integrity")
     _add_landing_arguments(audit)
@@ -301,12 +311,17 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if report.failed else 0
     if args.command == "doctor":
         if args.backend == "file":
-            check = check_file_landing(args.output)
+            if args.require_versioning:
+                parser.error("--require-versioning requires --backend=s3")
+            checks = (check_file_landing(args.output),)
         else:
             if not args.s3_bucket:
                 parser.error("--s3-bucket is required when --backend=s3")
-            check = check_s3_bucket(_create_s3_client(args), args.s3_bucket)
-        report = DoctorReport((check,))
+            client = _create_s3_client(args)
+            checks = (check_s3_bucket(client, args.s3_bucket),)
+            if args.require_versioning:
+                checks = (*checks, check_s3_versioning(client, args.s3_bucket))
+        report = DoctorReport(checks)
         print(json.dumps(report.as_dict(), sort_keys=True))
         return 0 if report.healthy else 1
     if args.command == "audit-landing":

@@ -43,9 +43,13 @@ class FakeS3Client:
         self.metadata[object_id] = kwargs["Metadata"]
         return {"ETag": '"test"'}
 
-    def head_bucket(self, **kwargs: Any) -> dict[str, Any]:
+    def get_bucket_location(self, **kwargs: Any) -> dict[str, Any]:
         assert kwargs["Bucket"] == "lakehouse"
         return {}
+
+    def get_bucket_versioning(self, **kwargs: Any) -> dict[str, Any]:
+        assert kwargs["Bucket"] == "lakehouse"
+        return {"Status": "Enabled"}
 
     def list_objects_v2(self, **kwargs: Any) -> dict[str, Any]:
         prefix = kwargs.get("Prefix", "")
@@ -251,6 +255,40 @@ def test_doctor_checks_s3_bucket(
     assert exit_code == 0
     assert report["status"] == "ready"
     assert report["checks"][0]["target"] == "s3://lakehouse"
+
+
+def test_doctor_requires_s3_bucket_versioning(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(cli.boto3, "client", lambda *_, **__: FakeS3Client())
+
+    exit_code = cli.main(
+        [
+            "doctor",
+            "--backend",
+            "s3",
+            "--s3-bucket",
+            "lakehouse",
+            "--require-versioning",
+        ]
+    )
+
+    report = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert [check["name"] for check in report["checks"]] == [
+        "s3_bucket_access",
+        "s3_bucket_versioning",
+    ]
+
+
+def test_doctor_rejects_versioning_check_for_file_backend(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as error:
+        cli.main(["doctor", "--require-versioning"])
+
+    assert error.value.code == 2
+    assert "requires --backend=s3" in capsys.readouterr().err
 
 
 def test_audit_landing_command_reports_integrity(

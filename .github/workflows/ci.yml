@@ -276,6 +276,13 @@ jobs:
           minio metastore-db hive-metastore
       - name: Initialize storage
         run: docker compose run --rm minio-init
+      - name: Verify versioned landing readiness
+        env:
+          AWS_ACCESS_KEY_ID: lakeops-ingest
+          AWS_SECRET_ACCESS_KEY: ingest-development-only
+        run: >-
+          uv run lakeops doctor --backend s3 --s3-bucket lakehouse
+          --s3-endpoint-url http://localhost:9000 --require-versioning
       - name: Verify MinIO service-account policy boundaries
         run: docker compose run --rm minio-access-check
       - name: Verify metastore schema

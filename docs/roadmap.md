@@ -129,6 +129,8 @@ centralized authorization, observability, and recovery.
   digest checks for cross-profile readiness and release-candidate evidence.
 - [x] Audit paginated S3-compatible landing prefixes with payload, path, and object
   metadata checksum validation.
+- [x] Enable MinIO bucket versioning idempotently and fail readiness checks when the
+  recovery invariant is absent.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.
