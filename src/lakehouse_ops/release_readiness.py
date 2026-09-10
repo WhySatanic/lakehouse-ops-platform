@@ -10,6 +10,7 @@ from typing import Any
 from lakehouse_ops.digests import normalized_text_digest
 from lakehouse_ops.metadata_db_recovery import validate_metadata_db_recovery_report
 from lakehouse_ops.metastore_recovery import validate_metastore_recovery_report
+from lakehouse_ops.report_schema import ReportSchemaError, validate_report_schema
 from lakehouse_ops.trino_worker_recovery import validate_trino_worker_recovery_report
 
 
@@ -43,12 +44,17 @@ EXPECTED_AUTHORIZATION_OUTCOMES = {
     "data_engineer_cannot_create_schema": "denied",
 }
 
+DEFAULT_REPORT_SCHEMA = Path(
+    "config/control-plane/schemas/release-readiness-attestation.schema.json"
+)
+
 
 def verify_release_readiness(
     contract_path: Path,
     evidence_root: Path,
     *,
     source_revision: str,
+    schema_path: Path = DEFAULT_REPORT_SCHEMA,
     clock: Callable[[], datetime] | None = None,
 ) -> dict[str, Any]:
     contract = _load_object(contract_path, "readiness contract")
@@ -105,7 +111,7 @@ def verify_release_readiness(
         raise ReleaseReadinessError(f"core row-count invariant failed: {row_counts}")
 
     now = clock or (lambda: datetime.now(UTC))
-    return {
+    report = {
         "schema_version": "1.0",
         "status": "ready",
         "target_release": target_release,
@@ -120,6 +126,11 @@ def verify_release_readiness(
             "row_count_consistent_across_core_and_recovery": True,
         },
     }
+    try:
+        validate_report_schema(report, schema_path)
+    except ReportSchemaError as error:
+        raise ReleaseReadinessError(str(error)) from error
+    return report
 
 
 def write_attestation(report: dict[str, Any], path: Path) -> None:

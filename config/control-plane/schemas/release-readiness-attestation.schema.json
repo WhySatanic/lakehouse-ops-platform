@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/WhySatanic/lakehouse-ops-platform/schemas/release-readiness-attestation-1.0.json",
+  "title": "Lakehouse release readiness attestation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "target_release",
+    "source_revision",
+    "generated_at",
+    "contract_sha256",
+    "evidence",
+    "invariants"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "status": {"const": "ready"},
+    "target_release": {"const": "1.0.0"},
+    "source_revision": {"type": "string", "minLength": 1},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "contract_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "evidence": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "path", "sha256", "validator"],
+        "properties": {
+          "key": {
+            "enum": [
+              "core_metadata",
+              "file_authorization",
+              "hive_metastore_recovery",
+              "metadata_db_recovery",
+              "trino_worker_recovery",
+              "platform_slos",
+              "ranger_authorization",
+              "clickhouse_serving"
+            ]
+          },
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "validator": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "invariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "core_snapshot_id",
+        "core_row_count",
+        "snapshot_consistent_across_core_and_recovery",
+        "row_count_consistent_across_core_and_recovery"
+      ],
+      "properties": {
+        "core_snapshot_id": {"type": "string", "pattern": "^[0-9]+$"},
+        "core_row_count": {"const": 2},
+        "snapshot_consistent_across_core_and_recovery": {"const": true},
+        "row_count_consistent_across_core_and_recovery": {"const": true}
+      }
+    }
+  }
+}

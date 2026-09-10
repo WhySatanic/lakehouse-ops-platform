@@ -21,7 +21,7 @@ def test_repository_contract_matches_public_cli() -> None:
 
     assert report["status"] == "compatible"
     assert report["commands_verified"] == 17
-    assert report["option_semantics_verified"] == 27
+    assert report["option_semantics_verified"] == 28
     assert report["outputs_verified"] == 11
     assert len(report["contract_sha256"]) == 64
 

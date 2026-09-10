@@ -868,12 +868,17 @@ def test_verify_release_readiness_command_writes_attestation(
     observed: dict[str, object] = {}
 
     def fake_verify(
-        contract_path: Path, evidence_root: Path, *, source_revision: str
+        contract_path: Path,
+        evidence_root: Path,
+        *,
+        source_revision: str,
+        schema_path: Path,
     ) -> dict[str, str]:
         observed.update(
             contract=contract_path,
             evidence_root=evidence_root,
             source_revision=source_revision,
+            schema_path=schema_path,
         )
         return report
 
@@ -900,6 +905,9 @@ def test_verify_release_readiness_command_writes_attestation(
         "contract": contract,
         "evidence_root": evidence,
         "source_revision": "abc123",
+        "schema_path": Path(
+            "config/control-plane/schemas/release-readiness-attestation.schema.json"
+        ),
     }
 
 

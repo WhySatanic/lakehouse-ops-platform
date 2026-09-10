@@ -142,6 +142,25 @@ def test_verify_release_readiness_attests_cross_profile_invariants(tmp_path: Pat
     assert json.loads(output.read_text(encoding="utf-8")) == report
 
 
+def test_verify_release_readiness_rejects_report_schema_drift(tmp_path: Path) -> None:
+    contract, root = write_bundle(tmp_path, evidence_reports())
+    source = Path(
+        "config/control-plane/schemas/release-readiness-attestation.schema.json"
+    )
+    schema = json.loads(source.read_text(encoding="utf-8"))
+    schema["properties"]["status"] = {"const": "blocked"}
+    candidate = tmp_path / "release-readiness.schema.json"
+    candidate.write_text(json.dumps(schema), encoding="utf-8")
+
+    with pytest.raises(ReleaseReadinessError, match="report schema validation failed"):
+        verify_release_readiness(
+            contract,
+            root,
+            source_revision="abc123",
+            schema_path=candidate,
+        )
+
+
 def test_contract_digest_is_stable_across_checkout_line_endings(tmp_path: Path) -> None:
     contract, root = write_bundle(tmp_path, evidence_reports())
     content = json.loads(contract.read_text(encoding="utf-8"))

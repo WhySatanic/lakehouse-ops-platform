@@ -219,6 +219,13 @@ def build_parser() -> argparse.ArgumentParser:
     readiness.add_argument("--contract", required=True, type=Path)
     readiness.add_argument("--evidence-root", required=True, type=Path)
     readiness.add_argument("--source-revision", required=True)
+    readiness.add_argument(
+        "--schema",
+        type=Path,
+        default=Path(
+            "config/control-plane/schemas/release-readiness-attestation.schema.json"
+        ),
+    )
     readiness.add_argument("--output", required=True, type=Path)
 
     compatibility = subparsers.add_parser(
@@ -459,6 +466,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.contract,
                 args.evidence_root,
                 source_revision=args.source_revision,
+                schema_path=args.schema,
             )
             write_attestation(report, args.output)
         except ReleaseReadinessError as error:
