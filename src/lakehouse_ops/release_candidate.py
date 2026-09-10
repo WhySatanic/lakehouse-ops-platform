@@ -9,11 +9,17 @@ from pathlib import Path
 from typing import Any
 
 from lakehouse_ops.digests import normalized_text_digest
+from lakehouse_ops.report_schema import ReportSchemaError, validate_report_schema
 from lakehouse_ops.trino_upgrade import load_upgrade_plan, validate_upgrade_report
 
 
 class ReleaseCandidateError(RuntimeError):
     pass
+
+
+DEFAULT_REPORT_SCHEMA = Path(
+    "config/control-plane/schemas/release-candidate-bundle-report.schema.json"
+)
 
 
 def build_release_candidate(
@@ -26,6 +32,7 @@ def build_release_candidate(
     upgrade_plan_path: Path,
     source_revision: str,
     output_path: Path,
+    schema_path: Path = DEFAULT_REPORT_SCHEMA,
 ) -> dict[str, Any]:
     if not source_revision.strip():
         raise ReleaseCandidateError("source revision must be non-empty")
@@ -86,7 +93,7 @@ def build_release_candidate(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n"
     ).encode()
     _write_deterministic_archive(output_path, archive_entries)
-    return {
+    report = {
         "schema_version": "1.0",
         "status": "ready",
         "target_release": "1.0.0",
@@ -94,6 +101,11 @@ def build_release_candidate(
         "entries": len(archive_entries),
         "bundle_sha256": _digest(output_path),
     }
+    try:
+        validate_report_schema(report, schema_path)
+    except ReportSchemaError as error:
+        raise ReleaseCandidateError(str(error)) from error
+    return report
 
 
 def _load_object(path: Path, label: str) -> dict[str, Any]:

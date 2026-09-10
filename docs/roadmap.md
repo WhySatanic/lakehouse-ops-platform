@@ -141,6 +141,8 @@ centralized authorization, observability, and recovery.
   runtime and expose an auditable schema override.
 - [x] Validate the cross-profile release-readiness attestation against its versioned JSON
   Schema at runtime and expose an auditable schema override.
+- [x] Validate the release-candidate bundle report against its versioned JSON Schema at
+  runtime and expose an auditable schema override.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.

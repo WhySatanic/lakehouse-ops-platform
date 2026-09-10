@@ -1054,6 +1054,9 @@ def test_build_release_candidate_command(
         "upgrade_plan_path": paths["upgrade-plan"],
         "source_revision": "a" * 40,
         "output_path": paths["output"],
+        "schema_path": Path(
+            "config/control-plane/schemas/release-candidate-bundle-report.schema.json"
+        ),
     }
 
 

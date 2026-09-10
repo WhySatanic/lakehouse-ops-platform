@@ -42,6 +42,27 @@ def test_build_release_candidate_is_deterministic_and_complete(
     assert observed["plan"]["source"]["version"] == "482"  # type: ignore[index]
 
 
+def test_build_release_candidate_rejects_report_schema_drift(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    inputs = _write_inputs(tmp_path)
+    monkeypatch.setattr(candidate, "validate_upgrade_report", lambda report, plan: None)
+    source = Path(
+        "config/control-plane/schemas/release-candidate-bundle-report.schema.json"
+    )
+    schema = json.loads(source.read_text(encoding="utf-8"))
+    schema["properties"]["status"] = {"const": "blocked"}
+    candidate_schema = tmp_path / "release-candidate.schema.json"
+    candidate_schema.write_text(json.dumps(schema), encoding="utf-8")
+
+    with pytest.raises(ReleaseCandidateError, match="report schema validation failed"):
+        build_release_candidate(
+            **inputs,
+            output_path=tmp_path / "bundle.tar.gz",
+            schema_path=candidate_schema,
+        )
+
+
 def test_build_release_candidate_rejects_tampered_evidence(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

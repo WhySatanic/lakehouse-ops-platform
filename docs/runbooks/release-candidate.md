@@ -31,6 +31,7 @@ uv run lakeops build-release-candidate \
   --control-plane-contract config/control-plane/contract.json \
   --upgrade-report evidence/lakehouse-evidence/trino-upgrade-rehearsal.json \
   --upgrade-plan config/trino/upgrade-rehearsal.json \
+  --schema config/control-plane/schemas/release-candidate-bundle-report.schema.json \
   --source-revision "$SOURCE_REVISION" \
   --output artifacts/lakehouse-ops-1.0.0-rc-evidence.tar.gz
 ```
@@ -43,3 +44,5 @@ and confirm its tag resolves to `source_revision` before publishing any stable r
 Do not publish when the checkout is dirty, the source revision differs, any attested
 digest changes, the readiness contract changes, or upgrade/rollback validation fails.
 Regenerate all evidence in one new workflow run instead of mixing artifacts across runs.
+The command also validates `release-candidate.json` against its Draft 2020-12 schema
+before returning success.

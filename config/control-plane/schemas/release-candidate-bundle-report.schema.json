@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/WhySatanic/lakehouse-ops-platform/schemas/release-candidate-bundle-report-1.0.json",
+  "title": "Lakehouse release candidate bundle report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "target_release",
+    "source_revision",
+    "entries",
+    "bundle_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "status": {"const": "ready"},
+    "target_release": {"const": "1.0.0"},
+    "source_revision": {"type": "string", "minLength": 1},
+    "entries": {"type": "integer", "minimum": 1},
+    "bundle_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
