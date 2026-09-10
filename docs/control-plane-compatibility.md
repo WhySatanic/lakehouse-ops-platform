@@ -40,8 +40,8 @@ valid values invalid. Such changes require a new schema major and a product majo
 release. Existing producer tests remain the executable field and type specification;
 the compatibility gate prevents an unnoticed major-version escape. Producers can also
 declare a Draft 2020-12 JSON Schema through `schema_path`. The control-plane, image-lock,
-and release-readiness verifiers validate their emitted reports this way, establishing
-the migration path for other reports.
+release-readiness, and release-candidate producers validate their emitted reports this
+way, establishing the migration path for other reports.
 
 The contract digest in the verifier output identifies the exact baseline used by CI.
 Release evidence should record this digest so a report can be tied to the supported
@@ -49,7 +49,7 @@ surface.
 
 ## Upgrade notes
 
-Version `1.6.0` adds runtime schema validation to the release-readiness verifier. It
+Version `1.7.0` adds runtime schema validation to the release-candidate builder. It
 preserves contract `1.0.0` and does not change existing report fields. Automation may
-override the schema path explicitly and should retain the validated attestation with
-release evidence.
+override the schema path explicitly and should retain the validated report with the
+digest-bound evidence archive.

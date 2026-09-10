@@ -265,6 +265,13 @@ def build_parser() -> argparse.ArgumentParser:
     release_candidate.add_argument("--upgrade-report", required=True, type=Path)
     release_candidate.add_argument("--upgrade-plan", required=True, type=Path)
     release_candidate.add_argument("--source-revision", required=True)
+    release_candidate.add_argument(
+        "--schema",
+        type=Path,
+        default=Path(
+            "config/control-plane/schemas/release-candidate-bundle-report.schema.json"
+        ),
+    )
     release_candidate.add_argument("--output", required=True, type=Path)
 
     plan = subparsers.add_parser(
@@ -508,6 +515,7 @@ def main(argv: list[str] | None = None) -> int:
                 upgrade_plan_path=args.upgrade_plan,
                 source_revision=args.source_revision,
                 output_path=args.output,
+                schema_path=args.schema,
             )
         except ReleaseCandidateError as error:
             parser.error(str(error))
