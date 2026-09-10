@@ -14,7 +14,7 @@
     "compare-trino-compaction": ["--after", "--before", "--execution"],
     "capture-trino-partition-pruning": ["--catalog", "--partitioned-table", "--repetitions", "--schema", "--server", "--target-day", "--unpartitioned-table", "--user"],
     "capture-trino-sort-order": ["--baseline-table", "--catalog", "--range-size", "--range-start", "--repetitions", "--schema", "--server", "--sorted-table", "--user"],
-    "verify-release-readiness": ["--contract", "--evidence-root", "--output", "--source-revision"],
+    "verify-release-readiness": ["--contract", "--evidence-root", "--output", "--schema", "--source-revision"],
     "verify-control-plane-contract": ["--contract"],
     "verify-image-lock": ["--compose", "--dockerfile", "--lock", "--schema", "--upgrade-plan"],
     "build-release-candidate": ["--attestation", "--control-plane-contract", "--evidence-root", "--output", "--readiness-contract", "--source-revision", "--upgrade-plan", "--upgrade-report"],
@@ -65,7 +65,8 @@
       "--range-size": {"required": false, "type": "int", "default": 128, "choices": []}
     },
     "verify-release-readiness": {
-      "--source-revision": {"required": true, "type": "str", "default": null, "choices": []}
+      "--source-revision": {"required": true, "type": "str", "default": null, "choices": []},
+      "--schema": {"required": false, "type": "path", "default": "config/control-plane/schemas/release-readiness-attestation.schema.json", "choices": []}
     },
     "verify-control-plane-contract": {
       "--contract": {"required": true, "type": "path", "default": null, "choices": []}
@@ -91,7 +92,7 @@
     {"name": "partition_pruning_experiment", "producer": "capture-trino-partition-pruning", "schema_version": "1.0"},
     {"name": "sort_order_experiment", "producer": "capture-trino-sort-order", "schema_version": "1.1"},
     {"name": "ranger_policy_sync", "producer": "sync-ranger-policy", "schema_version": "1.0"},
-    {"name": "release_readiness_attestation", "producer": "verify-release-readiness", "schema_version": "1.0"},
+    {"name": "release_readiness_attestation", "producer": "verify-release-readiness", "schema_version": "1.0", "schema_path": "schemas/release-readiness-attestation.schema.json"},
     {"name": "release_candidate_bundle_report", "producer": "build-release-candidate", "schema_version": "1.0"},
     {"name": "image_lock_verification", "producer": "verify-image-lock", "schema_version": "1.0", "schema_path": "schemas/image-lock-verification.schema.json"},
     {"name": "control_plane_contract_verification", "producer": "verify-control-plane-contract", "schema_version": "1.0", "schema_path": "schemas/control-plane-contract-verification.schema.json"}

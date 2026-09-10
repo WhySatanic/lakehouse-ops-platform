@@ -139,6 +139,8 @@ centralized authorization, observability, and recovery.
   report as the migration path for all public reports.
 - [x] Validate the image-lock supply-chain report against its versioned JSON Schema at
   runtime and expose an auditable schema override.
+- [x] Validate the cross-profile release-readiness attestation against its versioned JSON
+  Schema at runtime and expose an auditable schema override.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.
