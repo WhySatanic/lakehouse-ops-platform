@@ -17,6 +17,7 @@ uv run lakeops collect-iceberg-metadata \
 
 uv run lakeops plan-iceberg-maintenance \
   --input weather-hourly-metadata.json \
+  --schema config/control-plane/schemas/iceberg-maintenance-plan.schema.json \
   > weather-hourly-maintenance-plan.json
 ```
 

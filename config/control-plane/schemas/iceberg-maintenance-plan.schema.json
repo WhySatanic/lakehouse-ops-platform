@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/WhySatanic/lakehouse-ops-platform/schemas/iceberg-maintenance-plan-1.0.json",
+  "title": "Iceberg maintenance plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "plan_id", "status", "table", "source", "policy", "checks", "actions"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "plan_id": {"type": "string", "pattern": "^plan-[0-9a-f]{16}$"},
+    "status": {"enum": ["healthy", "maintenance_recommended", "review_required"]},
+    "table": {"type": "string", "minLength": 1},
+    "source": {"$ref": "#/$defs/source"},
+    "policy": {"$ref": "#/$defs/policy"},
+    "checks": {"type": "array", "minItems": 3, "items": {"$ref": "#/$defs/check"}},
+    "actions": {"type": "array", "items": {"$ref": "#/$defs/action"}}
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metadata_schema_version", "collected_at", "current_snapshot_id", "table"],
+      "properties": {
+        "metadata_schema_version": {"const": "1.0"},
+        "collected_at": {"type": "string", "minLength": 1},
+        "current_snapshot_id": {"type": "string", "minLength": 1},
+        "table": {"type": "string", "minLength": 1}
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_file_size_bytes", "small_file_ratio", "min_data_files", "min_manifest_count", "max_manifests_per_data_file", "snapshot_retention_hours", "min_snapshots_to_keep", "max_snapshots_to_expire", "orphan_inspection_enabled", "orphan_retention_hours", "max_orphan_files"],
+      "properties": {
+        "target_file_size_bytes": {"type": "integer", "minimum": 1},
+        "small_file_ratio": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "min_data_files": {"type": "integer", "minimum": 1},
+        "min_manifest_count": {"type": "integer", "minimum": 1},
+        "max_manifests_per_data_file": {"type": "number", "exclusiveMinimum": 0},
+        "snapshot_retention_hours": {"type": "integer", "minimum": 0},
+        "min_snapshots_to_keep": {"type": "integer", "minimum": 2},
+        "max_snapshots_to_expire": {"type": "integer", "minimum": 1},
+        "orphan_inspection_enabled": {"type": "boolean"},
+        "orphan_retention_hours": {"type": "integer", "minimum": 72},
+        "max_orphan_files": {"type": "integer", "minimum": 1}
+      }
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule", "outcome", "observed", "threshold", "reason"],
+      "properties": {
+        "rule": {"type": "string", "minLength": 1},
+        "outcome": {"enum": ["healthy", "recommend", "deferred", "inspect"]},
+        "observed": {"type": "object"},
+        "threshold": {"type": "object"},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action_id", "action_type", "reason_code", "reason", "parameters", "safety_bounds"],
+      "properties": {
+        "action_id": {"type": "string", "pattern": "^action-[0-9a-f]{16}$"},
+        "action_type": {"enum": ["rewrite_data_files", "rewrite_manifests", "expire_snapshots", "inspect_orphan_files"]},
+        "reason_code": {"type": "string", "minLength": 1},
+        "reason": {"type": "string", "minLength": 1},
+        "parameters": {"type": "object"},
+        "safety_bounds": {
+          "type": "object",
+          "required": ["dry_run_required", "expected_snapshot_id", "max_concurrent_jobs"],
+          "properties": {
+            "dry_run_required": {"const": true},
+            "expected_snapshot_id": {"type": "string", "minLength": 1},
+            "max_concurrent_jobs": {"const": 1}
+          }
+        }
+      }
+    }
+  }
+}

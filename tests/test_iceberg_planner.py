@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -57,7 +59,7 @@ def test_healthy_table_has_no_actions() -> None:
     assert plan["schema_version"] == "1.0"
     assert plan["status"] == "healthy"
     assert plan["table"] == "lakehouse.silver.weather_hourly"
-    assert plan["actions"] == ()
+    assert plan["actions"] == []
     assert [check["outcome"] for check in plan["checks"]] == [
         "healthy",
         "healthy",
@@ -114,7 +116,18 @@ def test_delete_files_defer_size_based_compaction() -> None:
 
     assert plan["status"] == "review_required"
     assert plan["checks"][0]["outcome"] == "deferred"
-    assert plan["actions"] == ()
+    assert plan["actions"] == []
+
+
+def test_planner_rejects_report_schema_drift(tmp_path: Path) -> None:
+    source = Path("config/control-plane/schemas/iceberg-maintenance-plan.schema.json")
+    schema = json.loads(source.read_text(encoding="utf-8"))
+    schema["properties"]["status"] = {"const": "blocked"}
+    candidate = tmp_path / "maintenance-plan.schema.json"
+    candidate.write_text(json.dumps(schema), encoding="utf-8")
+
+    with pytest.raises(PlanningContractError, match="report schema validation failed"):
+        IcebergMaintenancePlanner(schema_path=candidate).plan(metadata_report())
 
 
 def test_old_snapshots_recommend_exact_expiration_batch() -> None:

@@ -283,6 +283,11 @@ def build_parser() -> argparse.ArgumentParser:
         "plan-iceberg-maintenance", help="create an explainable Iceberg maintenance plan"
     )
     plan.add_argument("--input", required=True, type=Path)
+    plan.add_argument(
+        "--schema",
+        type=Path,
+        default=Path("config/control-plane/schemas/iceberg-maintenance-plan.schema.json"),
+    )
     plan.add_argument("--target-file-size-bytes", type=int, default=128 * 1024 * 1024)
     plan.add_argument("--small-file-ratio", type=float, default=0.5)
     plan.add_argument("--min-data-files", type=int, default=4)
@@ -542,7 +547,7 @@ def main(argv: list[str] | None = None) -> int:
                 orphan_retention_hours=args.orphan_retention_hours,
                 max_orphan_files=args.max_orphan_files,
             )
-            plan = IcebergMaintenancePlanner(policy).plan(report)
+            plan = IcebergMaintenancePlanner(policy, schema_path=args.schema).plan(report)
         except (OSError, json.JSONDecodeError, ValueError) as error:
             parser.error(str(error))
         print(json.dumps(plan.as_dict(), sort_keys=True))
