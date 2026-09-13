@@ -147,6 +147,8 @@ centralized authorization, observability, and recovery.
   without overloading the database `--schema` option.
 - [x] Validate explainable Iceberg maintenance plans against a versioned JSON Schema at
   runtime before execution automation consumes them.
+- [x] Validate Trino query baseline reports against a versioned JSON Schema at runtime
+  before performance automation compares observations.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.

@@ -582,6 +582,7 @@ def test_capture_trino_baseline_command(
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
 ) -> None:
+    observed: dict[str, object] = {}
     corpus = tmp_path / "queries.json"
     corpus.write_text(
         json.dumps(
@@ -608,15 +609,18 @@ def test_capture_trino_baseline_command(
             return None
 
     monkeypatch.setattr(cli, "TrinoClient", FakeClient)
-    monkeypatch.setattr(
-        cli,
-        "capture_baseline",
-        lambda client, loaded: {
+
+    def fake_capture(
+        client: FakeClient, loaded: Any, *, schema_path: Path
+    ) -> dict[str, object]:
+        observed.update(client=client, schema_path=schema_path)
+        return {
             "schema_version": "1.0",
             "status": "ready",
             "corpus": {"name": loaded.name, "query_count": len(loaded.queries)},
-        },
-    )
+        }
+
+    monkeypatch.setattr(cli, "capture_baseline", fake_capture)
 
     exit_code = cli.main(
         [
@@ -636,6 +640,9 @@ def test_capture_trino_baseline_command(
         "status": "ready",
         "corpus": {"name": "cli_test", "query_count": 1},
     }
+    assert observed["schema_path"] == Path(
+        "config/control-plane/schemas/trino-baseline-report.schema.json"
+    )
 
 
 def test_capture_trino_compaction_command(

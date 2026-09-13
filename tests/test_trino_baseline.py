@@ -84,6 +84,26 @@ def test_load_and_capture_query_baseline(tmp_path: Path) -> None:
     assert report["collected_at"] == "2026-08-25T03:00:00+00:00"
 
 
+def test_capture_rejects_report_schema_drift(tmp_path: Path) -> None:
+    source = Path("config/control-plane/schemas/trino-baseline-report.schema.json")
+    schema = json.loads(source.read_text(encoding="utf-8"))
+    schema["properties"]["engine"] = {"const": "spark"}
+    candidate = tmp_path / "trino-baseline.schema.json"
+    candidate.write_text(json.dumps(schema), encoding="utf-8")
+    corpus_path = tmp_path / "corpus.json"
+    write_corpus(
+        corpus_path,
+        [{"id": "scan_query", "description": "Scan rows", "sql": "SELECT 1"}],
+    )
+
+    with pytest.raises(QueryCorpusError, match="report schema validation failed"):
+        capture_baseline(
+            FakeTrinoClient(),
+            load_query_corpus(corpus_path),
+            schema_path=candidate,
+        )
+
+
 @pytest.mark.parametrize(
     "queries, message",
     [
