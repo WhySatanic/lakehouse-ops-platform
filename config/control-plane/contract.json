@@ -9,7 +9,7 @@
     "render-trino-access-policy": ["--check", "--model", "--output"],
     "sync-ranger-policy": ["--break-glass-lease", "--model", "--service-name", "--service-user", "--trino-jdbc-url", "--url", "--username"],
     "collect-iceberg-metadata": ["--catalog", "--report-schema", "--schema", "--server", "--table", "--user"],
-    "capture-trino-baseline": ["--corpus", "--server", "--user"],
+    "capture-trino-baseline": ["--corpus", "--schema", "--server", "--user"],
     "capture-trino-compaction": ["--catalog", "--phase", "--repetitions", "--schema", "--server", "--table", "--user"],
     "compare-trino-compaction": ["--after", "--before", "--execution"],
     "capture-trino-partition-pruning": ["--catalog", "--partitioned-table", "--repetitions", "--schema", "--server", "--target-day", "--unpartitioned-table", "--user"],
@@ -51,7 +51,8 @@
       "--report-schema": {"required": false, "type": "path", "default": "config/control-plane/schemas/iceberg-metadata-report.schema.json", "choices": []}
     },
     "capture-trino-baseline": {
-      "--corpus": {"required": true, "type": "path", "default": null, "choices": []}
+      "--corpus": {"required": true, "type": "path", "default": null, "choices": []},
+      "--schema": {"required": false, "type": "path", "default": "config/control-plane/schemas/trino-baseline-report.schema.json", "choices": []}
     },
     "capture-trino-compaction": {
       "--phase": {"required": true, "type": "str", "default": null, "choices": ["before", "after"]}
@@ -90,7 +91,7 @@
   "outputs": [
     {"name": "iceberg_metadata", "producer": "collect-iceberg-metadata", "schema_version": "1.0", "schema_path": "schemas/iceberg-metadata-report.schema.json"},
     {"name": "maintenance_plan", "producer": "plan-iceberg-maintenance", "schema_version": "1.0", "schema_path": "schemas/iceberg-maintenance-plan.schema.json"},
-    {"name": "trino_baseline", "producer": "capture-trino-baseline", "schema_version": "1.0"},
+    {"name": "trino_baseline", "producer": "capture-trino-baseline", "schema_version": "1.0", "schema_path": "schemas/trino-baseline-report.schema.json"},
     {"name": "compaction_experiment", "producer": "compare-trino-compaction", "schema_version": "1.0"},
     {"name": "partition_pruning_experiment", "producer": "capture-trino-partition-pruning", "schema_version": "1.0"},
     {"name": "sort_order_experiment", "producer": "capture-trino-sort-order", "schema_version": "1.1"},

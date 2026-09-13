@@ -9,9 +9,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from lakehouse_ops.report_schema import ReportSchemaError, validate_report_schema
 from lakehouse_ops.trino import TrinoClient
 
 QUERY_ID = re.compile(r"^[a-z][a-z0-9_]{2,63}$")
+DEFAULT_REPORT_SCHEMA = Path(
+    "config/control-plane/schemas/trino-baseline-report.schema.json"
+)
 
 
 class QueryCorpusError(ValueError):
@@ -60,6 +64,7 @@ def capture_baseline(
     client: TrinoClient,
     corpus: QueryCorpus,
     *,
+    schema_path: Path = DEFAULT_REPORT_SCHEMA,
     clock: Callable[[], datetime] | None = None,
 ) -> dict[str, Any]:
     now = clock or (lambda: datetime.now(UTC))
@@ -81,7 +86,7 @@ def capture_baseline(
                 "metrics": stats,
             }
         )
-    return {
+    report = {
         "schema_version": "1.0",
         "status": "ready",
         "collected_at": now().astimezone(UTC).isoformat(),
@@ -94,6 +99,11 @@ def capture_baseline(
         },
         "queries": runs,
     }
+    try:
+        validate_report_schema(report, schema_path)
+    except ReportSchemaError as error:
+        raise QueryCorpusError(str(error)) from error
+    return report
 
 
 def _query_definition(value: Any) -> QueryDefinition:

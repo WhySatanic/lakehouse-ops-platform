@@ -27,6 +27,7 @@ Run the core data path and start the Trino coordinator and both workers, then ex
 uv run lakeops capture-trino-baseline \
   --server http://localhost:8080 \
   --corpus config/trino/query-corpus.json \
+  --schema config/control-plane/schemas/trino-baseline-report.schema.json \
   > artifacts/trino-baseline.json
 uv run python tests/integration/check_trino_baseline.py \
   artifacts/trino-baseline.json
@@ -49,6 +50,10 @@ The final `FINISHED` response supplies:
 The command rejects missing, negative, incomplete, or non-final statistics. A baseline
 is an observation, not a performance claim. Compare repeated runs under the same image,
 topology, dataset snapshot, and corpus before choosing an optimization.
+
+Before returning success, the producer validates the complete report against the
+checked-in Draft 2020-12 JSON Schema. Keep `--schema` explicit when automation runs
+outside the repository root, and review schema changes with the same care as CLI changes.
 
 ## Comparison boundary
 

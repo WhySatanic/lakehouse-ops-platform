@@ -158,6 +158,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     baseline.add_argument("--corpus", required=True, type=Path)
     baseline.add_argument(
+        "--schema",
+        type=Path,
+        default=Path("config/control-plane/schemas/trino-baseline-report.schema.json"),
+    )
+    baseline.add_argument(
         "--server", default=os.getenv("TRINO_SERVER", "http://localhost:8080")
     )
     baseline.add_argument("--user", default="lakehouse-performance")
@@ -414,7 +419,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             corpus = load_query_corpus(args.corpus)
             with TrinoClient(args.server, user=args.user) as client:
-                report = capture_baseline(client, corpus)
+                report = capture_baseline(client, corpus, schema_path=args.schema)
         except QueryCorpusError as error:
             parser.error(str(error))
         print(json.dumps(report, sort_keys=True))
