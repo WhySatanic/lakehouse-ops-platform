@@ -18,7 +18,7 @@
     "verify-control-plane-contract": ["--contract"],
     "verify-image-lock": ["--compose", "--dockerfile", "--lock", "--schema", "--upgrade-plan"],
     "build-release-candidate": ["--attestation", "--control-plane-contract", "--evidence-root", "--output", "--readiness-contract", "--schema", "--source-revision", "--upgrade-plan", "--upgrade-report"],
-    "plan-iceberg-maintenance": ["--enable-orphan-inspection", "--input", "--max-manifests-per-data-file", "--max-orphan-files", "--max-snapshots-to-expire", "--min-data-files", "--min-manifest-count", "--min-snapshots-to-keep", "--orphan-retention-hours", "--small-file-ratio", "--snapshot-retention-hours", "--target-file-size-bytes"]
+    "plan-iceberg-maintenance": ["--enable-orphan-inspection", "--input", "--max-manifests-per-data-file", "--max-orphan-files", "--max-snapshots-to-expire", "--min-data-files", "--min-manifest-count", "--min-snapshots-to-keep", "--orphan-retention-hours", "--schema", "--small-file-ratio", "--snapshot-retention-hours", "--target-file-size-bytes"]
   },
   "option_semantics": {
     "ingest-weather": {
@@ -82,13 +82,14 @@
     },
     "plan-iceberg-maintenance": {
       "--input": {"required": true, "type": "path", "default": null, "choices": []},
+      "--schema": {"required": false, "type": "path", "default": "config/control-plane/schemas/iceberg-maintenance-plan.schema.json", "choices": []},
       "--small-file-ratio": {"required": false, "type": "float", "default": 0.5, "choices": []},
       "--enable-orphan-inspection": {"required": false, "type": "boolean", "default": false, "choices": []}
     }
   },
   "outputs": [
     {"name": "iceberg_metadata", "producer": "collect-iceberg-metadata", "schema_version": "1.0", "schema_path": "schemas/iceberg-metadata-report.schema.json"},
-    {"name": "maintenance_plan", "producer": "plan-iceberg-maintenance", "schema_version": "1.0"},
+    {"name": "maintenance_plan", "producer": "plan-iceberg-maintenance", "schema_version": "1.0", "schema_path": "schemas/iceberg-maintenance-plan.schema.json"},
     {"name": "trino_baseline", "producer": "capture-trino-baseline", "schema_version": "1.0"},
     {"name": "compaction_experiment", "producer": "compare-trino-compaction", "schema_version": "1.0"},
     {"name": "partition_pruning_experiment", "producer": "capture-trino-partition-pruning", "schema_version": "1.0"},

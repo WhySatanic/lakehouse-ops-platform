@@ -4,11 +4,19 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
+
+from lakehouse_ops.report_schema import ReportSchemaError, validate_report_schema
 
 
 class PlanningContractError(ValueError):
     pass
+
+
+DEFAULT_REPORT_SCHEMA = Path(
+    "config/control-plane/schemas/iceberg-maintenance-plan.schema.json"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,12 +68,21 @@ class MaintenancePlan:
     actions: tuple[dict[str, Any], ...]
 
     def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        report = asdict(self)
+        report["checks"] = list(report["checks"])
+        report["actions"] = list(report["actions"])
+        return report
 
 
 class IcebergMaintenancePlanner:
-    def __init__(self, policy: MaintenancePolicy | None = None) -> None:
+    def __init__(
+        self,
+        policy: MaintenancePolicy | None = None,
+        *,
+        schema_path: Path = DEFAULT_REPORT_SCHEMA,
+    ) -> None:
         self._policy = policy or MaintenancePolicy()
+        self._schema_path = schema_path
 
     def plan(self, report: dict[str, Any]) -> MaintenancePlan:
         source = _validate_report(report)
@@ -111,7 +128,7 @@ class IcebergMaintenancePlanner:
             "checks": checks,
             "actions": actions,
         }
-        return MaintenancePlan(
+        plan = MaintenancePlan(
             schema_version="1.0",
             plan_id=_identifier("plan", plan_seed),
             status=status,
@@ -121,6 +138,11 @@ class IcebergMaintenancePlanner:
             checks=tuple(checks),
             actions=tuple(actions),
         )
+        try:
+            validate_report_schema(plan.as_dict(), self._schema_path)
+        except ReportSchemaError as error:
+            raise PlanningContractError(str(error)) from error
+        return plan
 
     def _check_data_files(
         self,

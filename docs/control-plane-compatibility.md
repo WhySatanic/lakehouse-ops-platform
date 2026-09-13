@@ -40,8 +40,8 @@ valid values invalid. Such changes require a new schema major and a product majo
 release. Existing producer tests remain the executable field and type specification;
 the compatibility gate prevents an unnoticed major-version escape. Producers can also
 declare a Draft 2020-12 JSON Schema through `schema_path`. The control-plane, image-lock,
-release-readiness, release-candidate, and Iceberg metadata producers validate their
-emitted reports this way, establishing the migration path for other reports.
+release-readiness, release-candidate, Iceberg metadata, and maintenance-plan producers
+validate their emitted reports this way, establishing the migration path for other reports.
 
 The contract digest in the verifier output identifies the exact baseline used by CI.
 Release evidence should record this digest so a report can be tied to the supported
@@ -49,7 +49,6 @@ surface.
 
 ## Upgrade notes
 
-Version `1.8.0` adds runtime schema validation to the Iceberg metadata collector. It
-preserves contract `1.0.0` and does not change existing report fields. Because `--schema`
-already selects the Iceberg database schema, automation overrides the JSON contract with
-the distinct `--report-schema` option.
+Version `1.9.0` adds runtime schema validation to the Iceberg maintenance planner. It
+preserves contract `1.0.0`; the normalized Python representation now uses JSON-native
+arrays for checks and actions, matching the unchanged serialized CLI output.
