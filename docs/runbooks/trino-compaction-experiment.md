@@ -41,10 +41,16 @@ uv run lakeops compare-trino-compaction \
   --before artifacts/trino-compaction-before.json \
   --after artifacts/trino-compaction-after.json \
   --execution artifacts/maintenance-report.json \
+  --schema config/control-plane/schemas/trino-compaction-experiment.schema.json \
   > artifacts/trino-compaction-experiment.json
 uv run python tests/integration/check_trino_compaction_experiment.py \
   artifacts/trino-compaction-experiment.json
 ```
+
+After semantic reconciliation, the comparison is validated against the checked-in Draft
+2020-12 JSON Schema. Keep `--schema` explicit when automation runs outside the repository
+root. The schema fixes report structure and numeric bounds, while reconciliation proves
+cross-document relationships such as unchanged row counts and matching snapshots.
 
 ## Interpretation
 

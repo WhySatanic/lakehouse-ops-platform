@@ -6,8 +6,10 @@ import statistics
 from collections.abc import Callable
 from dataclasses import asdict
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
+from lakehouse_ops.report_schema import ReportSchemaError, validate_report_schema
 from lakehouse_ops.trino import TrinoClient
 
 IDENTIFIER = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
@@ -20,6 +22,9 @@ METRICS = (
     "physical_input_bytes",
     "peak_memory_bytes",
     "spilled_bytes",
+)
+DEFAULT_COMPARISON_SCHEMA = Path(
+    "config/control-plane/schemas/trino-compaction-experiment.schema.json"
 )
 
 
@@ -103,7 +108,11 @@ def capture_compaction_phase(
 
 
 def compare_compaction_phases(
-    before: dict[str, Any], after: dict[str, Any], execution: dict[str, Any]
+    before: dict[str, Any],
+    after: dict[str, Any],
+    execution: dict[str, Any],
+    *,
+    schema_path: Path = DEFAULT_COMPARISON_SCHEMA,
 ) -> dict[str, Any]:
     _validate_phase(before, "before")
     _validate_phase(after, "after")
@@ -143,7 +152,7 @@ def compare_compaction_phases(
     }
     files_before = before_layout["data_file_count"]
     files_after = after_layout["data_file_count"]
-    return {
+    report = {
         "schema_version": "1.0",
         "status": "ready",
         "experiment": "iceberg_data_file_compaction",
@@ -162,6 +171,11 @@ def compare_compaction_phases(
         "comparison": comparison,
         "latency_observation": _direction(comparison["wall_time_ms"]["delta"]),
     }
+    try:
+        validate_report_schema(report, schema_path)
+    except ReportSchemaError as error:
+        raise TrinoExperimentError(str(error)) from error
+    return report
 
 
 def _validate_phase(report: dict[str, Any], phase: str) -> None:

@@ -188,6 +188,13 @@ def build_parser() -> argparse.ArgumentParser:
     compaction_compare.add_argument("--before", required=True, type=Path)
     compaction_compare.add_argument("--after", required=True, type=Path)
     compaction_compare.add_argument("--execution", required=True, type=Path)
+    compaction_compare.add_argument(
+        "--schema",
+        type=Path,
+        default=Path(
+            "config/control-plane/schemas/trino-compaction-experiment.schema.json"
+        ),
+    )
 
     partition_pruning = subparsers.add_parser(
         "capture-trino-partition-pruning",
@@ -444,7 +451,9 @@ def main(argv: list[str] | None = None) -> int:
             before = json.loads(args.before.read_text(encoding="utf-8"))
             after = json.loads(args.after.read_text(encoding="utf-8"))
             execution = json.loads(args.execution.read_text(encoding="utf-8"))
-            report = compare_compaction_phases(before, after, execution)
+            report = compare_compaction_phases(
+                before, after, execution, schema_path=args.schema
+            )
         except (OSError, json.JSONDecodeError, TrinoExperimentError) as error:
             parser.error(str(error))
         print(json.dumps(report, sort_keys=True))

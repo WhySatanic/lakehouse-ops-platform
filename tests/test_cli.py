@@ -710,17 +710,24 @@ def test_compare_trino_compaction_command(
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
 ) -> None:
+    observed: dict[str, object] = {}
     paths = [tmp_path / name for name in ("before.json", "after.json", "execution.json")]
     for index, path in enumerate(paths):
         path.write_text(json.dumps({"report": index}), encoding="utf-8")
 
-    monkeypatch.setattr(
-        cli,
-        "compare_compaction_phases",
-        lambda before, after, execution: {
+    def fake_compare(
+        before: dict[str, object],
+        after: dict[str, object],
+        execution: dict[str, object],
+        *,
+        schema_path: Path,
+    ) -> dict[str, object]:
+        observed["schema_path"] = schema_path
+        return {
             "inputs": [before["report"], after["report"], execution["report"]]
-        },
-    )
+        }
+
+    monkeypatch.setattr(cli, "compare_compaction_phases", fake_compare)
 
     exit_code = cli.main(
         [
@@ -736,6 +743,9 @@ def test_compare_trino_compaction_command(
 
     assert exit_code == 0
     assert json.loads(capsys.readouterr().out) == {"inputs": [0, 1, 2]}
+    assert observed["schema_path"] == Path(
+        "config/control-plane/schemas/trino-compaction-experiment.schema.json"
+    )
 
 
 def test_capture_trino_partition_pruning_command(
