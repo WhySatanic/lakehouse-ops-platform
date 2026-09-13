@@ -3,7 +3,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Protocol
+
+from lakehouse_ops.report_schema import ReportSchemaError, validate_report_schema
 
 
 class QueryExecutor(Protocol):
@@ -12,6 +15,11 @@ class QueryExecutor(Protocol):
 
 class MetadataContractError(RuntimeError):
     pass
+
+
+DEFAULT_REPORT_SCHEMA = Path(
+    "config/control-plane/schemas/iceberg-metadata-report.schema.json"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,9 +97,11 @@ class IcebergMetadataCollector:
         self,
         executor: QueryExecutor,
         *,
+        schema_path: Path = DEFAULT_REPORT_SCHEMA,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._executor = executor
+        self._schema_path = schema_path
         self._clock = clock or (lambda: datetime.now(UTC))
 
     def collect(self, catalog: str, schema: str, table: str) -> IcebergMetadataReport:
@@ -172,7 +182,7 @@ class IcebergMetadataCollector:
         if not snapshots:
             raise MetadataContractError("Iceberg table has no snapshot history")
 
-        return IcebergMetadataReport(
+        report = IcebergMetadataReport(
             schema_version="1.0",
             status="ready",
             collected_at=self._clock().astimezone(UTC).isoformat(),
@@ -224,6 +234,11 @@ class IcebergMetadataCollector:
                 total_size_bytes=_integer(partitions, "total_size_bytes"),
             ),
         )
+        try:
+            validate_report_schema(report.as_dict(), self._schema_path)
+        except ReportSchemaError as error:
+            raise MetadataContractError(str(error)) from error
+        return report
 
 
 def _metadata_table(catalog: str, schema: str, table: str, suffix: str) -> str:

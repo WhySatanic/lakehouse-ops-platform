@@ -8,7 +8,7 @@
     "audit-landing": ["--backend", "--include-versions", "--output", "--s3-bucket", "--s3-endpoint-url", "--s3-prefix", "--s3-region"],
     "render-trino-access-policy": ["--check", "--model", "--output"],
     "sync-ranger-policy": ["--break-glass-lease", "--model", "--service-name", "--service-user", "--trino-jdbc-url", "--url", "--username"],
-    "collect-iceberg-metadata": ["--catalog", "--schema", "--server", "--table", "--user"],
+    "collect-iceberg-metadata": ["--catalog", "--report-schema", "--schema", "--server", "--table", "--user"],
     "capture-trino-baseline": ["--corpus", "--server", "--user"],
     "capture-trino-compaction": ["--catalog", "--phase", "--repetitions", "--schema", "--server", "--table", "--user"],
     "compare-trino-compaction": ["--after", "--before", "--execution"],
@@ -47,7 +47,8 @@
       "--service-name": {"required": false, "type": "str", "default": "lakehouse-trino", "choices": []}
     },
     "collect-iceberg-metadata": {
-      "--catalog": {"required": false, "type": "str", "default": "lakehouse", "choices": []}
+      "--catalog": {"required": false, "type": "str", "default": "lakehouse", "choices": []},
+      "--report-schema": {"required": false, "type": "path", "default": "config/control-plane/schemas/iceberg-metadata-report.schema.json", "choices": []}
     },
     "capture-trino-baseline": {
       "--corpus": {"required": true, "type": "path", "default": null, "choices": []}
@@ -86,7 +87,7 @@
     }
   },
   "outputs": [
-    {"name": "iceberg_metadata", "producer": "collect-iceberg-metadata", "schema_version": "1.0"},
+    {"name": "iceberg_metadata", "producer": "collect-iceberg-metadata", "schema_version": "1.0", "schema_path": "schemas/iceberg-metadata-report.schema.json"},
     {"name": "maintenance_plan", "producer": "plan-iceberg-maintenance", "schema_version": "1.0"},
     {"name": "trino_baseline", "producer": "capture-trino-baseline", "schema_version": "1.0"},
     {"name": "compaction_experiment", "producer": "compare-trino-compaction", "schema_version": "1.0"},

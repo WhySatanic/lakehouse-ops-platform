@@ -147,6 +147,11 @@ def build_parser() -> argparse.ArgumentParser:
     metadata.add_argument("--catalog", default="lakehouse")
     metadata.add_argument("--schema", default="silver")
     metadata.add_argument("--table", default="weather_hourly")
+    metadata.add_argument(
+        "--report-schema",
+        type=Path,
+        default=Path("config/control-plane/schemas/iceberg-metadata-report.schema.json"),
+    )
 
     baseline = subparsers.add_parser(
         "capture-trino-baseline", help="run a versioned query corpus with Trino metrics"
@@ -395,7 +400,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "collect-iceberg-metadata":
         with TrinoClient(args.server, user=args.user) as client:
-            report = IcebergMetadataCollector(client).collect(
+            report = IcebergMetadataCollector(client, schema_path=args.report_schema).collect(
                 args.catalog, args.schema, args.table
             )
         print(json.dumps(report.as_dict(), sort_keys=True))

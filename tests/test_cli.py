@@ -532,8 +532,9 @@ def test_collect_iceberg_metadata_command(
             return {"status": "ready", "schema_version": "1.0"}
 
     class FakeCollector:
-        def __init__(self, client: FakeTrinoClient) -> None:
+        def __init__(self, client: FakeTrinoClient, *, schema_path: Path) -> None:
             observed["client"] = client
+            observed["report_schema"] = schema_path
 
         def collect(self, catalog: str, schema: str, table: str) -> FakeReport:
             observed.update(catalog=catalog, schema=schema, table=table)
@@ -570,6 +571,9 @@ def test_collect_iceberg_metadata_command(
         "catalog": "iceberg",
         "schema": "ops",
         "table": "events",
+        "report_schema": Path(
+            "config/control-plane/schemas/iceberg-metadata-report.schema.json"
+        ),
     }
 
 

@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/WhySatanic/lakehouse-ops-platform/schemas/iceberg-metadata-report-1.0.json",
+  "title": "Iceberg metadata report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "collected_at", "table", "snapshots", "references", "files", "manifests", "partitions"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "status": {"const": "ready"},
+    "collected_at": {"type": "string", "format": "date-time"},
+    "table": {"type": "string", "minLength": 1},
+    "snapshots": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "current_id", "committed_at", "operation", "history"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 1},
+        "current_id": {"type": "string", "pattern": "^[0-9]+$"},
+        "committed_at": {"type": "string", "minLength": 1},
+        "operation": {"type": "string", "minLength": 1},
+        "history": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/snapshot"}
+        }
+      }
+    },
+    "references": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/reference"}
+    },
+    "files": {"$ref": "#/$defs/files"},
+    "manifests": {"$ref": "#/$defs/manifests"},
+    "partitions": {"$ref": "#/$defs/partitions"}
+  },
+  "$defs": {
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["snapshot_id", "parent_id", "committed_at", "operation"],
+      "properties": {
+        "snapshot_id": {"type": "string", "pattern": "^[0-9]+$"},
+        "parent_id": {"type": ["string", "null"], "pattern": "^[0-9]+$"},
+        "committed_at": {"type": "string", "minLength": 1},
+        "operation": {"type": "string", "minLength": 1}
+      }
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "reference_type", "snapshot_id"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "reference_type": {"type": "string", "minLength": 1},
+        "snapshot_id": {"type": "string", "pattern": "^[0-9]+$"}
+      }
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "records", "total_size_bytes", "min_size_bytes", "max_size_bytes", "delete_file_count"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 0},
+        "records": {"type": "integer", "minimum": 0},
+        "total_size_bytes": {"type": "integer", "minimum": 0},
+        "min_size_bytes": {"type": "integer", "minimum": 0},
+        "max_size_bytes": {"type": "integer", "minimum": 0},
+        "delete_file_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "manifests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "total_size_bytes", "added_files", "existing_files", "deleted_files"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 0},
+        "total_size_bytes": {"type": "integer", "minimum": 0},
+        "added_files": {"type": "integer", "minimum": 0},
+        "existing_files": {"type": "integer", "minimum": 0},
+        "deleted_files": {"type": "integer", "minimum": 0}
+      }
+    },
+    "partitions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "records", "files", "total_size_bytes"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 0},
+        "records": {"type": "integer", "minimum": 0},
+        "files": {"type": "integer", "minimum": 0},
+        "total_size_bytes": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}
