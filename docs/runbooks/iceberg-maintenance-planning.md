@@ -12,6 +12,7 @@ Collect a fresh observation and pass it to the planner:
 uv run lakeops collect-iceberg-metadata \
   --server http://localhost:8080 \
   --catalog lakehouse --schema silver --table weather_hourly \
+  --report-schema config/control-plane/schemas/iceberg-metadata-report.schema.json \
   > weather-hourly-metadata.json
 
 uv run lakeops plan-iceberg-maintenance \

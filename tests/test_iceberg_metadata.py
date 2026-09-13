@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -164,6 +166,19 @@ def test_collect_quotes_identifiers() -> None:
     IcebergMetadataCollector(executor).collect("lakehouse", "ops-data", 'table"name')
 
     assert '"lakehouse"."ops-data"."table""name$history"' in executor.queries[0]
+
+
+def test_collect_rejects_report_schema_drift(tmp_path: Path) -> None:
+    source = Path("config/control-plane/schemas/iceberg-metadata-report.schema.json")
+    schema = json.loads(source.read_text(encoding="utf-8"))
+    schema["properties"]["status"] = {"const": "blocked"}
+    candidate = tmp_path / "iceberg-metadata.schema.json"
+    candidate.write_text(json.dumps(schema), encoding="utf-8")
+
+    with pytest.raises(MetadataContractError, match="report schema validation failed"):
+        IcebergMetadataCollector(FakeExecutor(), schema_path=candidate).collect(
+            "lakehouse", "silver", "weather_hourly"
+        )
 
 
 def test_collect_rejects_table_without_snapshot() -> None:

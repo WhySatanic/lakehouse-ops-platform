@@ -143,6 +143,8 @@ centralized authorization, observability, and recovery.
   Schema at runtime and expose an auditable schema override.
 - [x] Validate the release-candidate bundle report against its versioned JSON Schema at
   runtime and expose an auditable schema override.
+- [x] Validate Iceberg metadata health reports against a versioned JSON Schema at runtime
+  without overloading the database `--schema` option.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.
