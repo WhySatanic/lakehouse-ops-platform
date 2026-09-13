@@ -149,6 +149,8 @@ centralized authorization, observability, and recovery.
   runtime before execution automation consumes them.
 - [x] Validate Trino query baseline reports against a versioned JSON Schema at runtime
   before performance automation compares observations.
+- [x] Validate Trino compaction experiment comparisons against a versioned JSON Schema
+  after reconciling snapshots and maintenance execution evidence.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.

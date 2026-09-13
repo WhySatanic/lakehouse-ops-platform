@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/WhySatanic/lakehouse-ops-platform/schemas/trino-compaction-experiment-1.0.json",
+  "title": "Trino compaction experiment report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "experiment", "table", "snapshots", "file_layout", "workload", "medians", "comparison", "latency_observation"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "status": {"const": "ready"},
+    "experiment": {"const": "iceberg_data_file_compaction"},
+    "table": {"type": "string", "minLength": 1},
+    "snapshots": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["before", "after"],
+      "properties": {
+        "before": {"type": "string", "minLength": 1},
+        "after": {"type": "string", "minLength": 1}
+      }
+    },
+    "file_layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["before", "after", "file_count_reduction", "file_count_reduction_percent"],
+      "properties": {
+        "before": {"$ref": "#/$defs/layout"},
+        "after": {"$ref": "#/$defs/layout"},
+        "file_count_reduction": {"type": "integer", "minimum": 1},
+        "file_count_reduction_percent": {"type": "number", "exclusiveMinimum": 0, "maximum": 100}
+      }
+    },
+    "workload": {"$ref": "#/$defs/workload"},
+    "medians": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["before", "after"],
+      "properties": {
+        "before": {"$ref": "#/$defs/metrics"},
+        "after": {"$ref": "#/$defs/metrics"}
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["elapsed_time_ms", "wall_time_ms", "cpu_time_ms", "processed_rows", "processed_bytes", "physical_input_bytes", "peak_memory_bytes", "spilled_bytes"],
+      "properties": {
+        "elapsed_time_ms": {"$ref": "#/$defs/delta"},
+        "wall_time_ms": {"$ref": "#/$defs/delta"},
+        "cpu_time_ms": {"$ref": "#/$defs/delta"},
+        "processed_rows": {"$ref": "#/$defs/delta"},
+        "processed_bytes": {"$ref": "#/$defs/delta"},
+        "physical_input_bytes": {"$ref": "#/$defs/delta"},
+        "peak_memory_bytes": {"$ref": "#/$defs/delta"},
+        "spilled_bytes": {"$ref": "#/$defs/delta"}
+      }
+    },
+    "latency_observation": {"enum": ["improved", "unchanged", "regressed"]}
+  },
+  "$defs": {
+    "layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["data_file_count", "record_count", "total_size_bytes"],
+      "properties": {
+        "data_file_count": {"type": "integer", "minimum": 1},
+        "record_count": {"type": "integer", "minimum": 1},
+        "total_size_bytes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sql_sha256", "mode", "repetitions"],
+      "properties": {
+        "sql_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "mode": {"const": "explain_analyze"},
+        "repetitions": {"enum": [3, 5, 7, 9]}
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["elapsed_time_ms", "wall_time_ms", "cpu_time_ms", "processed_rows", "processed_bytes", "physical_input_bytes", "peak_memory_bytes", "spilled_bytes"],
+      "properties": {
+        "elapsed_time_ms": {"type": "integer", "minimum": 0},
+        "wall_time_ms": {"type": "integer", "minimum": 0},
+        "cpu_time_ms": {"type": "integer", "minimum": 0},
+        "processed_rows": {"type": "integer", "minimum": 0},
+        "processed_bytes": {"type": "integer", "minimum": 0},
+        "physical_input_bytes": {"type": "integer", "minimum": 0},
+        "peak_memory_bytes": {"type": "integer", "minimum": 0},
+        "spilled_bytes": {"type": "integer", "minimum": 0}
+      }
+    },
+    "delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["before", "after", "delta", "delta_percent"],
+      "properties": {
+        "before": {"type": "integer", "minimum": 0},
+        "after": {"type": "integer", "minimum": 0},
+        "delta": {"type": "integer"},
+        "delta_percent": {"type": ["number", "null"]}
+      }
+    }
+  }
+}

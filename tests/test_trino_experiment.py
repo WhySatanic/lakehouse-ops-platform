@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -139,6 +141,24 @@ def test_compare_compaction_phases_links_measurement_to_execution() -> None:
         "delta_percent": -40.0,
     }
     assert report["latency_observation"] == "improved"
+
+
+def test_compare_compaction_phases_rejects_report_schema_drift(tmp_path: Path) -> None:
+    source = Path(
+        "config/control-plane/schemas/trino-compaction-experiment.schema.json"
+    )
+    schema = json.loads(source.read_text(encoding="utf-8"))
+    schema["properties"]["latency_observation"] = {"const": "unknown"}
+    candidate = tmp_path / "trino-compaction.schema.json"
+    candidate.write_text(json.dumps(schema), encoding="utf-8")
+
+    with pytest.raises(TrinoExperimentError, match="report schema validation failed"):
+        compare_compaction_phases(
+            phase_report("before", snapshot="41", files=4, wall=20),
+            phase_report("after", snapshot="42", files=1, wall=12),
+            execution_report(),
+            schema_path=candidate,
+        )
 
 
 @pytest.mark.parametrize(
