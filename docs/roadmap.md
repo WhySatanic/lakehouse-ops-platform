@@ -171,6 +171,8 @@ centralized authorization, observability, and recovery.
   `$dynamicRef` values recursively throughout each schema definition.
 - [x] Resolve every local public schema reference and reject dangling JSON Pointers or
   anchors before runtime validation consumes the schema.
+- [x] Reject duplicate static or dynamic anchor names within a public schema resource so
+  local reference resolution cannot silently select an ambiguous target.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.

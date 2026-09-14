@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import urljoin
 
 from referencing import Registry, Resource
 from referencing.exceptions import Unresolvable
@@ -204,6 +205,8 @@ def _validate_local_schema_references(name: str, schema: dict[str, Any]) -> None
         name,
         resource,
         registry.resolver(schema["$id"]),
+        schema["$id"],
+        {},
     )
 
 
@@ -211,7 +214,19 @@ def _validate_schema_resource_references(
     name: str,
     resource: Resource[Any],
     resolver: Any,
+    base_uri: str,
+    anchors_by_resource: dict[str, set[str]],
 ) -> None:
+    resource_id = resource.id()
+    resource_uri = urljoin(base_uri, resource_id) if resource_id else base_uri
+    anchor_names = anchors_by_resource.setdefault(resource_uri, set())
+    for anchor in resource.anchors():
+        if anchor.name in anchor_names:
+            raise ControlPlaneContractError(
+                f"output {name} has duplicate schema anchor: {anchor.name}"
+            )
+        anchor_names.add(anchor.name)
+
     contents = resource.contents
     if isinstance(contents, dict):
         for keyword in ("$ref", "$dynamicRef"):
@@ -228,6 +243,8 @@ def _validate_schema_resource_references(
             name,
             subresource,
             resolver.in_subresource(subresource),
+            resource_uri,
+            anchors_by_resource,
         )
 
 

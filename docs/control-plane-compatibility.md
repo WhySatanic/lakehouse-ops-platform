@@ -24,6 +24,8 @@ are compatible additions and do not require consumers to upgrade. `$ref` and
 `$dynamicRef` values must be local fragments so verification never depends on a remote
 schema registry or network availability. Every fragment must resolve to a bundled JSON
 Pointer or anchor; dangling references fail the compatibility gate before runtime.
+Anchor names must be unique within each schema resource, including names shared between
+`$anchor` and `$dynamicAnchor`.
 
 ## CLI policy
 
@@ -59,7 +61,6 @@ surface.
 
 ## Upgrade notes
 
-Version `1.14.7` resolves every local `$ref` and `$dynamicRef` in each public output schema
-and rejects missing JSON Pointers or anchors. It preserves contract `1.0.0`, report shapes,
-and producer behavior. Custom contract extensions must bundle definitions locally and keep
-all fragments resolvable.
+Version `1.14.8` rejects duplicate `$anchor` and `$dynamicAnchor` names within each public
+schema resource. It preserves contract `1.0.0`, report shapes, and producer behavior.
+Custom contract extensions must assign one unambiguous target to every local anchor name.
