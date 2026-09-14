@@ -15,8 +15,9 @@ uv run lakeops verify-control-plane-contract \
 The command exits non-zero if a baseline command or long option no longer exists, a
 frozen option changes its required flag, type, default, or choices, an output references
 an unknown producer, an output leaves schema major `1`, or its declared `schema_path` is
-missing or does not resolve to a file. New commands and options are compatible additions
-and do not require consumers to upgrade.
+missing, does not resolve to a file, contains invalid JSON, or fails Draft 2020-12
+metaschema validation. New commands and options are compatible additions and do not
+require consumers to upgrade.
 
 ## CLI policy
 
@@ -52,7 +53,7 @@ surface.
 
 ## Upgrade notes
 
-Version `1.14.1` makes `schema_path` mandatory and resolvable for every declared public
-output. It preserves contract `1.0.0`, report shapes, and producer behavior. Custom
-contract extensions must ship their schema file next to the contract and reference it
-with `schema_path`.
+Version `1.14.2` validates every declared output schema against the Draft 2020-12
+metaschema inside the compatibility gate. It preserves contract `1.0.0`, report shapes,
+and producer behavior. Custom contract extensions must ship a syntactically valid schema
+that passes the same definition check.

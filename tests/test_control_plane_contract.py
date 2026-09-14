@@ -126,6 +126,18 @@ def test_missing_output_schema_is_rejected(tmp_path: Path) -> None:
         verify_control_plane_contract(_write_contract(tmp_path, contract), build_parser())
 
 
+def test_invalid_output_schema_definition_is_rejected(tmp_path: Path) -> None:
+    contract = _load_contract()
+    path = _write_contract(tmp_path, contract)
+    schema_path = tmp_path / contract["outputs"][0]["schema_path"]
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema["type"] = "invalid"
+    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+
+    with pytest.raises(ControlPlaneContractError, match="invalid output schema"):
+        verify_control_plane_contract(path, build_parser())
+
+
 def test_report_schema_drift_is_rejected(tmp_path: Path) -> None:
     contract = _load_contract()
     path = _write_contract(tmp_path, contract)

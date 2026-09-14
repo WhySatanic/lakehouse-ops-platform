@@ -6,7 +6,11 @@ from pathlib import Path
 from typing import Any
 
 from lakehouse_ops.digests import normalized_text_digest
-from lakehouse_ops.report_schema import ReportSchemaError, validate_report_schema
+from lakehouse_ops.report_schema import (
+    ReportSchemaError,
+    load_report_schema,
+    validate_report_schema,
+)
 
 
 class ControlPlaneContractError(RuntimeError):
@@ -90,10 +94,17 @@ def verify_control_plane_contract(
         schema_path = output.get("schema_path")
         if not isinstance(schema_path, str) or not schema_path:
             raise ControlPlaneContractError(f"output {name} must declare schema_path")
-        if not (contract_path.parent / schema_path).is_file():
+        resolved_schema_path = contract_path.parent / schema_path
+        if not resolved_schema_path.is_file():
             raise ControlPlaneContractError(
                 f"output schema_path does not exist for {name}: {schema_path}"
             )
+        try:
+            load_report_schema(resolved_schema_path)
+        except ReportSchemaError as error:
+            raise ControlPlaneContractError(
+                f"invalid output schema for {name}: {error}"
+            ) from error
 
     report = {
         "schema_version": "1.0",

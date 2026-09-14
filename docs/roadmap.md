@@ -159,6 +159,8 @@ centralized authorization, observability, and recovery.
   service, user, managed-policy, and optional break-glass reconciliation.
 - [x] Require every declared public output to provide a resolvable `schema_path` in the
   executable control-plane compatibility gate.
+- [x] Validate every declared output schema against the Draft 2020-12 metaschema before
+  accepting the control-plane contract.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.
