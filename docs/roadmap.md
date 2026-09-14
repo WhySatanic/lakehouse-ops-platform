@@ -169,6 +169,8 @@ centralized authorization, observability, and recovery.
   non-empty `$id` before the control-plane contract is accepted.
 - [x] Keep public output schemas self-contained by rejecting external `$ref` and
   `$dynamicRef` values recursively throughout each schema definition.
+- [x] Resolve every local public schema reference and reject dangling JSON Pointers or
+  anchors before runtime validation consumes the schema.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.

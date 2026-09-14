@@ -262,12 +262,13 @@ wheels = [
 
 [[package]]
 name = "lakehouse-ops-platform"
-version = "1.14.6"
+version = "1.14.7"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
     { name = "httpx" },
     { name = "jsonschema" },
+    { name = "referencing" },
 ]
 
 [package.dev-dependencies]
@@ -282,6 +283,7 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.35,<2" },
     { name = "httpx", specifier = ">=0.28,<1" },
     { name = "jsonschema", specifier = ">=4.23,<5" },
+    { name = "referencing", specifier = ">=0.35,<1" },
 ]
 
 [package.metadata.requires-dev]
