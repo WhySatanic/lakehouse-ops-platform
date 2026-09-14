@@ -17,6 +17,9 @@ class ControlPlaneContractError(RuntimeError):
     pass
 
 
+DRAFT_2020_12 = "https://json-schema.org/draft/2020-12/schema"
+
+
 def verify_control_plane_contract(
     contract_path: Path, parser: argparse.ArgumentParser
 ) -> dict[str, Any]:
@@ -78,6 +81,7 @@ def verify_control_plane_contract(
     if not isinstance(outputs, list) or not outputs:
         raise ControlPlaneContractError("control-plane outputs must be a non-empty array")
     names: set[str] = set()
+    schema_ids: set[str] = set()
     for output in outputs:
         if not isinstance(output, dict):
             raise ControlPlaneContractError("output contract must be an object")
@@ -105,6 +109,10 @@ def verify_control_plane_contract(
             raise ControlPlaneContractError(
                 f"invalid output schema for {name}: {error}"
             ) from error
+        schema_id = _validate_output_schema_identity(name, schema)
+        if schema_id in schema_ids:
+            raise ControlPlaneContractError(f"output schema ids must be unique: {schema_id}")
+        schema_ids.add(schema_id)
         _validate_output_schema_version(name, version, schema)
 
     report = {
@@ -157,6 +165,17 @@ def _validate_output_schema_version(
     required = schema.get("required")
     if not isinstance(required, list) or "schema_version" not in required:
         raise ControlPlaneContractError(f"output {name} schema must require schema_version")
+
+
+def _validate_output_schema_identity(name: str, schema: dict[str, Any]) -> str:
+    if schema.get("$schema") != DRAFT_2020_12:
+        raise ControlPlaneContractError(
+            f"output {name} schema must declare Draft 2020-12"
+        )
+    schema_id = schema.get("$id")
+    if not isinstance(schema_id, str) or not schema_id:
+        raise ControlPlaneContractError(f"output {name} must declare a schema id")
+    return schema_id
 
 
 def _cli_surface(parser: argparse.ArgumentParser) -> dict[str, set[str]]:
