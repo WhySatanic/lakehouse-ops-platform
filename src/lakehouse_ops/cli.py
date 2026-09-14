@@ -207,6 +207,13 @@ def build_parser() -> argparse.ArgumentParser:
     partition_pruning.add_argument("--catalog", default="lakehouse")
     partition_pruning.add_argument("--schema", default="ops")
     partition_pruning.add_argument(
+        "--report-schema",
+        type=Path,
+        default=Path(
+            "config/control-plane/schemas/trino-partition-pruning-experiment.schema.json"
+        ),
+    )
+    partition_pruning.add_argument(
         "--unpartitioned-table", default="pruning_unpartitioned"
     )
     partition_pruning.add_argument("--partitioned-table", default="pruning_partitioned")
@@ -469,6 +476,7 @@ def main(argv: list[str] | None = None) -> int:
                     partitioned_table=args.partitioned_table,
                     target_day=args.target_day,
                     repetitions=args.repetitions,
+                    report_schema=args.report_schema,
                 )
         except PartitionExperimentError as error:
             parser.error(str(error))

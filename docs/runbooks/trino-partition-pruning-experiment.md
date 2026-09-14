@@ -47,10 +47,16 @@ uv run lakeops capture-trino-partition-pruning \
   --server http://localhost:8080 \
   --target-day 2026-01-16 \
   --repetitions 3 \
+  --report-schema config/control-plane/schemas/trino-partition-pruning-experiment.schema.json \
   > artifacts/trino-partition-pruning.json
 uv run python tests/integration/check_trino_partition_pruning.py \
   artifacts/trino-partition-pruning.json
 ```
+
+The producer validates the complete report against the checked-in Draft 2020-12 JSON
+Schema after proving identical filtered results and reduced scan volume. Keep
+`--report-schema` explicit when automation runs outside the repository root; the distinct
+name avoids overloading the existing catalog `--schema` option.
 
 ## Interpretation
 
