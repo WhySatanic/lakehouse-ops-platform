@@ -221,6 +221,23 @@ def test_duplicate_output_schema_id_is_rejected(tmp_path: Path) -> None:
         verify_control_plane_contract(path, build_parser())
 
 
+@pytest.mark.parametrize("keyword", ["$ref", "$dynamicRef"])
+def test_external_output_schema_reference_is_rejected(
+    tmp_path: Path, keyword: str
+) -> None:
+    contract = _load_contract()
+    path = _write_contract(tmp_path, contract)
+    schema_path = tmp_path / contract["outputs"][0]["schema_path"]
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema["properties"]["schema_version"][keyword] = (
+        "https://schemas.example/schema-version.json"
+    )
+    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+
+    with pytest.raises(ControlPlaneContractError, match="external schema reference"):
+        verify_control_plane_contract(path, build_parser())
+
+
 def test_report_schema_drift_is_rejected(tmp_path: Path) -> None:
     contract = _load_contract()
     path = _write_contract(tmp_path, contract)

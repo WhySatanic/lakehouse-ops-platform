@@ -20,7 +20,9 @@ metaschema validation. Absolute schema paths and references that resolve outside
 contract directory are also rejected. Each schema must require `schema_version` and bind
 it with a `const` equal to the output version declared by the contract. Schemas must also
 declare the Draft 2020-12 dialect and a unique non-empty `$id`. New commands and options
-are compatible additions and do not require consumers to upgrade.
+are compatible additions and do not require consumers to upgrade. `$ref` and
+`$dynamicRef` values must be local fragments so verification never depends on a remote
+schema registry or network availability.
 
 ## CLI policy
 
@@ -56,6 +58,6 @@ surface.
 
 ## Upgrade notes
 
-Version `1.14.5` requires the exact Draft 2020-12 dialect declaration and a unique `$id`
-for every public output schema. It preserves contract `1.0.0`, report shapes, and producer
-behavior. Custom contract extensions must provide their own stable schema identity.
+Version `1.14.6` rejects external `$ref` and `$dynamicRef` values anywhere inside a public
+output schema. It preserves contract `1.0.0`, report shapes, and producer behavior. Custom
+contract extensions must bundle definitions locally and reference them with fragments.
