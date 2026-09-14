@@ -284,6 +284,47 @@ def test_duplicate_local_output_schema_anchor_is_rejected(
         verify_control_plane_contract(path, build_parser())
 
 
+def test_duplicate_local_output_schema_resource_id_is_rejected(tmp_path: Path) -> None:
+    contract = _load_contract()
+    path = _write_contract(tmp_path, contract)
+    schema_path = tmp_path / contract["outputs"][0]["schema_path"]
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema.setdefault("$defs", {}).update(
+        {
+            "first_resource": {"$id": "shared", "type": "string"},
+            "second_resource": {"$id": "shared", "type": "string"},
+        }
+    )
+    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+
+    with pytest.raises(ControlPlaneContractError, match="duplicate schema resource id"):
+        verify_control_plane_contract(path, build_parser())
+
+
+def test_relative_output_schema_resource_ids_use_parent_scope(tmp_path: Path) -> None:
+    contract = _load_contract()
+    path = _write_contract(tmp_path, contract)
+    schema_path = tmp_path / contract["outputs"][0]["schema_path"]
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema.setdefault("$defs", {}).update(
+        {
+            "first_parent": {
+                "$id": "first/",
+                "$defs": {"child": {"$id": "shared", "type": "string"}},
+            },
+            "second_parent": {
+                "$id": "second/",
+                "$defs": {"child": {"$id": "shared", "type": "string"}},
+            },
+        }
+    )
+    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+
+    report = verify_control_plane_contract(path, build_parser())
+
+    assert report["status"] == "compatible"
+
+
 @pytest.mark.parametrize("keyword", ["$ref", "$dynamicRef"])
 def test_unresolved_local_output_schema_reference_is_rejected(
     tmp_path: Path, keyword: str

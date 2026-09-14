@@ -207,6 +207,7 @@ def _validate_local_schema_references(name: str, schema: dict[str, Any]) -> None
         registry.resolver(schema["$id"]),
         schema["$id"],
         {},
+        set(),
     )
 
 
@@ -216,9 +217,16 @@ def _validate_schema_resource_references(
     resolver: Any,
     base_uri: str,
     anchors_by_resource: dict[str, set[str]],
+    resource_uris: set[str],
 ) -> None:
     resource_id = resource.id()
     resource_uri = urljoin(base_uri, resource_id) if resource_id else base_uri
+    if resource_id:
+        if resource_uri in resource_uris:
+            raise ControlPlaneContractError(
+                f"output {name} has duplicate schema resource id: {resource_uri}"
+            )
+        resource_uris.add(resource_uri)
     anchor_names = anchors_by_resource.setdefault(resource_uri, set())
     for anchor in resource.anchors():
         if anchor.name in anchor_names:
@@ -245,6 +253,7 @@ def _validate_schema_resource_references(
             resolver.in_subresource(subresource),
             resource_uri,
             anchors_by_resource,
+            resource_uris,
         )
 
 

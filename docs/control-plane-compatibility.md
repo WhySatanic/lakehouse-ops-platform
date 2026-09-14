@@ -25,7 +25,8 @@ are compatible additions and do not require consumers to upgrade. `$ref` and
 schema registry or network availability. Every fragment must resolve to a bundled JSON
 Pointer or anchor; dangling references fail the compatibility gate before runtime.
 Anchor names must be unique within each schema resource, including names shared between
-`$anchor` and `$dynamicAnchor`.
+`$anchor` and `$dynamicAnchor`. Canonically resolved `$id` values must also be unique
+within a public schema document so nested resources cannot overwrite one another.
 
 ## CLI policy
 
@@ -61,6 +62,6 @@ surface.
 
 ## Upgrade notes
 
-Version `1.14.8` rejects duplicate `$anchor` and `$dynamicAnchor` names within each public
-schema resource. It preserves contract `1.0.0`, report shapes, and producer behavior.
-Custom contract extensions must assign one unambiguous target to every local anchor name.
+Version `1.14.9` rejects duplicate canonical `$id` values among nested resources in each
+public output schema. Relative identifiers resolve against their parent resource before
+comparison. Contract `1.0.0`, report shapes, and producer behavior remain unchanged.
