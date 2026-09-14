@@ -5,6 +5,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+from referencing import Registry, Resource
+from referencing.exceptions import Unresolvable
+
 from lakehouse_ops.digests import normalized_text_digest
 from lakehouse_ops.report_schema import (
     ReportSchemaError,
@@ -194,6 +197,38 @@ def _validate_local_schema_references(name: str, schema: dict[str, Any]) -> None
                 pending.append(value)
         elif isinstance(node, list):
             pending.extend(node)
+
+    resource = Resource.from_contents(schema)
+    registry = Registry().with_resource(schema["$id"], resource).crawl()
+    _validate_schema_resource_references(
+        name,
+        resource,
+        registry.resolver(schema["$id"]),
+    )
+
+
+def _validate_schema_resource_references(
+    name: str,
+    resource: Resource[Any],
+    resolver: Any,
+) -> None:
+    contents = resource.contents
+    if isinstance(contents, dict):
+        for keyword in ("$ref", "$dynamicRef"):
+            reference = contents.get(keyword)
+            if isinstance(reference, str):
+                try:
+                    resolver.lookup(reference)
+                except Unresolvable as error:
+                    raise ControlPlaneContractError(
+                        f"output {name} has unresolved schema reference: {reference}"
+                    ) from error
+    for subresource in resource.subresources():
+        _validate_schema_resource_references(
+            name,
+            subresource,
+            resolver.in_subresource(subresource),
+        )
 
 
 def _cli_surface(parser: argparse.ArgumentParser) -> dict[str, set[str]]:

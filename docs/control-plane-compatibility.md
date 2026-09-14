@@ -22,7 +22,8 @@ it with a `const` equal to the output version declared by the contract. Schemas 
 declare the Draft 2020-12 dialect and a unique non-empty `$id`. New commands and options
 are compatible additions and do not require consumers to upgrade. `$ref` and
 `$dynamicRef` values must be local fragments so verification never depends on a remote
-schema registry or network availability.
+schema registry or network availability. Every fragment must resolve to a bundled JSON
+Pointer or anchor; dangling references fail the compatibility gate before runtime.
 
 ## CLI policy
 
@@ -58,6 +59,7 @@ surface.
 
 ## Upgrade notes
 
-Version `1.14.6` rejects external `$ref` and `$dynamicRef` values anywhere inside a public
-output schema. It preserves contract `1.0.0`, report shapes, and producer behavior. Custom
-contract extensions must bundle definitions locally and reference them with fragments.
+Version `1.14.7` resolves every local `$ref` and `$dynamicRef` in each public output schema
+and rejects missing JSON Pointers or anchors. It preserves contract `1.0.0`, report shapes,
+and producer behavior. Custom contract extensions must bundle definitions locally and keep
+all fragments resolvable.
