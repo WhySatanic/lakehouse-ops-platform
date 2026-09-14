@@ -17,8 +17,9 @@ frozen option changes its required flag, type, default, or choices, an output re
 an unknown producer, an output leaves schema major `1`, or its declared `schema_path` is
 missing, does not resolve to a file, contains invalid JSON, or fails Draft 2020-12
 metaschema validation. Absolute schema paths and references that resolve outside the
-contract directory are also rejected. New commands and options are compatible additions
-and do not require consumers to upgrade.
+contract directory are also rejected. Each schema must require `schema_version` and bind
+it with a `const` equal to the output version declared by the contract. New commands and
+options are compatible additions and do not require consumers to upgrade.
 
 ## CLI policy
 
@@ -54,7 +55,6 @@ surface.
 
 ## Upgrade notes
 
-Version `1.14.3` confines every declared output schema to the contract directory after
-canonical path resolution. It preserves contract `1.0.0`, report shapes, and producer
-behavior. Custom contract extensions must use portable relative paths and package their
-schemas with the contract.
+Version `1.14.4` binds each declared output `schema_version` to the matching required
+`const` in its JSON Schema. It preserves contract `1.0.0`, report shapes, and producer
+behavior. Custom contract extensions must keep both version declarations synchronized.
