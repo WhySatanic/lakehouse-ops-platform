@@ -974,18 +974,13 @@ def test_verify_control_plane_contract_refreshes_schema_digests_first(
 ) -> None:
     contract = tmp_path / "contract.json"
     report = {"schema_version": "1.0", "status": "compatible"}
-    calls: list[tuple[str, Path]] = []
+    observed: dict[str, object] = {}
 
-    def fake_refresh(path: Path) -> int:
-        calls.append(("refresh", path))
-        return 11
-
-    def fake_verify(path: Path, parser: argparse.ArgumentParser) -> dict[str, str]:
-        calls.append(("verify", path))
+    def fake_refresh(path: Path, parser: argparse.ArgumentParser) -> dict[str, str]:
+        observed.update(path=path, parser=parser)
         return report
 
     monkeypatch.setattr(cli, "refresh_control_plane_schema_digests", fake_refresh)
-    monkeypatch.setattr(cli, "verify_control_plane_contract", fake_verify)
 
     exit_code = cli.main(
         [
@@ -998,7 +993,8 @@ def test_verify_control_plane_contract_refreshes_schema_digests_first(
 
     assert exit_code == 0
     assert json.loads(capsys.readouterr().out) == report
-    assert calls == [("refresh", contract), ("verify", contract)]
+    assert observed["path"] == contract
+    assert isinstance(observed["parser"], argparse.ArgumentParser)
 
 
 def test_verify_image_lock_command(
