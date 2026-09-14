@@ -12,6 +12,20 @@ uv run lakeops verify-control-plane-contract \
   --contract config/control-plane/contract.json
 ```
 
+After reviewing an intentional schema edit, refresh all schema bindings and immediately
+verify the resulting contract:
+
+```bash
+uv run lakeops verify-control-plane-contract \
+  --contract config/control-plane/contract.json \
+  --refresh-schema-digests
+```
+
+The refresh writes the complete contract through a temporary file and atomically replaces
+the original. It normalizes the JSON layout and then runs the same structural compatibility
+gate. Review the schema and contract diff together before committing. A refreshed digest
+records artifact identity; it does not approve semantic compatibility by itself.
+
 The command exits non-zero if a baseline command or long option no longer exists, a
 frozen option changes its required flag, type, default, or choices, an output references
 an unknown producer, an output leaves schema major `1`, or its declared `schema_path` is
@@ -64,6 +78,7 @@ surface.
 
 ## Upgrade notes
 
-Version `1.14.10` requires a matching `schema_sha256` for every public output. This makes
-all schema changes explicit contract updates while preserving contract `1.0.0`, CLI
-behavior, report shapes, and producer behavior.
+Version `1.15.0` adds the opt-in `--refresh-schema-digests` workflow. Existing verification
+remains read-only by default. Custom automation can keep invoking the command without the
+new flag, while maintainers can replace manual hash edits with one atomic refresh followed
+by verification.

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin
@@ -22,6 +24,53 @@ class ControlPlaneContractError(RuntimeError):
 
 
 DRAFT_2020_12 = "https://json-schema.org/draft/2020-12/schema"
+
+
+def refresh_control_plane_schema_digests(contract_path: Path) -> int:
+    try:
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ControlPlaneContractError(f"cannot load control-plane contract: {error}") from error
+    outputs = contract.get("outputs") if isinstance(contract, dict) else None
+    if not isinstance(outputs, list) or not outputs:
+        raise ControlPlaneContractError("control-plane outputs must be a non-empty array")
+
+    for output in outputs:
+        if not isinstance(output, dict):
+            raise ControlPlaneContractError("output contract must be an object")
+        name = output.get("name")
+        schema_path = output.get("schema_path")
+        if not isinstance(name, str) or not name:
+            raise ControlPlaneContractError("output contract must declare a name")
+        if not isinstance(schema_path, str) or not schema_path:
+            raise ControlPlaneContractError(f"output {name} must declare schema_path")
+        resolved_schema_path = _resolve_output_schema_path(contract_path, schema_path, name)
+        if not resolved_schema_path.is_file():
+            raise ControlPlaneContractError(
+                f"output schema_path does not exist for {name}: {schema_path}"
+            )
+        output["schema_sha256"] = normalized_text_digest(resolved_schema_path)
+
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=contract_path.parent,
+            prefix=".lakeops-contract-",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary:
+            json.dump(contract, temporary, indent=2, ensure_ascii=False)
+            temporary.write("\n")
+            temporary_path = Path(temporary.name)
+        os.replace(temporary_path, contract_path)
+    except OSError as error:
+        raise ControlPlaneContractError(f"cannot update control-plane contract: {error}") from error
+    finally:
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink()
+    return len(outputs)
 
 
 def verify_control_plane_contract(
