@@ -12,6 +12,7 @@ from lakehouse_ops.control_plane_contract import (
     ControlPlaneContractError,
     verify_control_plane_contract,
 )
+from lakehouse_ops.digests import normalized_text_digest
 
 CONTRACT = Path("config/control-plane/contract.json")
 
@@ -123,6 +124,23 @@ def test_missing_output_schema_is_rejected(tmp_path: Path) -> None:
     contract["outputs"][0]["schema_path"] = "schemas/missing.schema.json"
 
     with pytest.raises(ControlPlaneContractError, match="schema_path does not exist"):
+        verify_control_plane_contract(_write_contract(tmp_path, contract), build_parser())
+
+
+def test_output_without_schema_digest_is_rejected(tmp_path: Path) -> None:
+    contract = _load_contract()
+    contract["outputs"][0].pop("schema_sha256", None)
+
+    with pytest.raises(ControlPlaneContractError, match="must declare schema_sha256"):
+        verify_control_plane_contract(_write_contract(tmp_path, contract), build_parser())
+
+
+@pytest.mark.parametrize("digest", ["invalid", "0" * 64])
+def test_output_schema_digest_drift_is_rejected(tmp_path: Path, digest: str) -> None:
+    contract = _load_contract()
+    contract["outputs"][0]["schema_sha256"] = digest
+
+    with pytest.raises(ControlPlaneContractError, match="schema_sha256"):
         verify_control_plane_contract(_write_contract(tmp_path, contract), build_parser())
 
 
@@ -248,7 +266,7 @@ def test_local_output_schema_anchor_is_resolved(tmp_path: Path) -> None:
         "type": "string",
     }
     schema["properties"]["schema_version"]["$ref"] = "#declaredVersion"
-    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+    _write_schema(path, contract, schema_path, schema)
 
     report = verify_control_plane_contract(path, build_parser())
 
@@ -318,7 +336,7 @@ def test_relative_output_schema_resource_ids_use_parent_scope(tmp_path: Path) ->
             },
         }
     )
-    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+    _write_schema(path, contract, schema_path, schema)
 
     report = verify_control_plane_contract(path, build_parser())
 
@@ -346,7 +364,7 @@ def test_report_schema_drift_is_rejected(tmp_path: Path) -> None:
     schema_path = tmp_path / "schemas" / "control-plane-contract-verification.schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     schema["properties"]["status"] = {"const": "broken"}
-    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+    _write_schema(path, contract, schema_path, schema)
 
     with pytest.raises(ControlPlaneContractError, match="report schema validation failed"):
         verify_control_plane_contract(path, build_parser())
@@ -402,3 +420,20 @@ def _copy_schemas(tmp_path: Path) -> None:
     target = tmp_path / "schemas"
     if not target.exists():
         shutil.copytree(CONTRACT.parent / "schemas", target)
+
+
+def _write_schema(
+    contract_path: Path,
+    contract: dict[str, object],
+    schema_path: Path,
+    schema: dict[str, object],
+) -> None:
+    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+    relative_path = schema_path.relative_to(contract_path.parent).as_posix()
+    output = next(
+        output
+        for output in contract["outputs"]
+        if output["schema_path"] == relative_path
+    )
+    output["schema_sha256"] = normalized_text_digest(schema_path)
+    contract_path.write_text(json.dumps(contract), encoding="utf-8")

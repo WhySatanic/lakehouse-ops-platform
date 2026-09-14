@@ -26,7 +26,9 @@ schema registry or network availability. Every fragment must resolve to a bundle
 Pointer or anchor; dangling references fail the compatibility gate before runtime.
 Anchor names must be unique within each schema resource, including names shared between
 `$anchor` and `$dynamicAnchor`. Canonically resolved `$id` values must also be unique
-within a public schema document so nested resources cannot overwrite one another.
+within a public schema document so nested resources cannot overwrite one another. Every
+output binds its schema file to a lowercase SHA-256 digest in the contract. Digests
+normalize line endings so Windows and Linux checkouts verify the same reviewed artifact.
 
 ## CLI policy
 
@@ -62,6 +64,6 @@ surface.
 
 ## Upgrade notes
 
-Version `1.14.9` rejects duplicate canonical `$id` values among nested resources in each
-public output schema. Relative identifiers resolve against their parent resource before
-comparison. Contract `1.0.0`, report shapes, and producer behavior remain unchanged.
+Version `1.14.10` requires a matching `schema_sha256` for every public output. This makes
+all schema changes explicit contract updates while preserving contract `1.0.0`, CLI
+behavior, report shapes, and producer behavior.
