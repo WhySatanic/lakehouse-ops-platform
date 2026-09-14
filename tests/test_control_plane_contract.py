@@ -126,6 +126,27 @@ def test_missing_output_schema_is_rejected(tmp_path: Path) -> None:
         verify_control_plane_contract(_write_contract(tmp_path, contract), build_parser())
 
 
+def test_absolute_output_schema_path_is_rejected(tmp_path: Path) -> None:
+    contract = _load_contract()
+    schema_path = (CONTRACT.parent / contract["outputs"][0]["schema_path"]).resolve()
+    contract["outputs"][0]["schema_path"] = str(schema_path)
+
+    with pytest.raises(ControlPlaneContractError, match="must stay within contract directory"):
+        verify_control_plane_contract(_write_contract(tmp_path, contract), build_parser())
+
+
+def test_output_schema_path_escape_is_rejected(tmp_path: Path) -> None:
+    contract = _load_contract()
+    contract_dir = tmp_path / "contract"
+    external_schema = tmp_path / "external.schema.json"
+    source_schema = CONTRACT.parent / contract["outputs"][0]["schema_path"]
+    shutil.copyfile(source_schema, external_schema)
+    contract["outputs"][0]["schema_path"] = "../external.schema.json"
+
+    with pytest.raises(ControlPlaneContractError, match="must stay within contract directory"):
+        verify_control_plane_contract(_write_contract(contract_dir, contract), build_parser())
+
+
 def test_invalid_output_schema_definition_is_rejected(tmp_path: Path) -> None:
     contract = _load_contract()
     path = _write_contract(tmp_path, contract)

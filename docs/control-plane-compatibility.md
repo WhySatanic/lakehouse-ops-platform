@@ -16,8 +16,9 @@ The command exits non-zero if a baseline command or long option no longer exists
 frozen option changes its required flag, type, default, or choices, an output references
 an unknown producer, an output leaves schema major `1`, or its declared `schema_path` is
 missing, does not resolve to a file, contains invalid JSON, or fails Draft 2020-12
-metaschema validation. New commands and options are compatible additions and do not
-require consumers to upgrade.
+metaschema validation. Absolute schema paths and references that resolve outside the
+contract directory are also rejected. New commands and options are compatible additions
+and do not require consumers to upgrade.
 
 ## CLI policy
 
@@ -53,7 +54,7 @@ surface.
 
 ## Upgrade notes
 
-Version `1.14.2` validates every declared output schema against the Draft 2020-12
-metaschema inside the compatibility gate. It preserves contract `1.0.0`, report shapes,
-and producer behavior. Custom contract extensions must ship a syntactically valid schema
-that passes the same definition check.
+Version `1.14.3` confines every declared output schema to the contract directory after
+canonical path resolution. It preserves contract `1.0.0`, report shapes, and producer
+behavior. Custom contract extensions must use portable relative paths and package their
+schemas with the contract.

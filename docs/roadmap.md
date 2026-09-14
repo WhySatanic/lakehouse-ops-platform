@@ -161,6 +161,8 @@ centralized authorization, observability, and recovery.
   executable control-plane compatibility gate.
 - [x] Validate every declared output schema against the Draft 2020-12 metaschema before
   accepting the control-plane contract.
+- [x] Confine output schemas to portable relative paths inside the contract directory,
+  including canonical resolution that rejects parent traversal.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.

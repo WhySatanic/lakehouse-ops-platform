@@ -94,7 +94,7 @@ def verify_control_plane_contract(
         schema_path = output.get("schema_path")
         if not isinstance(schema_path, str) or not schema_path:
             raise ControlPlaneContractError(f"output {name} must declare schema_path")
-        resolved_schema_path = contract_path.parent / schema_path
+        resolved_schema_path = _resolve_output_schema_path(contract_path, schema_path, name)
         if not resolved_schema_path.is_file():
             raise ControlPlaneContractError(
                 f"output schema_path does not exist for {name}: {schema_path}"
@@ -129,6 +129,19 @@ def verify_control_plane_contract(
     except ReportSchemaError as error:
         raise ControlPlaneContractError(str(error)) from error
     return report
+
+
+def _resolve_output_schema_path(contract_path: Path, schema_path: str, name: str) -> Path:
+    schema_reference = Path(schema_path)
+    contract_directory = contract_path.parent.resolve()
+    resolved_schema_path = (contract_directory / schema_reference).resolve()
+    if schema_reference.is_absolute() or not resolved_schema_path.is_relative_to(
+        contract_directory
+    ):
+        raise ControlPlaneContractError(
+            f"output schema_path must stay within contract directory for {name}: {schema_path}"
+        )
+    return resolved_schema_path
 
 
 def _cli_surface(parser: argparse.ArgumentParser) -> dict[str, set[str]]:
