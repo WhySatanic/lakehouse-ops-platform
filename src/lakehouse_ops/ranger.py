@@ -9,8 +9,12 @@ import httpx
 
 from lakehouse_ops.access_policy import load_access_policy
 from lakehouse_ops.break_glass import apply_break_glass_lease
+from lakehouse_ops.report_schema import ReportSchemaError, validate_report_schema
 
 MANAGED_DESCRIPTION = "Managed by Lakehouse Ops role-policy schema 1.0"
+DEFAULT_REPORT_SCHEMA = Path(
+    "config/control-plane/schemas/ranger-policy-sync-report.schema.json"
+)
 
 
 class RangerAdminError(RuntimeError):
@@ -176,6 +180,7 @@ class RangerAdminClient:
         trino_jdbc_url: str,
         service_user: str,
         break_glass_path: Path | None = None,
+        report_schema: Path = DEFAULT_REPORT_SCHEMA,
     ) -> dict[str, Any]:
         model = load_access_policy(model_path)
         break_glass = None
@@ -268,6 +273,10 @@ class RangerAdminClient:
         }
         if break_glass is not None:
             report["break_glass"] = break_glass
+        try:
+            validate_report_schema(report, report_schema)
+        except ReportSchemaError as error:
+            raise RangerAdminError(str(error)) from error
         return report
 
     def _remove_bootstrap_policies(

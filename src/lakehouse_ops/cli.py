@@ -132,6 +132,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ranger_policy.add_argument("--service-user", default="platform_admin")
     ranger_policy.add_argument(
+        "--report-schema",
+        type=Path,
+        default=Path("config/control-plane/schemas/ranger-policy-sync-report.schema.json"),
+    )
+    ranger_policy.add_argument(
         "--break-glass-lease",
         type=Path,
         help="apply an approved, time-bounded role lease during synchronization",
@@ -424,6 +429,7 @@ def main(argv: list[str] | None = None) -> int:
                     trino_jdbc_url=args.trino_jdbc_url,
                     service_user=args.service_user,
                     break_glass_path=args.break_glass_lease,
+                    report_schema=args.report_schema,
                 )
         except (OSError, AccessPolicyError, BreakGlassError, RangerAdminError) as error:
             parser.error(str(error))

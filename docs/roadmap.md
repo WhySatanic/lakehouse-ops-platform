@@ -155,6 +155,8 @@ centralized authorization, observability, and recovery.
   after proving identical results and reduced scan volume.
 - [x] Validate Trino sort-order experiment reports against a versioned JSON Schema after
   proving identical results, declared sort order, and reduced scan volume.
+- [x] Validate Ranger policy-synchronization reports against a versioned JSON Schema after
+  service, user, managed-policy, and optional break-glass reconciliation.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.

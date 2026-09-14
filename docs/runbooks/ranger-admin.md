@@ -99,8 +99,13 @@ with the incident evidence:
 ```bash
 uv run --env-file .env lakeops sync-ranger-policy \
   --break-glass-lease approved-break-glass.json \
+  --report-schema config/control-plane/schemas/ranger-policy-sync-report.schema.json \
   > break-glass-grant-report.json
 ```
+
+The synchronizer validates every completed report against the reviewed Draft 2020-12
+schema before emitting JSON. Automation running outside the repository should pass
+`--report-schema` explicitly so its trust boundary does not depend on the working directory.
 
 An active lease adds the named user to the requested existing role. A future lease is
 reported as `not_yet_valid`; an expired lease is reported as `expired` and is not added to

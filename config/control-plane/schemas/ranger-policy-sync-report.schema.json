@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/WhySatanic/lakehouse-ops-platform/schemas/ranger-policy-sync-report-1.0.json",
+  "title": "Ranger policy synchronization report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "service", "service_status", "users", "policies"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "status": {"const": "synchronized"},
+    "service": {"type": "string", "minLength": 1},
+    "service_status": {"enum": ["created", "updated", "unchanged"]},
+    "users": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["desired", "created", "unchanged"],
+      "properties": {
+        "desired": {"type": "integer", "minimum": 0},
+        "created": {"type": "integer", "minimum": 0},
+        "unchanged": {"type": "integer", "minimum": 0}
+      }
+    },
+    "policies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["desired", "bootstrap_deleted", "created", "updated", "unchanged", "deleted"],
+      "properties": {
+        "desired": {"type": "integer", "minimum": 0},
+        "bootstrap_deleted": {"type": "integer", "minimum": 0},
+        "created": {"type": "integer", "minimum": 0},
+        "updated": {"type": "integer", "minimum": 0},
+        "unchanged": {"type": "integer", "minimum": 0},
+        "deleted": {"type": "integer", "minimum": 0}
+      }
+    },
+    "break_glass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "grant_id", "status", "user", "role", "approved_by", "ticket", "reason", "issued_at", "expires_at", "evaluated_at"],
+      "properties": {
+        "schema_version": {"const": "1.0"},
+        "grant_id": {"type": "string", "minLength": 1},
+        "status": {"enum": ["active", "not_yet_valid", "expired"]},
+        "user": {"type": "string", "minLength": 1},
+        "role": {"type": "string", "minLength": 1},
+        "approved_by": {"type": "string", "minLength": 1},
+        "ticket": {"type": "string", "minLength": 1},
+        "reason": {"type": "string", "minLength": 1},
+        "issued_at": {"type": "string", "minLength": 1},
+        "expires_at": {"type": "string", "minLength": 1},
+        "evaluated_at": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}
