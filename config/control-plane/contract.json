@@ -93,16 +93,16 @@
     }
   },
   "outputs": [
-    {"name": "iceberg_metadata", "producer": "collect-iceberg-metadata", "schema_version": "1.0", "schema_path": "schemas/iceberg-metadata-report.schema.json"},
-    {"name": "maintenance_plan", "producer": "plan-iceberg-maintenance", "schema_version": "1.0", "schema_path": "schemas/iceberg-maintenance-plan.schema.json"},
-    {"name": "trino_baseline", "producer": "capture-trino-baseline", "schema_version": "1.0", "schema_path": "schemas/trino-baseline-report.schema.json"},
-    {"name": "compaction_experiment", "producer": "compare-trino-compaction", "schema_version": "1.0", "schema_path": "schemas/trino-compaction-experiment.schema.json"},
-    {"name": "partition_pruning_experiment", "producer": "capture-trino-partition-pruning", "schema_version": "1.0", "schema_path": "schemas/trino-partition-pruning-experiment.schema.json"},
-    {"name": "sort_order_experiment", "producer": "capture-trino-sort-order", "schema_version": "1.1", "schema_path": "schemas/trino-sort-order-experiment.schema.json"},
-    {"name": "ranger_policy_sync", "producer": "sync-ranger-policy", "schema_version": "1.0", "schema_path": "schemas/ranger-policy-sync-report.schema.json"},
-    {"name": "release_readiness_attestation", "producer": "verify-release-readiness", "schema_version": "1.0", "schema_path": "schemas/release-readiness-attestation.schema.json"},
-    {"name": "release_candidate_bundle_report", "producer": "build-release-candidate", "schema_version": "1.0", "schema_path": "schemas/release-candidate-bundle-report.schema.json"},
-    {"name": "image_lock_verification", "producer": "verify-image-lock", "schema_version": "1.0", "schema_path": "schemas/image-lock-verification.schema.json"},
-    {"name": "control_plane_contract_verification", "producer": "verify-control-plane-contract", "schema_version": "1.0", "schema_path": "schemas/control-plane-contract-verification.schema.json"}
+    {"name": "iceberg_metadata", "producer": "collect-iceberg-metadata", "schema_version": "1.0", "schema_path": "schemas/iceberg-metadata-report.schema.json", "schema_sha256": "136c1ea121dd5502d4007ac6d1e195b64e416378deaf664bfc881273d5c489b1"},
+    {"name": "maintenance_plan", "producer": "plan-iceberg-maintenance", "schema_version": "1.0", "schema_path": "schemas/iceberg-maintenance-plan.schema.json", "schema_sha256": "9a4a8d54c3d8513bbce56c088827441b45035eab242473a1923b24e8753c4cc1"},
+    {"name": "trino_baseline", "producer": "capture-trino-baseline", "schema_version": "1.0", "schema_path": "schemas/trino-baseline-report.schema.json", "schema_sha256": "8ae2e97a08e53eb96d78cd4dfed1a8ca706749c432f9c6f6f19f8545174ba83e"},
+    {"name": "compaction_experiment", "producer": "compare-trino-compaction", "schema_version": "1.0", "schema_path": "schemas/trino-compaction-experiment.schema.json", "schema_sha256": "b41372a71311c4df1000c2d00070f5a627421c6d4bfcce89d7364bb19b207b6b"},
+    {"name": "partition_pruning_experiment", "producer": "capture-trino-partition-pruning", "schema_version": "1.0", "schema_path": "schemas/trino-partition-pruning-experiment.schema.json", "schema_sha256": "8cfc1f894378d441291c4b9fb0bfabe81fa9839c259a95d5cda842150e232546"},
+    {"name": "sort_order_experiment", "producer": "capture-trino-sort-order", "schema_version": "1.1", "schema_path": "schemas/trino-sort-order-experiment.schema.json", "schema_sha256": "6f935f52bfa4c3cace2be3449b98a0317707ade442b14e22c4aa227796cce918"},
+    {"name": "ranger_policy_sync", "producer": "sync-ranger-policy", "schema_version": "1.0", "schema_path": "schemas/ranger-policy-sync-report.schema.json", "schema_sha256": "d83534566b89c6f1af4bccdb6875fd76dbd8cb7f5c586a56261781b053d7c80c"},
+    {"name": "release_readiness_attestation", "producer": "verify-release-readiness", "schema_version": "1.0", "schema_path": "schemas/release-readiness-attestation.schema.json", "schema_sha256": "30fe77dce52d7e032114711aa34cb8de85ce899b6772d7e832bed8289ce41cc9"},
+    {"name": "release_candidate_bundle_report", "producer": "build-release-candidate", "schema_version": "1.0", "schema_path": "schemas/release-candidate-bundle-report.schema.json", "schema_sha256": "bea9a13a4f6c9068f13bf1cda1be47a352528386bf548af9838365199570c37f"},
+    {"name": "image_lock_verification", "producer": "verify-image-lock", "schema_version": "1.0", "schema_path": "schemas/image-lock-verification.schema.json", "schema_sha256": "9bfa66599b86d1837ff9c71d733f65b51fbfab230f833cb919a827834e94ff2c"},
+    {"name": "control_plane_contract_verification", "producer": "verify-control-plane-contract", "schema_version": "1.0", "schema_path": "schemas/control-plane-contract-verification.schema.json", "schema_sha256": "028195776bba0c4608cb27b993023034eb8f181a57aead2c43e03a748966b0ba"}
   ]
 }

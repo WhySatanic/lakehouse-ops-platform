@@ -175,6 +175,8 @@ centralized authorization, observability, and recovery.
   local reference resolution cannot silently select an ambiguous target.
 - [x] Resolve nested schema resource IDs canonically and reject duplicates within each
   public schema document before a registry can silently overwrite a resource.
+- [x] Bind every public output schema to a normalized SHA-256 digest in the executable
+  contract so reviewed schema content cannot drift silently.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.

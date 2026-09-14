@@ -107,6 +107,13 @@ def verify_control_plane_contract(
             raise ControlPlaneContractError(
                 f"output schema_path does not exist for {name}: {schema_path}"
             )
+        schema_sha256 = output.get("schema_sha256")
+        if not isinstance(schema_sha256, str) or len(schema_sha256) != 64 or any(
+            character not in "0123456789abcdef" for character in schema_sha256
+        ):
+            raise ControlPlaneContractError(
+                f"output {name} must declare schema_sha256 as a lowercase SHA-256 digest"
+            )
         try:
             schema = load_report_schema(resolved_schema_path)
         except ReportSchemaError as error:
@@ -119,6 +126,12 @@ def verify_control_plane_contract(
         schema_ids.add(schema_id)
         _validate_local_schema_references(name, schema)
         _validate_output_schema_version(name, version, schema)
+        actual_schema_sha256 = normalized_text_digest(resolved_schema_path)
+        if schema_sha256 != actual_schema_sha256:
+            raise ControlPlaneContractError(
+                f"output {name} schema_sha256 mismatch: "
+                f"expected {schema_sha256}, observed {actual_schema_sha256}"
+            )
 
     report = {
         "schema_version": "1.0",
