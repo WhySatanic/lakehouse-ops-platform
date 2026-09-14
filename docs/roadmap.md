@@ -173,6 +173,8 @@ centralized authorization, observability, and recovery.
   anchors before runtime validation consumes the schema.
 - [x] Reject duplicate static or dynamic anchor names within a public schema resource so
   local reference resolution cannot silently select an ambiguous target.
+- [x] Resolve nested schema resource IDs canonically and reject duplicates within each
+  public schema document before a registry can silently overwrite a resource.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.
