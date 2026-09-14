@@ -21,10 +21,12 @@ uv run lakeops verify-control-plane-contract \
   --refresh-schema-digests
 ```
 
-The refresh writes the complete contract through a temporary file and atomically replaces
-the original. It normalizes the JSON layout and then runs the same structural compatibility
-gate. Review the schema and contract diff together before committing. A refreshed digest
-records artifact identity; it does not approve semantic compatibility by itself.
+The refresh writes the complete candidate contract through a temporary file, runs the same
+structural compatibility gate against that candidate, and atomically replaces the original
+only after validation succeeds. A validation or replacement failure leaves the original
+bytes unchanged. The operation normalizes the JSON layout. Review the schema and contract
+diff together before committing. A refreshed digest records artifact identity; it does not
+approve semantic compatibility by itself.
 
 The command exits non-zero if a baseline command or long option no longer exists, a
 frozen option changes its required flag, type, default, or choices, an output references
@@ -78,7 +80,6 @@ surface.
 
 ## Upgrade notes
 
-Version `1.15.0` adds the opt-in `--refresh-schema-digests` workflow. Existing verification
-remains read-only by default. Custom automation can keep invoking the command without the
-new flag, while maintainers can replace manual hash edits with one atomic refresh followed
-by verification.
+Version `1.15.1` validates the refreshed candidate before replacing the original contract.
+Existing verification remains read-only by default. Custom automation can keep invoking the
+command without the refresh flag.

@@ -179,6 +179,8 @@ centralized authorization, observability, and recovery.
   contract so reviewed schema content cannot drift silently.
 - [x] Refresh reviewed public schema digests through an atomic control-plane operation
   that immediately reruns the compatibility gate.
+- [x] Validate the complete refreshed contract before replacement and preserve the original
+  bytes when validation or atomic replacement fails.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.

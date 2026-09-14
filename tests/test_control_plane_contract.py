@@ -150,13 +150,48 @@ def test_refresh_output_schema_digests_repairs_contract_atomically(tmp_path: Pat
     contract["outputs"][0]["schema_sha256"] = "0" * 64
     path = _write_contract(tmp_path, contract)
 
-    refreshed = contract_module.refresh_control_plane_schema_digests(path)
+    report = contract_module.refresh_control_plane_schema_digests(path, build_parser())
 
     updated = json.loads(path.read_text(encoding="utf-8"))
     schema_path = path.parent / updated["outputs"][0]["schema_path"]
-    assert refreshed == 11
+    assert report["status"] == "compatible"
+    assert report["outputs_verified"] == 11
     assert updated["outputs"][0]["schema_sha256"] == normalized_text_digest(schema_path)
-    assert verify_control_plane_contract(path, build_parser())["status"] == "compatible"
+    assert list(tmp_path.glob(".lakeops-contract-*.tmp")) == []
+
+
+def test_refresh_rejects_invalid_candidate_without_replacing_contract(tmp_path: Path) -> None:
+    path = _write_contract(tmp_path, _load_contract())
+    original = path.read_bytes()
+    schema_path = tmp_path / "schemas" / "iceberg-metadata-report.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema["type"] = "invalid"
+    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+
+    with pytest.raises(ControlPlaneContractError, match="invalid output schema"):
+        contract_module.refresh_control_plane_schema_digests(path, build_parser())
+
+    assert path.read_bytes() == original
+    assert list(tmp_path.glob(".lakeops-contract-*.tmp")) == []
+
+
+def test_refresh_preserves_contract_when_atomic_replace_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    contract = _load_contract()
+    contract["outputs"][0]["schema_sha256"] = "0" * 64
+    path = _write_contract(tmp_path, contract)
+    original = path.read_bytes()
+
+    def fail_replace(source: Path, destination: Path) -> None:
+        raise OSError("replace denied")
+
+    monkeypatch.setattr(contract_module.os, "replace", fail_replace)
+
+    with pytest.raises(ControlPlaneContractError, match=r"cannot update.*replace denied"):
+        contract_module.refresh_control_plane_schema_digests(path, build_parser())
+
+    assert path.read_bytes() == original
     assert list(tmp_path.glob(".lakeops-contract-*.tmp")) == []
 
 

@@ -26,7 +26,9 @@ class ControlPlaneContractError(RuntimeError):
 DRAFT_2020_12 = "https://json-schema.org/draft/2020-12/schema"
 
 
-def refresh_control_plane_schema_digests(contract_path: Path) -> int:
+def refresh_control_plane_schema_digests(
+    contract_path: Path, parser: argparse.ArgumentParser
+) -> dict[str, Any]:
     try:
         contract = json.loads(contract_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
@@ -64,13 +66,14 @@ def refresh_control_plane_schema_digests(contract_path: Path) -> int:
             json.dump(contract, temporary, indent=2, ensure_ascii=False)
             temporary.write("\n")
             temporary_path = Path(temporary.name)
+        report = verify_control_plane_contract(temporary_path, parser)
         os.replace(temporary_path, contract_path)
     except OSError as error:
         raise ControlPlaneContractError(f"cannot update control-plane contract: {error}") from error
     finally:
         if temporary_path is not None and temporary_path.exists():
             temporary_path.unlink()
-    return len(outputs)
+    return report
 
 
 def verify_control_plane_contract(

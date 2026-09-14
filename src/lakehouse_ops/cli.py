@@ -535,8 +535,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "verify-control-plane-contract":
         try:
             if args.refresh_schema_digests:
-                refresh_control_plane_schema_digests(args.contract)
-            report = verify_control_plane_contract(args.contract, parser)
+                report = refresh_control_plane_schema_digests(args.contract, parser)
+            else:
+                report = verify_control_plane_contract(args.contract, parser)
         except ControlPlaneContractError as error:
             parser.error(str(error))
         print(json.dumps(report, sort_keys=True))
