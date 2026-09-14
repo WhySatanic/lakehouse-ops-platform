@@ -167,6 +167,8 @@ centralized authorization, observability, and recovery.
   JSON Schema so contract and producer versions cannot drift independently.
 - [x] Require every output schema to declare the Draft 2020-12 dialect and a unique,
   non-empty `$id` before the control-plane contract is accepted.
+- [x] Keep public output schemas self-contained by rejecting external `$ref` and
+  `$dynamicRef` values recursively throughout each schema definition.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.

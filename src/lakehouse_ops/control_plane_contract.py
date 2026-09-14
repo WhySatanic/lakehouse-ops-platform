@@ -113,6 +113,7 @@ def verify_control_plane_contract(
         if schema_id in schema_ids:
             raise ControlPlaneContractError(f"output schema ids must be unique: {schema_id}")
         schema_ids.add(schema_id)
+        _validate_local_schema_references(name, schema)
         _validate_output_schema_version(name, version, schema)
 
     report = {
@@ -176,6 +177,23 @@ def _validate_output_schema_identity(name: str, schema: dict[str, Any]) -> str:
     if not isinstance(schema_id, str) or not schema_id:
         raise ControlPlaneContractError(f"output {name} must declare a schema id")
     return schema_id
+
+
+def _validate_local_schema_references(name: str, schema: dict[str, Any]) -> None:
+    pending: list[object] = [schema]
+    while pending:
+        node = pending.pop()
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key in {"$ref", "$dynamicRef"} and (
+                    not isinstance(value, str) or not value.startswith("#")
+                ):
+                    raise ControlPlaneContractError(
+                        f"output {name} has external schema reference: {value}"
+                    )
+                pending.append(value)
+        elif isinstance(node, list):
+            pending.extend(node)
 
 
 def _cli_surface(parser: argparse.ArgumentParser) -> dict[str, set[str]]:
