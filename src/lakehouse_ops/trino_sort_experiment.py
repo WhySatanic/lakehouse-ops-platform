@@ -6,8 +6,10 @@ import statistics
 from collections.abc import Callable
 from dataclasses import asdict
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
+from lakehouse_ops.report_schema import ReportSchemaError, validate_report_schema
 from lakehouse_ops.trino import TrinoClient
 
 IDENTIFIER = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
@@ -20,6 +22,9 @@ METRICS = (
     "physical_input_bytes",
     "peak_memory_bytes",
     "spilled_bytes",
+)
+DEFAULT_REPORT_SCHEMA = Path(
+    "config/control-plane/schemas/trino-sort-order-experiment.schema.json"
 )
 
 
@@ -37,6 +42,7 @@ def capture_sort_order_experiment(
     range_start: int,
     range_size: int,
     repetitions: int = 3,
+    report_schema: Path = DEFAULT_REPORT_SCHEMA,
     clock: Callable[[], datetime] | None = None,
 ) -> dict[str, Any]:
     if repetitions not in {3, 5, 7, 9}:
@@ -122,7 +128,7 @@ def capture_sort_order_experiment(
         raise SortExperimentError("sort order did not reduce physical input bytes")
 
     now = clock or (lambda: datetime.now(UTC))
-    return {
+    report = {
         "schema_version": "1.1",
         "status": "ready",
         "experiment": "iceberg_sort_order",
@@ -154,6 +160,11 @@ def capture_sort_order_experiment(
         },
         "latency_observation": _direction(comparison["wall_time_ms"]["delta"]),
     }
+    try:
+        validate_report_schema(report, report_schema)
+    except ReportSchemaError as error:
+        raise SortExperimentError(str(error)) from error
+    return report
 
 
 def _table_state(

@@ -230,6 +230,13 @@ def build_parser() -> argparse.ArgumentParser:
     sort_order.add_argument("--user", default="lakehouse-performance")
     sort_order.add_argument("--catalog", default="lakehouse")
     sort_order.add_argument("--schema", default="ops")
+    sort_order.add_argument(
+        "--report-schema",
+        type=Path,
+        default=Path(
+            "config/control-plane/schemas/trino-sort-order-experiment.schema.json"
+        ),
+    )
     sort_order.add_argument("--baseline-table", default="sort_baseline")
     sort_order.add_argument("--sorted-table", default="sort_ordered")
     sort_order.add_argument("--range-start", type=int, default=30_000)
@@ -494,6 +501,7 @@ def main(argv: list[str] | None = None) -> int:
                     range_start=args.range_start,
                     range_size=args.range_size,
                     repetitions=args.repetitions,
+                    report_schema=args.report_schema,
                 )
         except SortExperimentError as error:
             parser.error(str(error))
