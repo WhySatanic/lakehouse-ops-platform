@@ -492,6 +492,9 @@ def test_sync_ranger_policy_command(
     assert observed["url"] == "http://ranger.test:6080"
     assert observed["password"] == "secret"
     assert observed["break_glass_path"] is None
+    assert observed["report_schema"] == Path(
+        "config/control-plane/schemas/ranger-policy-sync-report.schema.json"
+    )
 
 
 def test_sync_ranger_policy_requires_password(

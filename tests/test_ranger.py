@@ -179,6 +179,31 @@ def test_sync_creates_then_leaves_service_and_policies_unchanged() -> None:
     }
 
 
+def test_sync_rejects_report_schema_drift(tmp_path: Path) -> None:
+    source = Path("config/control-plane/schemas/ranger-policy-sync-report.schema.json")
+    schema = json.loads(source.read_text(encoding="utf-8"))
+    schema["properties"]["status"] = {"const": "failed"}
+    candidate = tmp_path / "ranger-sync.schema.json"
+    candidate.write_text(json.dumps(schema), encoding="utf-8")
+
+    state = RangerState()
+    with RangerAdminClient(
+        "http://ranger.test",
+        "admin",
+        "secret",
+        transport=httpx.MockTransport(state.handle),
+    ) as client, pytest.raises(
+        RangerAdminError, match="report schema validation failed"
+    ):
+        client.sync(
+            model_path=MODEL_PATH,
+            service_name="lakehouse-trino",
+            trino_jdbc_url="jdbc:trino://trino-coordinator:8080",
+            service_user="platform_admin",
+            report_schema=candidate,
+        )
+
+
 def test_sync_applies_active_break_glass_lease(tmp_path: Path) -> None:
     now = datetime.now(UTC)
     lease_path = tmp_path / "break-glass.json"
