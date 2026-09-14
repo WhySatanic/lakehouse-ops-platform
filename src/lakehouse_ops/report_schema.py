@@ -12,10 +12,18 @@ class ReportSchemaError(RuntimeError):
     pass
 
 
-def validate_report_schema(report: dict[str, Any], schema_path: Path) -> None:
+def load_report_schema(schema_path: Path) -> dict[str, Any]:
     try:
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
         Draft202012Validator.check_schema(schema)
+    except (OSError, json.JSONDecodeError, SchemaError) as error:
+        raise ReportSchemaError(f"report schema validation failed: {error}") from error
+    return schema
+
+
+def validate_report_schema(report: dict[str, Any], schema_path: Path) -> None:
+    schema = load_report_schema(schema_path)
+    try:
         Draft202012Validator(schema).validate(report)
-    except (OSError, json.JSONDecodeError, SchemaError, ValidationError) as error:
+    except ValidationError as error:
         raise ReportSchemaError(f"report schema validation failed: {error}") from error
