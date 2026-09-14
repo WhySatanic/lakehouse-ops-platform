@@ -100,11 +100,12 @@ def verify_control_plane_contract(
                 f"output schema_path does not exist for {name}: {schema_path}"
             )
         try:
-            load_report_schema(resolved_schema_path)
+            schema = load_report_schema(resolved_schema_path)
         except ReportSchemaError as error:
             raise ControlPlaneContractError(
                 f"invalid output schema for {name}: {error}"
             ) from error
+        _validate_output_schema_version(name, version, schema)
 
     report = {
         "schema_version": "1.0",
@@ -142,6 +143,20 @@ def _resolve_output_schema_path(contract_path: Path, schema_path: str, name: str
             f"output schema_path must stay within contract directory for {name}: {schema_path}"
         )
     return resolved_schema_path
+
+
+def _validate_output_schema_version(
+    name: str, declared_version: str, schema: dict[str, Any]
+) -> None:
+    properties = schema.get("properties")
+    version_schema = properties.get("schema_version") if isinstance(properties, dict) else None
+    if not isinstance(version_schema, dict) or version_schema.get("const") != declared_version:
+        raise ControlPlaneContractError(
+            f"output {name} schema_version does not match its schema const"
+        )
+    required = schema.get("required")
+    if not isinstance(required, list) or "schema_version" not in required:
+        raise ControlPlaneContractError(f"output {name} schema must require schema_version")
 
 
 def _cli_surface(parser: argparse.ArgumentParser) -> dict[str, set[str]]:

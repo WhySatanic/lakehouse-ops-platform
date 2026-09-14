@@ -163,6 +163,8 @@ centralized authorization, observability, and recovery.
   accepting the control-plane contract.
 - [x] Confine output schemas to portable relative paths inside the contract directory,
   including canonical resolution that rejects parent traversal.
+- [x] Bind each declared output `schema_version` to a required matching `const` in its
+  JSON Schema so contract and producer versions cannot drift independently.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.
