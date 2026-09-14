@@ -110,6 +110,22 @@ def test_unknown_output_producer_is_rejected(tmp_path: Path) -> None:
         verify_control_plane_contract(_write_contract(tmp_path, contract), build_parser())
 
 
+def test_output_without_schema_path_is_rejected(tmp_path: Path) -> None:
+    contract = _load_contract()
+    del contract["outputs"][0]["schema_path"]
+
+    with pytest.raises(ControlPlaneContractError, match="must declare schema_path"):
+        verify_control_plane_contract(_write_contract(tmp_path, contract), build_parser())
+
+
+def test_missing_output_schema_is_rejected(tmp_path: Path) -> None:
+    contract = _load_contract()
+    contract["outputs"][0]["schema_path"] = "schemas/missing.schema.json"
+
+    with pytest.raises(ControlPlaneContractError, match="schema_path does not exist"):
+        verify_control_plane_contract(_write_contract(tmp_path, contract), build_parser())
+
+
 def test_report_schema_drift_is_rejected(tmp_path: Path) -> None:
     contract = _load_contract()
     path = _write_contract(tmp_path, contract)
