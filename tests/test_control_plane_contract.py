@@ -183,6 +183,44 @@ def test_optional_output_schema_version_is_rejected(tmp_path: Path) -> None:
         verify_control_plane_contract(path, build_parser())
 
 
+def test_output_schema_without_draft_2020_12_dialect_is_rejected(tmp_path: Path) -> None:
+    contract = _load_contract()
+    path = _write_contract(tmp_path, contract)
+    schema_path = tmp_path / contract["outputs"][0]["schema_path"]
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema["$schema"] = "http://json-schema.org/draft-07/schema#"
+    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+
+    with pytest.raises(ControlPlaneContractError, match="must declare Draft 2020-12"):
+        verify_control_plane_contract(path, build_parser())
+
+
+def test_output_schema_without_id_is_rejected(tmp_path: Path) -> None:
+    contract = _load_contract()
+    path = _write_contract(tmp_path, contract)
+    schema_path = tmp_path / contract["outputs"][0]["schema_path"]
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    del schema["$id"]
+    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+
+    with pytest.raises(ControlPlaneContractError, match="must declare a schema id"):
+        verify_control_plane_contract(path, build_parser())
+
+
+def test_duplicate_output_schema_id_is_rejected(tmp_path: Path) -> None:
+    contract = _load_contract()
+    path = _write_contract(tmp_path, contract)
+    first_path = tmp_path / contract["outputs"][0]["schema_path"]
+    second_path = tmp_path / contract["outputs"][1]["schema_path"]
+    first_schema = json.loads(first_path.read_text(encoding="utf-8"))
+    second_schema = json.loads(second_path.read_text(encoding="utf-8"))
+    second_schema["$id"] = first_schema["$id"]
+    second_path.write_text(json.dumps(second_schema), encoding="utf-8")
+
+    with pytest.raises(ControlPlaneContractError, match="schema ids must be unique"):
+        verify_control_plane_contract(path, build_parser())
+
+
 def test_report_schema_drift_is_rejected(tmp_path: Path) -> None:
     contract = _load_contract()
     path = _write_contract(tmp_path, contract)

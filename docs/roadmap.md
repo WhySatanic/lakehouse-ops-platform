@@ -165,6 +165,8 @@ centralized authorization, observability, and recovery.
   including canonical resolution that rejects parent traversal.
 - [x] Bind each declared output `schema_version` to a required matching `const` in its
   JSON Schema so contract and producer versions cannot drift independently.
+- [x] Require every output schema to declare the Draft 2020-12 dialect and a unique,
+  non-empty `$id` before the control-plane contract is accepted.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.

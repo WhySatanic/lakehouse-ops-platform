@@ -18,8 +18,9 @@ an unknown producer, an output leaves schema major `1`, or its declared `schema_
 missing, does not resolve to a file, contains invalid JSON, or fails Draft 2020-12
 metaschema validation. Absolute schema paths and references that resolve outside the
 contract directory are also rejected. Each schema must require `schema_version` and bind
-it with a `const` equal to the output version declared by the contract. New commands and
-options are compatible additions and do not require consumers to upgrade.
+it with a `const` equal to the output version declared by the contract. Schemas must also
+declare the Draft 2020-12 dialect and a unique non-empty `$id`. New commands and options
+are compatible additions and do not require consumers to upgrade.
 
 ## CLI policy
 
@@ -55,6 +56,6 @@ surface.
 
 ## Upgrade notes
 
-Version `1.14.4` binds each declared output `schema_version` to the matching required
-`const` in its JSON Schema. It preserves contract `1.0.0`, report shapes, and producer
-behavior. Custom contract extensions must keep both version declarations synchronized.
+Version `1.14.5` requires the exact Draft 2020-12 dialect declaration and a unique `$id`
+for every public output schema. It preserves contract `1.0.0`, report shapes, and producer
+behavior. Custom contract extensions must provide their own stable schema identity.
