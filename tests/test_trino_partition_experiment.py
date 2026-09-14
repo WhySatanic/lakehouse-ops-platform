@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -116,6 +118,19 @@ def test_capture_partition_pruning_experiment_records_reduction() -> None:
     assert report["collected_at"] == "2026-08-25T07:00:00+00:00"
     assert len(report["runs"]["unpartitioned"]) == 3
     assert len(report["runs"]["partitioned"]) == 3
+
+
+def test_capture_partition_pruning_rejects_report_schema_drift(tmp_path: Path) -> None:
+    source = Path(
+        "config/control-plane/schemas/trino-partition-pruning-experiment.schema.json"
+    )
+    schema = json.loads(source.read_text(encoding="utf-8"))
+    schema["properties"]["engine"] = {"const": "spark"}
+    candidate = tmp_path / "partition-pruning.schema.json"
+    candidate.write_text(json.dumps(schema), encoding="utf-8")
+
+    with pytest.raises(PartitionExperimentError, match="report schema validation failed"):
+        capture(FakeTrinoClient(), report_schema=candidate)
 
 
 @pytest.mark.parametrize(

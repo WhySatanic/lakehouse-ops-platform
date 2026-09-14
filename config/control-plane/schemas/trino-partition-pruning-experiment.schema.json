@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/WhySatanic/lakehouse-ops-platform/schemas/trino-partition-pruning-experiment-1.0.json",
+  "title": "Trino partition pruning experiment report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "experiment", "collected_at", "engine", "target_day", "predicate_sha256", "workload", "tables", "filtered_result", "runs", "medians", "comparison", "pruning_evidence", "latency_observation"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "status": {"const": "ready"},
+    "experiment": {"const": "iceberg_partition_pruning"},
+    "collected_at": {"type": "string", "minLength": 1},
+    "engine": {"const": "trino"},
+    "target_day": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "predicate_sha256": {"$ref": "#/$defs/digest"},
+    "workload": {"$ref": "#/$defs/workload"},
+    "tables": {"$ref": "#/$defs/variants_table"},
+    "filtered_result": {"$ref": "#/$defs/filtered_result"},
+    "runs": {"$ref": "#/$defs/variants_runs"},
+    "medians": {"$ref": "#/$defs/variants_metrics"},
+    "comparison": {"$ref": "#/$defs/comparison"},
+    "pruning_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["processed_rows_reduced", "physical_input_bytes_reduced", "processed_rows_reduction_percent", "physical_input_bytes_reduction_percent"],
+      "properties": {
+        "processed_rows_reduced": {"const": true},
+        "physical_input_bytes_reduced": {"const": true},
+        "processed_rows_reduction_percent": {"type": "number", "exclusiveMinimum": 0, "maximum": 100},
+        "physical_input_bytes_reduction_percent": {"type": "number", "exclusiveMinimum": 0, "maximum": 100}
+      }
+    },
+    "latency_observation": {"enum": ["improved", "unchanged", "regressed"]}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "repetitions", "sql_template_sha256"],
+      "properties": {
+        "mode": {"const": "explain_analyze"},
+        "repetitions": {"enum": [3, 5, 7, 9]},
+        "sql_template_sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "table": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["table", "snapshot_id", "data_file_count", "record_count", "total_size_bytes", "partition_count"],
+      "properties": {
+        "table": {"type": "string", "minLength": 1},
+        "snapshot_id": {"type": "string", "minLength": 1},
+        "data_file_count": {"type": "integer", "minimum": 1},
+        "record_count": {"type": "integer", "minimum": 1},
+        "total_size_bytes": {"type": "integer", "minimum": 1},
+        "partition_count": {"type": "integer", "minimum": 1}
+      }
+    },
+    "variants_table": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unpartitioned", "partitioned"],
+      "properties": {
+        "unpartitioned": {"$ref": "#/$defs/table"},
+        "partitioned": {"$ref": "#/$defs/table"}
+      }
+    },
+    "filtered_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["row_count", "event_id_checksum", "maximum_payload_length"],
+      "properties": {
+        "row_count": {"type": "integer", "minimum": 1},
+        "event_id_checksum": {"type": "integer", "minimum": 1},
+        "maximum_payload_length": {"type": "integer", "minimum": 1}
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repetition", "trino_query_id", "plan_sha256", "metrics"],
+      "properties": {
+        "repetition": {"type": "integer", "minimum": 1, "maximum": 9},
+        "trino_query_id": {"type": "string", "minLength": 1},
+        "plan_sha256": {"$ref": "#/$defs/digest"},
+        "metrics": {"$ref": "#/$defs/run_metrics"}
+      }
+    },
+    "run_list": {"type": "array", "minItems": 3, "maxItems": 9, "items": {"$ref": "#/$defs/run"}},
+    "variants_runs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unpartitioned", "partitioned"],
+      "properties": {
+        "unpartitioned": {"$ref": "#/$defs/run_list"},
+        "partitioned": {"$ref": "#/$defs/run_list"}
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["elapsed_time_ms", "wall_time_ms", "cpu_time_ms", "processed_rows", "processed_bytes", "physical_input_bytes", "peak_memory_bytes", "spilled_bytes"],
+      "properties": {
+        "elapsed_time_ms": {"type": "integer", "minimum": 0},
+        "wall_time_ms": {"type": "integer", "minimum": 0},
+        "cpu_time_ms": {"type": "integer", "minimum": 0},
+        "processed_rows": {"type": "integer", "minimum": 0},
+        "processed_bytes": {"type": "integer", "minimum": 0},
+        "physical_input_bytes": {"type": "integer", "minimum": 0},
+        "peak_memory_bytes": {"type": "integer", "minimum": 0},
+        "spilled_bytes": {"type": "integer", "minimum": 0}
+      }
+    },
+    "run_metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "elapsed_time_ms", "wall_time_ms", "cpu_time_ms", "processed_rows", "processed_bytes", "physical_input_bytes", "peak_memory_bytes", "spilled_bytes"],
+      "properties": {
+        "state": {"const": "FINISHED"},
+        "elapsed_time_ms": {"type": "integer", "minimum": 0},
+        "wall_time_ms": {"type": "integer", "minimum": 0},
+        "cpu_time_ms": {"type": "integer", "minimum": 0},
+        "processed_rows": {"type": "integer", "minimum": 0},
+        "processed_bytes": {"type": "integer", "minimum": 0},
+        "physical_input_bytes": {"type": "integer", "minimum": 0},
+        "peak_memory_bytes": {"type": "integer", "minimum": 0},
+        "spilled_bytes": {"type": "integer", "minimum": 0}
+      }
+    },
+    "variants_metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unpartitioned", "partitioned"],
+      "properties": {
+        "unpartitioned": {"$ref": "#/$defs/metrics"},
+        "partitioned": {"$ref": "#/$defs/metrics"}
+      }
+    },
+    "delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["before", "after", "delta", "delta_percent"],
+      "properties": {
+        "before": {"type": "integer", "minimum": 0},
+        "after": {"type": "integer", "minimum": 0},
+        "delta": {"type": "integer"},
+        "delta_percent": {"type": ["number", "null"]}
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["elapsed_time_ms", "wall_time_ms", "cpu_time_ms", "processed_rows", "processed_bytes", "physical_input_bytes", "peak_memory_bytes", "spilled_bytes"],
+      "properties": {
+        "elapsed_time_ms": {"$ref": "#/$defs/delta"},
+        "wall_time_ms": {"$ref": "#/$defs/delta"},
+        "cpu_time_ms": {"$ref": "#/$defs/delta"},
+        "processed_rows": {"$ref": "#/$defs/delta"},
+        "processed_bytes": {"$ref": "#/$defs/delta"},
+        "physical_input_bytes": {"$ref": "#/$defs/delta"},
+        "peak_memory_bytes": {"$ref": "#/$defs/delta"},
+        "spilled_bytes": {"$ref": "#/$defs/delta"}
+      }
+    }
+  }
+}

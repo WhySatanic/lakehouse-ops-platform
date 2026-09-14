@@ -151,6 +151,8 @@ centralized authorization, observability, and recovery.
   before performance automation compares observations.
 - [x] Validate Trino compaction experiment comparisons against a versioned JSON Schema
   after reconciling snapshots and maintenance execution evidence.
+- [x] Validate Trino partition-pruning experiment reports against a versioned JSON Schema
+  after proving identical results and reduced scan volume.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.

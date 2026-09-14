@@ -6,8 +6,10 @@ import statistics
 from collections.abc import Callable
 from dataclasses import asdict
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
+from lakehouse_ops.report_schema import ReportSchemaError, validate_report_schema
 from lakehouse_ops.trino import TrinoClient
 
 IDENTIFIER = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
@@ -20,6 +22,9 @@ METRICS = (
     "physical_input_bytes",
     "peak_memory_bytes",
     "spilled_bytes",
+)
+DEFAULT_REPORT_SCHEMA = Path(
+    "config/control-plane/schemas/trino-partition-pruning-experiment.schema.json"
 )
 
 
@@ -36,6 +41,7 @@ def capture_partition_pruning_experiment(
     partitioned_table: str,
     target_day: str,
     repetitions: int = 3,
+    report_schema: Path = DEFAULT_REPORT_SCHEMA,
     clock: Callable[[], datetime] | None = None,
 ) -> dict[str, Any]:
     if repetitions not in {3, 5, 7, 9}:
@@ -133,7 +139,7 @@ def capture_partition_pruning_experiment(
         raise PartitionExperimentError("partition pruning did not reduce physical input bytes")
 
     now = clock or (lambda: datetime.now(UTC))
-    return {
+    report = {
         "schema_version": "1.0",
         "status": "ready",
         "experiment": "iceberg_partition_pruning",
@@ -165,6 +171,11 @@ def capture_partition_pruning_experiment(
         },
         "latency_observation": _direction(comparison["wall_time_ms"]["delta"]),
     }
+    try:
+        validate_report_schema(report, report_schema)
+    except ReportSchemaError as error:
+        raise PartitionExperimentError(str(error)) from error
+    return report
 
 
 def _table_state(

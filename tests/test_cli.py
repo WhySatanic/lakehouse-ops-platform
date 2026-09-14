@@ -808,6 +808,9 @@ def test_capture_trino_partition_pruning_command(
         "partitioned_table": "events_daily",
         "target_day": "2026-01-16",
         "repetitions": 5,
+        "report_schema": Path(
+            "config/control-plane/schemas/trino-partition-pruning-experiment.schema.json"
+        ),
     }
 
 
