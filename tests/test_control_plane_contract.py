@@ -255,6 +255,35 @@ def test_local_output_schema_anchor_is_resolved(tmp_path: Path) -> None:
     assert report["status"] == "compatible"
 
 
+@pytest.mark.parametrize(
+    ("first_keyword", "second_keyword"),
+    [
+        ("$anchor", "$anchor"),
+        ("$dynamicAnchor", "$dynamicAnchor"),
+        ("$anchor", "$dynamicAnchor"),
+    ],
+)
+def test_duplicate_local_output_schema_anchor_is_rejected(
+    tmp_path: Path,
+    first_keyword: str,
+    second_keyword: str,
+) -> None:
+    contract = _load_contract()
+    path = _write_contract(tmp_path, contract)
+    schema_path = tmp_path / contract["outputs"][0]["schema_path"]
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema.setdefault("$defs", {}).update(
+        {
+            "first_anchor": {first_keyword: "duplicateAnchor", "type": "string"},
+            "second_anchor": {second_keyword: "duplicateAnchor", "type": "string"},
+        }
+    )
+    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+
+    with pytest.raises(ControlPlaneContractError, match="duplicate schema anchor"):
+        verify_control_plane_contract(path, build_parser())
+
+
 @pytest.mark.parametrize("keyword", ["$ref", "$dynamicRef"])
 def test_unresolved_local_output_schema_reference_is_rejected(
     tmp_path: Path, keyword: str
