@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -154,6 +156,19 @@ def test_capture_sort_order_experiment_records_reduction() -> None:
     assert len(report["runs"]["sorted"]) == 3
     assert any("$properties" in query for query in client.queries)
     assert not any(query.startswith("SHOW CREATE TABLE") for query in client.queries)
+
+
+def test_capture_sort_order_rejects_report_schema_drift(tmp_path: Path) -> None:
+    source = Path(
+        "config/control-plane/schemas/trino-sort-order-experiment.schema.json"
+    )
+    schema = json.loads(source.read_text(encoding="utf-8"))
+    schema["properties"]["engine"] = {"const": "spark"}
+    candidate = tmp_path / "sort-order.schema.json"
+    candidate.write_text(json.dumps(schema), encoding="utf-8")
+
+    with pytest.raises(SortExperimentError, match="report schema validation failed"):
+        capture(FakeTrinoClient(), report_schema=candidate)
 
 
 @pytest.mark.parametrize(

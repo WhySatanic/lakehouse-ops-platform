@@ -45,6 +45,7 @@ Capture and verify Trino evidence:
 uv run lakeops capture-trino-sort-order \
   --server http://localhost:8080 \
   --range-start 30000 --range-size 128 --repetitions 3 \
+  --report-schema config/control-plane/schemas/trino-sort-order-experiment.schema.json \
   > artifacts/trino-sort-order.json
 uv run python tests/integration/check_trino_sort_order.py \
   artifacts/trino-sort-order.json
@@ -60,6 +61,10 @@ uses task sizing, so identical data and scan evidence are the gates, not exact f
 The table snapshots and sort-order digests bind measurements to exact layouts.
 Alternating execution order reduces systematic warm-cache bias, but does not turn three
 local repetitions into a production capacity benchmark.
+
+The producer validates the completed report against the reviewed Draft 2020-12 schema
+before writing JSON. Automation running outside the repository should pass
+`--report-schema` explicitly so its trust boundary does not depend on the working directory.
 
 ## Rollback and cleanup
 

@@ -877,6 +877,9 @@ def test_capture_trino_sort_order_command(
         "range_start": 1000,
         "range_size": 64,
         "repetitions": 5,
+        "report_schema": Path(
+            "config/control-plane/schemas/trino-sort-order-experiment.schema.json"
+        ),
     }
 
 

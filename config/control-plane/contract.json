@@ -13,7 +13,7 @@
     "capture-trino-compaction": ["--catalog", "--phase", "--repetitions", "--schema", "--server", "--table", "--user"],
     "compare-trino-compaction": ["--after", "--before", "--execution", "--schema"],
     "capture-trino-partition-pruning": ["--catalog", "--partitioned-table", "--repetitions", "--report-schema", "--schema", "--server", "--target-day", "--unpartitioned-table", "--user"],
-    "capture-trino-sort-order": ["--baseline-table", "--catalog", "--range-size", "--range-start", "--repetitions", "--schema", "--server", "--sorted-table", "--user"],
+    "capture-trino-sort-order": ["--baseline-table", "--catalog", "--range-size", "--range-start", "--repetitions", "--report-schema", "--schema", "--server", "--sorted-table", "--user"],
     "verify-release-readiness": ["--contract", "--evidence-root", "--output", "--schema", "--source-revision"],
     "verify-control-plane-contract": ["--contract"],
     "verify-image-lock": ["--compose", "--dockerfile", "--lock", "--schema", "--upgrade-plan"],
@@ -66,7 +66,8 @@
       "--report-schema": {"required": false, "type": "path", "default": "config/control-plane/schemas/trino-partition-pruning-experiment.schema.json", "choices": []}
     },
     "capture-trino-sort-order": {
-      "--range-size": {"required": false, "type": "int", "default": 128, "choices": []}
+      "--range-size": {"required": false, "type": "int", "default": 128, "choices": []},
+      "--report-schema": {"required": false, "type": "path", "default": "config/control-plane/schemas/trino-sort-order-experiment.schema.json", "choices": []}
     },
     "verify-release-readiness": {
       "--source-revision": {"required": true, "type": "str", "default": null, "choices": []},
@@ -96,7 +97,7 @@
     {"name": "trino_baseline", "producer": "capture-trino-baseline", "schema_version": "1.0", "schema_path": "schemas/trino-baseline-report.schema.json"},
     {"name": "compaction_experiment", "producer": "compare-trino-compaction", "schema_version": "1.0", "schema_path": "schemas/trino-compaction-experiment.schema.json"},
     {"name": "partition_pruning_experiment", "producer": "capture-trino-partition-pruning", "schema_version": "1.0", "schema_path": "schemas/trino-partition-pruning-experiment.schema.json"},
-    {"name": "sort_order_experiment", "producer": "capture-trino-sort-order", "schema_version": "1.1"},
+    {"name": "sort_order_experiment", "producer": "capture-trino-sort-order", "schema_version": "1.1", "schema_path": "schemas/trino-sort-order-experiment.schema.json"},
     {"name": "ranger_policy_sync", "producer": "sync-ranger-policy", "schema_version": "1.0"},
     {"name": "release_readiness_attestation", "producer": "verify-release-readiness", "schema_version": "1.0", "schema_path": "schemas/release-readiness-attestation.schema.json"},
     {"name": "release_candidate_bundle_report", "producer": "build-release-candidate", "schema_version": "1.0", "schema_path": "schemas/release-candidate-bundle-report.schema.json"},
