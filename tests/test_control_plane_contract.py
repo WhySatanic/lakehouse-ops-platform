@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from lakehouse_ops import control_plane_contract as contract_module
 from lakehouse_ops.cli import build_parser
 from lakehouse_ops.control_plane_contract import (
     ControlPlaneContractError,
@@ -22,7 +23,7 @@ def test_repository_contract_matches_public_cli() -> None:
 
     assert report["status"] == "compatible"
     assert report["commands_verified"] == 17
-    assert report["option_semantics_verified"] == 36
+    assert report["option_semantics_verified"] == 37
     assert report["outputs_verified"] == 11
     assert len(report["contract_sha256"]) == 64
 
@@ -142,6 +143,21 @@ def test_output_schema_digest_drift_is_rejected(tmp_path: Path, digest: str) -> 
 
     with pytest.raises(ControlPlaneContractError, match="schema_sha256"):
         verify_control_plane_contract(_write_contract(tmp_path, contract), build_parser())
+
+
+def test_refresh_output_schema_digests_repairs_contract_atomically(tmp_path: Path) -> None:
+    contract = _load_contract()
+    contract["outputs"][0]["schema_sha256"] = "0" * 64
+    path = _write_contract(tmp_path, contract)
+
+    refreshed = contract_module.refresh_control_plane_schema_digests(path)
+
+    updated = json.loads(path.read_text(encoding="utf-8"))
+    schema_path = path.parent / updated["outputs"][0]["schema_path"]
+    assert refreshed == 11
+    assert updated["outputs"][0]["schema_sha256"] == normalized_text_digest(schema_path)
+    assert verify_control_plane_contract(path, build_parser())["status"] == "compatible"
+    assert list(tmp_path.glob(".lakeops-contract-*.tmp")) == []
 
 
 def test_absolute_output_schema_path_is_rejected(tmp_path: Path) -> None:

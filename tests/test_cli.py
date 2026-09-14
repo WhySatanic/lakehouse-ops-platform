@@ -967,6 +967,40 @@ def test_verify_control_plane_contract_command(
     assert observed["parser"].prog == "lakeops"
 
 
+def test_verify_control_plane_contract_refreshes_schema_digests_first(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    contract = tmp_path / "contract.json"
+    report = {"schema_version": "1.0", "status": "compatible"}
+    calls: list[tuple[str, Path]] = []
+
+    def fake_refresh(path: Path) -> int:
+        calls.append(("refresh", path))
+        return 11
+
+    def fake_verify(path: Path, parser: argparse.ArgumentParser) -> dict[str, str]:
+        calls.append(("verify", path))
+        return report
+
+    monkeypatch.setattr(cli, "refresh_control_plane_schema_digests", fake_refresh)
+    monkeypatch.setattr(cli, "verify_control_plane_contract", fake_verify)
+
+    exit_code = cli.main(
+        [
+            "verify-control-plane-contract",
+            "--contract",
+            str(contract),
+            "--refresh-schema-digests",
+        ]
+    )
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == report
+    assert calls == [("refresh", contract), ("verify", contract)]
+
+
 def test_verify_image_lock_command(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

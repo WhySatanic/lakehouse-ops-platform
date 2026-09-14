@@ -177,6 +177,8 @@ centralized authorization, observability, and recovery.
   public schema document before a registry can silently overwrite a resource.
 - [x] Bind every public output schema to a normalized SHA-256 digest in the executable
   contract so reviewed schema content cannot drift silently.
+- [x] Refresh reviewed public schema digests through an atomic control-plane operation
+  that immediately reruns the compatibility gate.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.

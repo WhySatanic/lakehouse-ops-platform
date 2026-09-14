@@ -13,6 +13,7 @@ from lakehouse_ops.access_policy import AccessPolicyError, render_trino_policy
 from lakehouse_ops.break_glass import BreakGlassError
 from lakehouse_ops.control_plane_contract import (
     ControlPlaneContractError,
+    refresh_control_plane_schema_digests,
     verify_control_plane_contract,
 )
 from lakehouse_ops.doctor import (
@@ -269,6 +270,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="verify the public CLI and JSON compatibility baseline",
     )
     compatibility.add_argument("--contract", required=True, type=Path)
+    compatibility.add_argument(
+        "--refresh-schema-digests",
+        action="store_true",
+        help="atomically refresh public schema digests before verification",
+    )
 
     image_lock = subparsers.add_parser(
         "verify-image-lock",
@@ -528,6 +534,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "verify-control-plane-contract":
         try:
+            if args.refresh_schema_digests:
+                refresh_control_plane_schema_digests(args.contract)
             report = verify_control_plane_contract(args.contract, parser)
         except ControlPlaneContractError as error:
             parser.error(str(error))

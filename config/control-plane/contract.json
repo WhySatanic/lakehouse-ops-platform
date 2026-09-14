@@ -15,7 +15,7 @@
     "capture-trino-partition-pruning": ["--catalog", "--partitioned-table", "--repetitions", "--report-schema", "--schema", "--server", "--target-day", "--unpartitioned-table", "--user"],
     "capture-trino-sort-order": ["--baseline-table", "--catalog", "--range-size", "--range-start", "--repetitions", "--report-schema", "--schema", "--server", "--sorted-table", "--user"],
     "verify-release-readiness": ["--contract", "--evidence-root", "--output", "--schema", "--source-revision"],
-    "verify-control-plane-contract": ["--contract"],
+    "verify-control-plane-contract": ["--contract", "--refresh-schema-digests"],
     "verify-image-lock": ["--compose", "--dockerfile", "--lock", "--schema", "--upgrade-plan"],
     "build-release-candidate": ["--attestation", "--control-plane-contract", "--evidence-root", "--output", "--readiness-contract", "--schema", "--source-revision", "--upgrade-plan", "--upgrade-report"],
     "plan-iceberg-maintenance": ["--enable-orphan-inspection", "--input", "--max-manifests-per-data-file", "--max-orphan-files", "--max-snapshots-to-expire", "--min-data-files", "--min-manifest-count", "--min-snapshots-to-keep", "--orphan-retention-hours", "--schema", "--small-file-ratio", "--snapshot-retention-hours", "--target-file-size-bytes"]
@@ -75,7 +75,8 @@
       "--schema": {"required": false, "type": "path", "default": "config/control-plane/schemas/release-readiness-attestation.schema.json", "choices": []}
     },
     "verify-control-plane-contract": {
-      "--contract": {"required": true, "type": "path", "default": null, "choices": []}
+      "--contract": {"required": true, "type": "path", "default": null, "choices": []},
+      "--refresh-schema-digests": {"required": false, "type": "boolean", "default": false, "choices": []}
     },
     "verify-image-lock": {
       "--lock": {"required": false, "type": "path", "default": "config/images.lock.json", "choices": []},
