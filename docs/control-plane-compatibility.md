@@ -14,8 +14,9 @@ uv run lakeops verify-control-plane-contract \
 
 The command exits non-zero if a baseline command or long option no longer exists, a
 frozen option changes its required flag, type, default, or choices, an output references
-an unknown producer, or an output leaves schema major `1`. New commands and options are
-compatible additions and do not require consumers to upgrade.
+an unknown producer, an output leaves schema major `1`, or its declared `schema_path` is
+missing or does not resolve to a file. New commands and options are compatible additions
+and do not require consumers to upgrade.
 
 ## CLI policy
 
@@ -51,6 +52,7 @@ surface.
 
 ## Upgrade notes
 
-Version `1.14.0` adds runtime schema validation to Ranger policy synchronization and an
-explicit `--report-schema` override. It preserves contract `1.0.0` and the existing report
-shape.
+Version `1.14.1` makes `schema_path` mandatory and resolvable for every declared public
+output. It preserves contract `1.0.0`, report shapes, and producer behavior. Custom
+contract extensions must ship their schema file next to the contract and reference it
+with `schema_path`.

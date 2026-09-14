@@ -87,6 +87,13 @@ def verify_control_plane_contract(
             raise ControlPlaneContractError(f"unknown output producer for {name}: {producer}")
         if not isinstance(version, str) or version.split(".", 1)[0] != "1":
             raise ControlPlaneContractError(f"output {name} must remain on schema major 1")
+        schema_path = output.get("schema_path")
+        if not isinstance(schema_path, str) or not schema_path:
+            raise ControlPlaneContractError(f"output {name} must declare schema_path")
+        if not (contract_path.parent / schema_path).is_file():
+            raise ControlPlaneContractError(
+                f"output schema_path does not exist for {name}: {schema_path}"
+            )
 
     report = {
         "schema_version": "1.0",
@@ -105,11 +112,7 @@ def verify_control_plane_contract(
         raise ControlPlaneContractError(
             "control_plane_contract_verification output contract is required"
         )
-    schema_path = verifier_output.get("schema_path")
-    if not isinstance(schema_path, str) or not schema_path:
-        raise ControlPlaneContractError(
-            "control_plane_contract_verification must declare schema_path"
-        )
+    schema_path = verifier_output["schema_path"]
     try:
         validate_report_schema(report, contract_path.parent / schema_path)
     except ReportSchemaError as error:
