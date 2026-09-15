@@ -12,8 +12,9 @@ This complements the [container image lock](container-image-digest-lock.md).
 | actions/setup-python | [v7.0.0](https://github.com/actions/setup-python/releases/tag/v7.0.0) | Install Python 3.12 and restore the pip cache |
 | actions/upload-artifact | [v7.0.1](https://github.com/actions/upload-artifact/releases/tag/v7.0.1) | Archive evidence for downstream jobs |
 | actions/download-artifact | [v8.0.1](https://github.com/actions/download-artifact/releases/tag/v8.0.1) | Download evidence and fail on a digest mismatch |
+| actions/attest | [v4.2.2](https://github.com/actions/attest/releases/tag/v4.2.2) | Sign release-candidate provenance with GitHub OIDC and Sigstore |
 
-All four actions declare Node 24 in their pinned `action.yml`. The workflow uses
+All five actions declare Node 24 in their pinned `action.yml`. The workflow uses
 GitHub-hosted `ubuntu-latest` runners. Self-hosted forks need Actions Runner 2.327.1
 or newer; authenticated Git commands inside Docker container actions need 2.329.0
 or newer with checkout v6 and later.
@@ -30,6 +31,12 @@ files. Downloads preserve separate artifact-name directories and explicitly use
 `digest-mismatch: error`. A transfer hash mismatch stops readiness or candidate
 assembly before semantic evidence validation. Do not downgrade it to a warning.
 
+The release-candidate job grants `id-token`, `attestations`, and `artifact-metadata`
+write access only to that job. `actions/attest` receives the three final candidate files
+as subjects and writes its Sigstore bundle outside the checkout. CI copies that bundle
+into the evidence set, then verifies every subject while requiring the repository,
+workflow, source SHA, `main` ref, public GitHub OIDC issuer, and hosted runner.
+
 ## Refresh and verification
 
 1. Review the upstream release notes and the release's `action.yml`, including runtime,
@@ -41,7 +48,8 @@ assembly before semantic evidence validation. Do not downgrade it to a warning.
 4. Run the local quality gate and verify that all `uses:` references are full SHAs.
    Require the PR's quality, serving, Ranger, lakehouse, and release-readiness jobs.
 5. After merge, require the main run's release-candidate job. Its evidence archive
-   must retain the matching source revision and pass manifest validation.
+   must retain the matching source revision, pass manifest validation, and contain a
+   provenance bundle that verifies for every published subject.
 
 If migration breaks checkout, caching, or evidence transfer, revert the workflow
 change in a reviewed PR and rerun the same gates. Keep the failed run for diagnosis.
