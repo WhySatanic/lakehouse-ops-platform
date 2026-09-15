@@ -879,6 +879,13 @@ jobs:
             --source-revision "$SOURCE_REVISION" \
             --output artifacts/lakehouse-ops-1.0.0-rc-evidence.tar.gz \
             > artifacts/release-candidate.json
+      - name: Verify downloadable release-candidate assets
+        run: |
+          uv run lakeops verify-release-candidate \
+            --bundle artifacts/lakehouse-ops-1.0.0-rc-evidence.tar.gz \
+            --report artifacts/release-candidate.json \
+            --expected-source-revision "$SOURCE_REVISION" \
+            > artifacts/release-candidate-verification.json
       - name: Verify checkout remained clean
         run: test -z "$(git status --porcelain --untracked-files=all)"
       - name: Upload release-candidate evidence
@@ -889,5 +896,6 @@ jobs:
           path: |
             artifacts/lakehouse-ops-1.0.0-rc-evidence.tar.gz
             artifacts/release-candidate.json
+            artifacts/release-candidate-verification.json
           if-no-files-found: error
           overwrite: true
