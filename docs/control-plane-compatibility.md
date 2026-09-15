@@ -83,3 +83,7 @@ surface.
 Version `1.16.0` adds `verify-release-candidate` and its `1.0` verification report. Existing
 commands and outputs remain compatible. Consumers can verify downloaded evidence without
 extracting archive members to disk.
+
+Version `1.17.0` adds signed release-candidate provenance without changing the public CLI
+or JSON report contract. The retained Sigstore bundle is release evidence, not a new
+control-plane output.

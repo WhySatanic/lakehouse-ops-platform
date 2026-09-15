@@ -183,6 +183,8 @@ centralized authorization, observability, and recovery.
   bytes when validation or atomic replacement fails.
 - [x] Verify downloaded release-candidate report/archive pairs offline against the report
   schema, expected source revision, complete manifest membership, and member digests.
+- [x] Sign release-candidate assets with GitHub OIDC and Sigstore, retain the provenance
+  bundle, and enforce repository, workflow, source, issuer, and runner identity in CI.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.
