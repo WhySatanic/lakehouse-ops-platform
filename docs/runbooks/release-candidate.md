@@ -15,6 +15,26 @@ The archive contains:
 The builder rechecks every digest recorded by the attestation, validates the attestation
 source revision and readiness-contract digest, and reruns the Trino upgrade/rollback
 validator. Archive metadata is normalized, so identical inputs produce identical bytes.
+CI then verifies the two downloadable assets through the same public command available to
+release consumers.
+
+## Verify downloaded release assets
+
+Obtain the expected full source revision from a trusted release tag, download the archive
+and `release-candidate.json` into one directory, then run:
+
+```bash
+uv run lakeops verify-release-candidate \
+  --bundle lakehouse-ops-1.0.0-rc-evidence.tar.gz \
+  --report release-candidate.json \
+  --expected-source-revision "$EXPECTED_SOURCE_REVISION"
+```
+
+The verifier validates the report against its public schema, binds it to the expected
+revision, streams the archive digest, and reads tar members without extracting them. It
+rejects duplicate or unsafe paths, non-regular members, missing or additional content,
+and every manifest digest mismatch. Archive reads are bounded to 256 regular files,
+64 MiB per file, and 256 MiB in total.
 
 ## Reproduce from downloaded artifacts
 
@@ -36,13 +56,15 @@ uv run lakeops build-release-candidate \
   --output artifacts/lakehouse-ops-1.0.0-rc-evidence.tar.gz
 ```
 
-Retain both the archive and `release-candidate.json`. Attach them to the GitHub Release
-and confirm its tag resolves to `source_revision` before publishing any stable release.
+Retain the archive, `release-candidate.json`, and
+`release-candidate-verification.json`. Attach them to the GitHub Release and confirm its
+tag resolves to `source_revision` before publishing any stable release.
 
 ## Failure policy
 
 Do not publish when the checkout is dirty, the source revision differs, any attested
 digest changes, the readiness contract changes, or upgrade/rollback validation fails.
 Regenerate all evidence in one new workflow run instead of mixing artifacts across runs.
-The command also validates `release-candidate.json` against its Draft 2020-12 schema
-before returning success.
+The builder validates `release-candidate.json` against its Draft 2020-12 schema before
+returning success. Offline verification proves internal integrity and source binding, not
+the authenticity of an untrusted expected revision or download channel.

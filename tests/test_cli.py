@@ -1120,6 +1120,49 @@ def test_build_release_candidate_command(
     }
 
 
+def test_verify_release_candidate_command(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    report = {"schema_version": "1.0", "status": "verified"}
+    observed: dict[str, object] = {}
+
+    def fake_verify(**kwargs: object) -> dict[str, str]:
+        observed.update(kwargs)
+        return report
+
+    monkeypatch.setattr(cli, "verify_release_candidate", fake_verify)
+    bundle = tmp_path / "bundle.tar.gz"
+    candidate_report = tmp_path / "release-candidate.json"
+
+    exit_code = cli.main(
+        [
+            "verify-release-candidate",
+            "--bundle",
+            str(bundle),
+            "--report",
+            str(candidate_report),
+            "--expected-source-revision",
+            "a" * 40,
+        ]
+    )
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == report
+    assert observed == {
+        "bundle_path": bundle,
+        "report_path": candidate_report,
+        "expected_source_revision": "a" * 40,
+        "report_schema_path": Path(
+            "config/control-plane/schemas/release-candidate-bundle-report.schema.json"
+        ),
+        "verification_schema_path": Path(
+            "config/control-plane/schemas/release-candidate-verification-report.schema.json"
+        ),
+    }
+
+
 def test_plan_iceberg_maintenance_command(
     capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:

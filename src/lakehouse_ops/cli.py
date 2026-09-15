@@ -43,6 +43,7 @@ from lakehouse_ops.ranger import RangerAdminClient, RangerAdminError
 from lakehouse_ops.release_candidate import (
     ReleaseCandidateError,
     build_release_candidate,
+    verify_release_candidate,
 )
 from lakehouse_ops.release_readiness import (
     ReleaseReadinessError,
@@ -316,6 +317,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     release_candidate.add_argument("--output", required=True, type=Path)
 
+    verify_candidate = subparsers.add_parser(
+        "verify-release-candidate",
+        help="verify downloaded release-candidate report and archive assets",
+    )
+    verify_candidate.add_argument("--bundle", required=True, type=Path)
+    verify_candidate.add_argument("--report", required=True, type=Path)
+    verify_candidate.add_argument("--expected-source-revision", required=True)
+    verify_candidate.add_argument(
+        "--report-schema",
+        type=Path,
+        default=Path(
+            "config/control-plane/schemas/release-candidate-bundle-report.schema.json"
+        ),
+    )
+    verify_candidate.add_argument(
+        "--verification-schema",
+        type=Path,
+        default=Path(
+            "config/control-plane/schemas/release-candidate-verification-report.schema.json"
+        ),
+    )
+
     plan = subparsers.add_parser(
         "plan-iceberg-maintenance", help="create an explainable Iceberg maintenance plan"
     )
@@ -571,6 +594,19 @@ def main(argv: list[str] | None = None) -> int:
                 source_revision=args.source_revision,
                 output_path=args.output,
                 schema_path=args.schema,
+            )
+        except ReleaseCandidateError as error:
+            parser.error(str(error))
+        print(json.dumps(report, sort_keys=True))
+        return 0
+    if args.command == "verify-release-candidate":
+        try:
+            report = verify_release_candidate(
+                bundle_path=args.bundle,
+                report_path=args.report,
+                expected_source_revision=args.expected_source_revision,
+                report_schema_path=args.report_schema,
+                verification_schema_path=args.verification_schema,
             )
         except ReleaseCandidateError as error:
             parser.error(str(error))

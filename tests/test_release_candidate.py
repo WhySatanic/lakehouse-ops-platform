@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import tarfile
 from pathlib import Path
@@ -151,6 +152,255 @@ def test_build_release_candidate_requires_source_revision(tmp_path: Path) -> Non
 
     with pytest.raises(ReleaseCandidateError, match="source revision"):
         build_release_candidate(**inputs, output_path=tmp_path / "bundle.tar.gz")
+
+
+def test_verify_release_candidate_checks_downloaded_pair(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    bundle, report_path, report = _build_pair(monkeypatch, tmp_path)
+
+    verified = candidate.verify_release_candidate(
+        bundle_path=bundle,
+        report_path=report_path,
+        expected_source_revision="a" * 40,
+    )
+
+    assert verified == {
+        "schema_version": "1.0",
+        "status": "verified",
+        "target_release": "1.0.0",
+        "source_revision": "a" * 40,
+        "entries": 7,
+        "bundle_sha256": report["bundle_sha256"],
+        "report_sha256": _digest(report_path),
+        "manifest_sha256": verified["manifest_sha256"],
+    }
+    assert len(verified["manifest_sha256"]) == 64
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("report", "report schema validation failed"),
+        ("bundle", "bundle digest does not match report"),
+        ("revision", "source revision does not match expected revision"),
+        ("member", "archive member digest does not match manifest"),
+    ],
+)
+def test_verify_release_candidate_rejects_tampering(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    mutation: str,
+    message: str,
+) -> None:
+    bundle, report_path, report = _build_pair(monkeypatch, tmp_path)
+    expected_revision = "a" * 40
+    if mutation == "report":
+        report["status"] = "failed"
+        _write_json(report_path, report)
+    elif mutation == "bundle":
+        bundle.write_bytes(bundle.read_bytes() + b"tampered")
+    elif mutation == "revision":
+        expected_revision = "b" * 40
+    else:
+        entries = _read_archive(bundle)
+        entries["evidence/lakehouse-evidence/core.json"] = b'{"tampered":true}'
+        candidate._write_deterministic_archive(bundle, entries)
+        report["bundle_sha256"] = _digest(bundle)
+        _write_json(report_path, report)
+
+    with pytest.raises(ReleaseCandidateError, match=message):
+        candidate.verify_release_candidate(
+            bundle_path=bundle,
+            report_path=report_path,
+            expected_source_revision=expected_revision,
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("unexpected", "archive membership does not match manifest"),
+        ("unsafe", "archive member path is unsafe"),
+        ("duplicate", "duplicate archive member"),
+        ("symlink", "archive member must be a regular file"),
+    ],
+)
+def test_verify_release_candidate_rejects_unsafe_archive_structure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    mutation: str,
+    message: str,
+) -> None:
+    bundle, report_path, report = _build_pair(monkeypatch, tmp_path)
+    members = [(name, content, tarfile.REGTYPE) for name, content in _read_archive(bundle).items()]
+    if mutation == "unexpected":
+        members.append(("extra.json", b"{}", tarfile.REGTYPE))
+    elif mutation == "unsafe":
+        members.append(("../escape.json", b"{}", tarfile.REGTYPE))
+    elif mutation == "duplicate":
+        members.append((members[0][0], members[0][1], tarfile.REGTYPE))
+    else:
+        members.append(("link", b"", tarfile.SYMTYPE))
+    _write_archive(bundle, members)
+    report["bundle_sha256"] = _digest(bundle)
+    report["entries"] = len(members)
+    _write_json(report_path, report)
+
+    with pytest.raises(ReleaseCandidateError, match=message):
+        candidate.verify_release_candidate(
+            bundle_path=bundle,
+            report_path=report_path,
+            expected_source_revision="a" * 40,
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("missing", "archive manifest is missing"),
+        ("json", "cannot load archive manifest"),
+        ("object", "archive manifest must be a JSON object"),
+        ("fields", "archive manifest fields are invalid"),
+        ("identity", "archive manifest identity is invalid"),
+        ("empty", "manifest entries must be a non-empty array"),
+        ("entry-fields", "manifest entry fields are invalid"),
+        ("entry-values", "manifest entry values are invalid"),
+        ("entry-duplicate", "duplicate archive manifest entry"),
+        ("entry-digest", "archive manifest digest is invalid"),
+    ],
+)
+def test_verify_release_candidate_rejects_invalid_manifest(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    mutation: str,
+    message: str,
+) -> None:
+    bundle, report_path, report = _build_pair(monkeypatch, tmp_path)
+    entries = _read_archive(bundle)
+    if mutation == "missing":
+        entries.pop("manifest.json")
+    elif mutation == "json":
+        entries["manifest.json"] = b"{"
+    elif mutation == "object":
+        entries["manifest.json"] = b"[]"
+    else:
+        manifest = json.loads(entries["manifest.json"])
+        if mutation == "fields":
+            manifest["extra"] = True
+        elif mutation == "identity":
+            manifest["source_revision"] = "b" * 40
+        elif mutation == "empty":
+            manifest["entries"] = []
+        elif mutation == "entry-fields":
+            manifest["entries"][0]["extra"] = True
+        elif mutation == "entry-values":
+            manifest["entries"][0]["path"] = 1
+        elif mutation == "entry-duplicate":
+            manifest["entries"].append(manifest["entries"][0])
+        else:
+            manifest["entries"][0]["sha256"] = "invalid"
+        entries["manifest.json"] = json.dumps(manifest).encode()
+    candidate._write_deterministic_archive(bundle, entries)
+    report["bundle_sha256"] = _digest(bundle)
+    report["entries"] = len(entries)
+    _write_json(report_path, report)
+
+    with pytest.raises(ReleaseCandidateError, match=message):
+        candidate.verify_release_candidate(
+            bundle_path=bundle,
+            report_path=report_path,
+            expected_source_revision="a" * 40,
+        )
+
+
+def test_verify_release_candidate_rejects_report_entry_count(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    bundle, report_path, report = _build_pair(monkeypatch, tmp_path)
+    report["entries"] = 6
+    _write_json(report_path, report)
+
+    with pytest.raises(ReleaseCandidateError, match="entry count does not match"):
+        candidate.verify_release_candidate(
+            bundle_path=bundle,
+            report_path=report_path,
+            expected_source_revision="a" * 40,
+        )
+
+
+def test_verify_release_candidate_enforces_archive_bounds(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    bundle, report_path, _ = _build_pair(monkeypatch, tmp_path)
+    monkeypatch.setattr(candidate, "MAX_ARCHIVE_BYTES", 1)
+
+    with pytest.raises(ReleaseCandidateError, match="expands beyond the size limit"):
+        candidate.verify_release_candidate(
+            bundle_path=bundle,
+            report_path=report_path,
+            expected_source_revision="a" * 40,
+        )
+
+
+def test_verify_release_candidate_rejects_output_schema_drift(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    bundle, report_path, _ = _build_pair(monkeypatch, tmp_path)
+    schema = json.loads(candidate.DEFAULT_VERIFICATION_SCHEMA.read_text(encoding="utf-8"))
+    schema["properties"]["status"] = {"const": "blocked"}
+    schema_path = tmp_path / "verification.schema.json"
+    _write_json(schema_path, schema)
+
+    with pytest.raises(ReleaseCandidateError, match="report schema validation failed"):
+        candidate.verify_release_candidate(
+            bundle_path=bundle,
+            report_path=report_path,
+            expected_source_revision="a" * 40,
+            verification_schema_path=schema_path,
+        )
+
+
+def test_verify_release_candidate_requires_expected_revision(tmp_path: Path) -> None:
+    with pytest.raises(ReleaseCandidateError, match="expected source revision"):
+        candidate.verify_release_candidate(
+            bundle_path=tmp_path / "bundle.tar.gz",
+            report_path=tmp_path / "report.json",
+            expected_source_revision=" ",
+        )
+
+
+def _build_pair(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> tuple[Path, Path, dict[str, object]]:
+    inputs = _write_inputs(tmp_path)
+    monkeypatch.setattr(candidate, "validate_upgrade_report", lambda report, plan: None)
+    bundle = tmp_path / "bundle.tar.gz"
+    report = build_release_candidate(**inputs, output_path=bundle)
+    report_path = tmp_path / "release-candidate.json"
+    _write_json(report_path, report)
+    return bundle, report_path, report
+
+
+def _read_archive(path: Path) -> dict[str, bytes]:
+    with tarfile.open(path, "r:gz") as archive:
+        return {
+            member.name: archive.extractfile(member).read()  # type: ignore[union-attr]
+            for member in archive.getmembers()
+        }
+
+
+def _write_archive(path: Path, members: list[tuple[str, bytes, bytes]]) -> None:
+    with tarfile.open(path, "w:gz") as archive:
+        for name, content, member_type in members:
+            info = tarfile.TarInfo(name)
+            info.type = member_type
+            info.size = len(content)
+            archive.addfile(info, io.BytesIO(content))
+
+
+def _write_json(path: Path, value: object) -> None:
+    path.write_text(json.dumps(value), encoding="utf-8")
 
 
 def _write_inputs(tmp_path: Path) -> dict[str, object]:

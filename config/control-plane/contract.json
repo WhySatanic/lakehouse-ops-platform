@@ -18,6 +18,7 @@
     "verify-control-plane-contract": ["--contract", "--refresh-schema-digests"],
     "verify-image-lock": ["--compose", "--dockerfile", "--lock", "--schema", "--upgrade-plan"],
     "build-release-candidate": ["--attestation", "--control-plane-contract", "--evidence-root", "--output", "--readiness-contract", "--schema", "--source-revision", "--upgrade-plan", "--upgrade-report"],
+    "verify-release-candidate": ["--bundle", "--expected-source-revision", "--report", "--report-schema", "--verification-schema"],
     "plan-iceberg-maintenance": ["--enable-orphan-inspection", "--input", "--max-manifests-per-data-file", "--max-orphan-files", "--max-snapshots-to-expire", "--min-data-files", "--min-manifest-count", "--min-snapshots-to-keep", "--orphan-retention-hours", "--schema", "--small-file-ratio", "--snapshot-retention-hours", "--target-file-size-bytes"]
   },
   "option_semantics": {
@@ -86,6 +87,11 @@
       "--source-revision": {"required": true, "type": "str", "default": null, "choices": []},
       "--schema": {"required": false, "type": "path", "default": "config/control-plane/schemas/release-candidate-bundle-report.schema.json", "choices": []}
     },
+    "verify-release-candidate": {
+      "--expected-source-revision": {"required": true, "type": "str", "default": null, "choices": []},
+      "--report-schema": {"required": false, "type": "path", "default": "config/control-plane/schemas/release-candidate-bundle-report.schema.json", "choices": []},
+      "--verification-schema": {"required": false, "type": "path", "default": "config/control-plane/schemas/release-candidate-verification-report.schema.json", "choices": []}
+    },
     "plan-iceberg-maintenance": {
       "--input": {"required": true, "type": "path", "default": null, "choices": []},
       "--schema": {"required": false, "type": "path", "default": "config/control-plane/schemas/iceberg-maintenance-plan.schema.json", "choices": []},
@@ -103,6 +109,7 @@
     {"name": "ranger_policy_sync", "producer": "sync-ranger-policy", "schema_version": "1.0", "schema_path": "schemas/ranger-policy-sync-report.schema.json", "schema_sha256": "d83534566b89c6f1af4bccdb6875fd76dbd8cb7f5c586a56261781b053d7c80c"},
     {"name": "release_readiness_attestation", "producer": "verify-release-readiness", "schema_version": "1.0", "schema_path": "schemas/release-readiness-attestation.schema.json", "schema_sha256": "30fe77dce52d7e032114711aa34cb8de85ce899b6772d7e832bed8289ce41cc9"},
     {"name": "release_candidate_bundle_report", "producer": "build-release-candidate", "schema_version": "1.0", "schema_path": "schemas/release-candidate-bundle-report.schema.json", "schema_sha256": "bea9a13a4f6c9068f13bf1cda1be47a352528386bf548af9838365199570c37f"},
+    {"name": "release_candidate_verification", "producer": "verify-release-candidate", "schema_version": "1.0", "schema_path": "schemas/release-candidate-verification-report.schema.json", "schema_sha256": "1bad166f51d82b6e7162322d92c2337ce2f5feda95aff65a943ec1b35df3395a"},
     {"name": "image_lock_verification", "producer": "verify-image-lock", "schema_version": "1.0", "schema_path": "schemas/image-lock-verification.schema.json", "schema_sha256": "9bfa66599b86d1837ff9c71d733f65b51fbfab230f833cb919a827834e94ff2c"},
     {"name": "control_plane_contract_verification", "producer": "verify-control-plane-contract", "schema_version": "1.0", "schema_path": "schemas/control-plane-contract-verification.schema.json", "schema_sha256": "028195776bba0c4608cb27b993023034eb8f181a57aead2c43e03a748966b0ba"}
   ]

@@ -69,10 +69,10 @@ valid values invalid. Such changes require a new schema major and a product majo
 release. Existing producer tests remain the executable field and type specification;
 the compatibility gate prevents an unnoticed major-version escape. Producers can also
 declare a Draft 2020-12 JSON Schema through `schema_path`. The control-plane, image-lock,
-release-readiness, release-candidate, Iceberg metadata, maintenance-plan, Trino baseline,
-Trino compaction-comparison, partition-pruning, sort-order, and Ranger policy-sync
-producers validate their emitted reports this way. Every declared public output now has
-a standalone schema and runtime producer validation.
+release-readiness, release-candidate build and verification, Iceberg metadata,
+maintenance-plan, Trino baseline, Trino compaction-comparison, partition-pruning,
+sort-order, and Ranger policy-sync producers validate their emitted reports this way.
+Every declared public output now has a standalone schema and runtime producer validation.
 
 The contract digest in the verifier output identifies the exact baseline used by CI.
 Release evidence should record this digest so a report can be tied to the supported
@@ -80,6 +80,6 @@ surface.
 
 ## Upgrade notes
 
-Version `1.15.1` validates the refreshed candidate before replacing the original contract.
-Existing verification remains read-only by default. Custom automation can keep invoking the
-command without the refresh flag.
+Version `1.16.0` adds `verify-release-candidate` and its `1.0` verification report. Existing
+commands and outputs remain compatible. Consumers can verify downloaded evidence without
+extracting archive members to disk.

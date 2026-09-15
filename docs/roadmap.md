@@ -181,6 +181,8 @@ centralized authorization, observability, and recovery.
   that immediately reruns the compatibility gate.
 - [x] Validate the complete refreshed contract before replacement and preserve the original
   bytes when validation or atomic replacement fails.
+- [x] Verify downloaded release-candidate report/archive pairs offline against the report
+  schema, expected source revision, complete manifest membership, and member digests.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.

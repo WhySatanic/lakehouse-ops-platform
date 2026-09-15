@@ -22,9 +22,9 @@ def test_repository_contract_matches_public_cli() -> None:
     report = verify_control_plane_contract(CONTRACT, build_parser())
 
     assert report["status"] == "compatible"
-    assert report["commands_verified"] == 17
-    assert report["option_semantics_verified"] == 37
-    assert report["outputs_verified"] == 11
+    assert report["commands_verified"] == 18
+    assert report["option_semantics_verified"] == 40
+    assert report["outputs_verified"] == 12
     assert len(report["contract_sha256"]) == 64
 
 
@@ -155,7 +155,7 @@ def test_refresh_output_schema_digests_repairs_contract_atomically(tmp_path: Pat
     updated = json.loads(path.read_text(encoding="utf-8"))
     schema_path = path.parent / updated["outputs"][0]["schema_path"]
     assert report["status"] == "compatible"
-    assert report["outputs_verified"] == 11
+    assert report["outputs_verified"] == 12
     assert updated["outputs"][0]["schema_sha256"] == normalized_text_digest(schema_path)
     assert list(tmp_path.glob(".lakeops-contract-*.tmp")) == []
 
