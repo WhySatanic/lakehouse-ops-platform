@@ -805,6 +805,79 @@ services:
     mem_limit: 1g
     restart: on-failure
 
+  trino-security-bootstrap:
+    image: ${TRINO_SERVER_IMAGE:-trinodb/trino:483@sha256:db58cc93e593a2706553745f276bb119c9810e69918be56ecde088ba7ccb0534}
+    profiles: ["secure-query"]
+    user: "0:0"
+    environment:
+      TRINO_TLS_KEYSTORE_PASSWORD: ${TRINO_TLS_KEYSTORE_PASSWORD:-lakehouse-tls-development-only}
+    volumes:
+      - ./infra/trino/secure/bootstrap.sh:/bootstrap/bootstrap.sh:ro
+      - trino-secure-material:/security
+    entrypoint: ["/bin/bash", "/bootstrap/bootstrap.sh"]
+    restart: "no"
+
+  trino-secure-coordinator:
+    image: ${TRINO_SERVER_IMAGE:-trinodb/trino:483@sha256:db58cc93e593a2706553745f276bb119c9810e69918be56ecde088ba7ccb0534}
+    profiles: ["secure-query"]
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+      ranger-admin:
+        condition: service_healthy
+      trino-security-bootstrap:
+        condition: service_completed_successfully
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_TRINO_USER:-lakeops-trino}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_TRINO_PASSWORD:-trino-development-only}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      TRINO_INTERNAL_SHARED_SECRET: ${TRINO_INTERNAL_SHARED_SECRET:-lakehouse-internal-development-only-rotate-me}
+      TRINO_TLS_KEYSTORE_PASSWORD: ${TRINO_TLS_KEYSTORE_PASSWORD:-lakehouse-tls-development-only}
+    ports:
+      - "${TRINO_HTTPS_PORT:-8443}:8443"
+    volumes:
+      - ./infra/trino/secure/config.properties:/etc/trino/config.properties:ro
+      - ./infra/trino/secure/node.properties:/etc/trino/node.properties:ro
+      - ./infra/trino/secure/password-authenticator.properties:/etc/trino/password-authenticator.properties:ro
+      - ./infra/trino/secure/password.db:/etc/trino/password.db:ro
+      - ./infra/trino/ranger-access-control.properties:/etc/trino/access-control.properties:ro
+      - ./infra/trino/ranger-trino-security.xml:/etc/trino/ranger-trino-security.xml:ro
+      - ./infra/trino/ranger-trino-audit.xml:/etc/trino/ranger-trino-audit.xml:ro
+      - ./infra/trino/catalog/lakehouse.properties:/etc/trino/catalog/lakehouse.properties:ro
+      - trino-secure-material:/etc/trino/security:ro
+      - trino-secure-coordinator-data:/data/trino
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ': >/dev/tcp/127.0.0.1/8443'"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+    mem_limit: 1g
+    restart: on-failure
+
+  trino-secure-authorization-check:
+    image: trinodb/trino:483@sha256:db58cc93e593a2706553745f276bb119c9810e69918be56ecde088ba7ccb0534
+    profiles: ["secure-query"]
+    depends_on:
+      trino-secure-coordinator:
+        condition: service_healthy
+    environment:
+      TRINO_SERVER: https://trino-secure-coordinator:8443
+      TRINO_AUTHORIZATION_REPORT_PATH: /artifacts/trino-authenticated-authorization-report.json
+      TRINO_AUTHORIZATION_MODE: ranger
+      TRINO_AUTHENTICATION_ENFORCED: "true"
+      TRINO_AUTH_PASSWORD: ${TRINO_AUTH_PASSWORD:-lakehouse-development-only}
+      TRINO_TRUSTSTORE_PATH: /security/trino.p12
+      TRINO_TRUSTSTORE_PASSWORD: ${TRINO_TLS_KEYSTORE_PASSWORD:-lakehouse-tls-development-only}
+      TRINO_CA_CERT_PATH: /security/trino.crt
+      TRINO_EXPECTED_NODE_COUNT: "1"
+    volumes:
+      - ./artifacts:/artifacts
+      - ./tests/integration/check_trino_authorization.sh:/checks/check_trino_authorization.sh:ro
+      - trino-secure-material:/security:ro
+    entrypoint: ["/bin/bash", "/checks/check_trino_authorization.sh"]
+    restart: "no"
+
   trino-query-check:
     image: trinodb/trino:483@sha256:db58cc93e593a2706553745f276bb119c9810e69918be56ecde088ba7ccb0534
     profiles: ["query"]
@@ -1155,6 +1228,8 @@ volumes:
   trino-coordinator-data:
   trino-worker-data:
   trino-worker-2-data:
+  trino-secure-material:
+  trino-secure-coordinator-data:
   ranger-db-data:
   ranger-solr-data:
   clickhouse-data:
