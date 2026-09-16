@@ -99,6 +99,9 @@ def test_secure_profile_requires_tls_password_authentication_and_ranger() -> Non
     authenticator = (
         ROOT / "infra" / "trino" / "secure" / "password-authenticator.properties"
     ).read_text(encoding="utf-8")
+    acceptance_script = (
+        ROOT / "tests" / "integration" / "check_trino_authorization.sh"
+    ).read_text(encoding="utf-8")
     compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
     workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
         encoding="utf-8"
@@ -118,6 +121,7 @@ def test_secure_profile_requires_tls_password_authentication_and_ranger() -> Non
     assert "ranger-access-control.properties" in secure_service
     assert "TRINO_INTERNAL_SHARED_SECRET" in secure_service
     assert "TRINO_TLS_KEYSTORE_PASSWORD" in secure_service
+    assert "--data 'SELECT 1' \"$server/v1/statement\"" in acceptance_script
     assert (
         "docker compose --profile security --profile catalog --profile secure-query \\\n"
         "            run --rm trino-secure-authorization-check"

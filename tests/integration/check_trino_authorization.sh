@@ -39,7 +39,9 @@ query() {
 if [[ "$authentication_enforced" == "true" ]]; then
   : "${ca_cert_path:?TRINO_CA_CERT_PATH is required}"
   anonymous_status="$(curl --silent --show-error --output /dev/null \
-    --write-out '%{http_code}' --cacert "$ca_cert_path" "$server/v1/info")"
+    --write-out '%{http_code}' --cacert "$ca_cert_path" \
+    --request POST --header 'X-Trino-User: platform_admin' \
+    --data 'SELECT 1' "$server/v1/statement")"
   if [[ "$anonymous_status" != "401" ]]; then
     printf 'anonymous request returned HTTP %s, expected 401\n' "$anonymous_status" >&2
     exit 1
