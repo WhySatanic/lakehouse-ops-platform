@@ -100,6 +100,9 @@ def test_secure_profile_requires_tls_password_authentication_and_ranger() -> Non
         ROOT / "infra" / "trino" / "secure" / "password-authenticator.properties"
     ).read_text(encoding="utf-8")
     compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8"
+    )
     secure_service = compose[
         compose.index("  trino-secure-coordinator:") : compose.index(
             "  trino-secure-authorization-check:"
@@ -115,6 +118,11 @@ def test_secure_profile_requires_tls_password_authentication_and_ranger() -> Non
     assert "ranger-access-control.properties" in secure_service
     assert "TRINO_INTERNAL_SHARED_SECRET" in secure_service
     assert "TRINO_TLS_KEYSTORE_PASSWORD" in secure_service
+    assert (
+        "docker compose --profile security --profile catalog --profile secure-query \\\n"
+        "            run --rm trino-secure-authorization-check"
+        in workflow
+    )
 
 
 def test_development_password_file_contains_valid_pbkdf2_hashes() -> None:

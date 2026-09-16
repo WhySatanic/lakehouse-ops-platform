@@ -190,7 +190,8 @@ jobs:
         run: |
           touch artifacts/trino-authenticated-authorization-report.json
           chmod 0666 artifacts/trino-authenticated-authorization-report.json
-          docker compose --profile secure-query run --rm trino-secure-authorization-check
+          docker compose --profile security --profile catalog --profile secure-query \
+            run --rm trino-secure-authorization-check
       - name: Verify authenticated Ranger evidence
         run: >-
           uv run python tests/integration/check_trino_authorization.py

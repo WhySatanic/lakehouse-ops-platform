@@ -62,7 +62,8 @@ coordinator and run the same authorization matrix through HTTPS:
 docker compose --profile security --profile catalog --profile secure-query \
   up -d --wait trino-secure-coordinator
 touch artifacts/trino-authenticated-authorization-report.json
-docker compose --profile secure-query run --rm trino-secure-authorization-check
+docker compose --profile security --profile catalog --profile secure-query \
+  run --rm trino-secure-authorization-check
 uv run python tests/integration/check_trino_authorization.py \
   artifacts/trino-authenticated-authorization-report.json \
   --mode ranger --authentication-enforced
