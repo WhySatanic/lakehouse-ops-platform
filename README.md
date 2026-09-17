@@ -7,7 +7,7 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: version `1.18.0`, stable `1.0.0` control-plane contract, and reproducible
+> Status: version `1.19.0`, stable `1.0.0` control-plane contract, and reproducible
 > reference stack.
 > Open-Meteo ingestion works against the local filesystem and MinIO. Spark writes
 > S3-backed Iceberg bronze and validated silver tables registered in PostgreSQL-backed
@@ -202,7 +202,8 @@ The [Trino authorization runbook](docs/runbooks/trino-authorization.md) document
 deny-by-default file policy shared by every Trino node. Live acceptance checks prove the
 allowed role paths and six negative cases. The default HTTP profile remains a trusted
 development path; an opt-in HTTPS profile requires passwords before Ranger evaluates
-the authenticated identity. The checked-in Trino rules are generated from a versioned
+the authenticated identity and executes accepted queries across two private workers.
+The checked-in Trino rules are generated from a versioned
 role-to-resource model, and CI rejects policy drift between the model and the deployed
 artifact.
 
@@ -306,8 +307,8 @@ The [release-candidate runbook](docs/runbooks/release-candidate.md) describes th
 checkout and deterministic evidence bundle retained with stable releases.
 The [1.0.0 acceptance manifest](docs/releases/1.0.0.md) maps the stable release promise
 to its executable CI evidence and documented limitations.
-The [1.18.0 release notes](docs/releases/1.18.0.md) describe authenticated HTTPS queries
-through the centralized Ranger policy path.
+The [1.19.0 release notes](docs/releases/1.19.0.md) describe distributed authenticated
+queries through the centralized Ranger policy path.
 
 ## Project principles
 

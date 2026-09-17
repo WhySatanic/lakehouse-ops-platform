@@ -132,6 +132,44 @@ def test_secure_profile_requires_tls_password_authentication_and_ranger() -> Non
     )
 
 
+def test_secure_profile_executes_queries_on_two_private_workers() -> None:
+    coordinator = (ROOT / "infra" / "trino" / "secure" / "config.properties").read_text(
+        encoding="utf-8"
+    )
+    worker = (
+        ROOT / "infra" / "trino" / "secure" / "worker-config.properties"
+    ).read_text(encoding="utf-8")
+    first_node = (
+        ROOT / "infra" / "trino" / "secure" / "worker-1-node.properties"
+    ).read_text(encoding="utf-8")
+    second_node = (
+        ROOT / "infra" / "trino" / "secure" / "worker-2-node.properties"
+    ).read_text(encoding="utf-8")
+    compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "node-scheduler.include-coordinator=false" in coordinator
+    assert "coordinator=false" in worker
+    assert "discovery.uri=http://trino-secure-coordinator:8080" in worker
+    assert "internal-communication.shared-secret=${ENV:TRINO_INTERNAL_SHARED_SECRET}" in worker
+    assert "node.id=lakehouse-secure-worker-1" in first_node
+    assert "node.id=lakehouse-secure-worker-2" in second_node
+    assert "  trino-secure-worker:" in compose
+    assert "  trino-secure-worker-2:" in compose
+    assert 'TRINO_EXPECTED_NODE_COUNT: "3"' in compose
+    assert "trino-secure-worker:\n        condition: service_healthy" in compose
+    assert "trino-secure-worker-2:\n        condition: service_healthy" in compose
+    assert (
+        "trino-secure-coordinator trino-secure-worker trino-secure-worker-2"
+        in workflow
+    )
+    assert "Stop default Trino nodes before secure distributed acceptance" in workflow
+    assert "Stop authenticated Trino nodes" in workflow
+    assert "Restore Trino with Ranger enforcement" in workflow
+
+
 def test_development_password_file_contains_valid_pbkdf2_hashes() -> None:
     password_file = ROOT / "infra" / "trino" / "secure" / "password.db"
     records = [line.split(":") for line in password_file.read_text().splitlines()]

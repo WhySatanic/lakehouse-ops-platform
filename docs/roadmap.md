@@ -186,6 +186,8 @@ centralized authorization, observability, and recovery.
   schema, expected source revision, complete manifest membership, and member digests.
 - [x] Sign release-candidate assets with GitHub OIDC and Sigstore, retain the provenance
   bundle, and enforce repository, workflow, source, issuer, and runner identity in CI.
+- [x] Execute authenticated Ranger acceptance through two private Trino workers while
+  excluding the secure coordinator from task scheduling.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.

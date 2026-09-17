@@ -56,11 +56,12 @@ The report uses schema version `1.0` and is written to
 
 Start Ranger, Hive Metastore, and the deterministic fixtures as described in the
 [Ranger runbook](ranger-admin.md), then synchronize the policy. Start the secure
-coordinator and run the same authorization matrix through HTTPS:
+coordinator and both workers, then run the same authorization matrix through HTTPS:
 
 ```bash
 docker compose --profile security --profile catalog --profile secure-query \
-  up -d --wait trino-secure-coordinator
+  up -d --wait \
+  trino-secure-coordinator trino-secure-worker trino-secure-worker-2
 touch artifacts/trino-authenticated-authorization-report.json
 docker compose --profile security --profile catalog --profile secure-query \
   run --rm trino-secure-authorization-check
@@ -75,6 +76,11 @@ request receives HTTP 401, proves that an incorrect password cannot authenticate
 then executes all Ranger allow, deny, row-filter, and column-mask cases as authenticated
 users. The CI artifact is separate from the stable release-readiness report set because
 this addition does not revise the public evidence contract.
+
+The coordinator is excluded from task scheduling. Both workers use unique node IDs,
+share the internal communication secret, remain unexposed to the host, and must be
+healthy before acceptance starts. The node-count assertion and table queries therefore
+prove that authenticated work can execute through the distributed cluster.
 
 Compose marks the secure coordinator healthy only after an authenticated `SELECT 1`
 succeeds over TLS. A listening HTTPS socket is not sufficient because Trino can accept
@@ -91,7 +97,8 @@ identity provider.
 To rotate the self-signed key, stop the secure profile and remove only the
 `trino-secure-material` named volume before restarting it. To roll back the capability,
 stop the `secure-query` profile. The default Trino cluster, Iceberg data, and metastore
-state are not changed.
+state are not changed. The two secure worker data volumes contain disposable local node
+state and can be removed while the profile is stopped.
 
 For centralized enforcement, start Ranger, run `lakeops sync-ranger-policy`, set
 `TRINO_ACCESS_CONTROL_PROPERTIES=./infra/trino/ranger-access-control.properties` and
