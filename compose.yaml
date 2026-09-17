@@ -865,11 +865,59 @@ services:
     mem_limit: 1g
     restart: on-failure
 
+  trino-secure-worker:
+    image: ${TRINO_SERVER_IMAGE:-trinodb/trino:483@sha256:db58cc93e593a2706553745f276bb119c9810e69918be56ecde088ba7ccb0534}
+    profiles: ["secure-query"]
+    depends_on:
+      trino-secure-coordinator:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_TRINO_USER:-lakeops-trino}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_TRINO_PASSWORD:-trino-development-only}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      TRINO_INTERNAL_SHARED_SECRET: ${TRINO_INTERNAL_SHARED_SECRET:-lakehouse-internal-development-only-rotate-me}
+    volumes:
+      - ./infra/trino/secure/worker-config.properties:/etc/trino/config.properties:ro
+      - ./infra/trino/secure/worker-1-node.properties:/etc/trino/node.properties:ro
+      - ./infra/trino/ranger-access-control.properties:/etc/trino/access-control.properties:ro
+      - ./infra/trino/ranger-trino-security.xml:/etc/trino/ranger-trino-security.xml:ro
+      - ./infra/trino/ranger-trino-audit.xml:/etc/trino/ranger-trino-audit.xml:ro
+      - ./infra/trino/catalog/lakehouse.properties:/etc/trino/catalog/lakehouse.properties:ro
+      - trino-secure-worker-data:/data/trino
+    mem_limit: 1g
+    restart: on-failure
+
+  trino-secure-worker-2:
+    image: ${TRINO_SERVER_IMAGE:-trinodb/trino:483@sha256:db58cc93e593a2706553745f276bb119c9810e69918be56ecde088ba7ccb0534}
+    profiles: ["secure-query"]
+    depends_on:
+      trino-secure-coordinator:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_TRINO_USER:-lakeops-trino}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_TRINO_PASSWORD:-trino-development-only}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      TRINO_INTERNAL_SHARED_SECRET: ${TRINO_INTERNAL_SHARED_SECRET:-lakehouse-internal-development-only-rotate-me}
+    volumes:
+      - ./infra/trino/secure/worker-config.properties:/etc/trino/config.properties:ro
+      - ./infra/trino/secure/worker-2-node.properties:/etc/trino/node.properties:ro
+      - ./infra/trino/ranger-access-control.properties:/etc/trino/access-control.properties:ro
+      - ./infra/trino/ranger-trino-security.xml:/etc/trino/ranger-trino-security.xml:ro
+      - ./infra/trino/ranger-trino-audit.xml:/etc/trino/ranger-trino-audit.xml:ro
+      - ./infra/trino/catalog/lakehouse.properties:/etc/trino/catalog/lakehouse.properties:ro
+      - trino-secure-worker-2-data:/data/trino
+    mem_limit: 1g
+    restart: on-failure
+
   trino-secure-authorization-check:
     image: trinodb/trino:483@sha256:db58cc93e593a2706553745f276bb119c9810e69918be56ecde088ba7ccb0534
     profiles: ["secure-query"]
     depends_on:
       trino-secure-coordinator:
+        condition: service_healthy
+      trino-secure-worker:
+        condition: service_healthy
+      trino-secure-worker-2:
         condition: service_healthy
     environment:
       TRINO_SERVER: https://trino-secure-coordinator:8443
@@ -880,7 +928,7 @@ services:
       TRINO_TRUSTSTORE_PATH: /security/trino.p12
       TRINO_TRUSTSTORE_PASSWORD: ${TRINO_TLS_KEYSTORE_PASSWORD:-lakehouse-tls-development-only}
       TRINO_CA_CERT_PATH: /security/trino.crt
-      TRINO_EXPECTED_NODE_COUNT: "1"
+      TRINO_EXPECTED_NODE_COUNT: "3"
     volumes:
       - ./artifacts:/artifacts
       - ./tests/integration/check_trino_authorization.sh:/checks/check_trino_authorization.sh:ro
@@ -1240,6 +1288,8 @@ volumes:
   trino-worker-2-data:
   trino-secure-material:
   trino-secure-coordinator-data:
+  trino-secure-worker-data:
+  trino-secure-worker-2-data:
   ranger-db-data:
   ranger-solr-data:
   clickhouse-data:

@@ -91,3 +91,7 @@ control-plane output.
 Version `1.18.0` adds an opt-in authenticated Trino transport and extends private CI
 evidence with authentication results. It does not change a public command or versioned
 JSON contract.
+
+Version `1.19.0` adds private workers to that authenticated profile and raises its
+acceptance node count from one to three. This is a deployment-only additive change; the
+public CLI, JSON schemas, and release-readiness contract remain unchanged.

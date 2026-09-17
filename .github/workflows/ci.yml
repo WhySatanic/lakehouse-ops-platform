@@ -182,10 +182,15 @@ jobs:
         run: >-
           uv run python tests/integration/check_trino_authorization.py
           artifacts/trino-authorization-report.json --mode ranger
-      - name: Start authenticated Trino with Ranger enforcement
+      - name: Stop default Trino nodes before secure distributed acceptance
         run: >-
-          docker compose --profile security --profile catalog --profile secure-query
-          up -d --wait --wait-timeout 180 trino-secure-coordinator
+          docker compose --profile query stop
+          trino-worker trino-worker-2 trino-coordinator
+      - name: Start authenticated Trino with Ranger enforcement
+        run: |
+          docker compose --profile security --profile catalog --profile secure-query \
+            up -d --wait --wait-timeout 180 \
+            trino-secure-coordinator trino-secure-worker trino-secure-worker-2
       - name: Exercise authenticated Ranger authorization
         run: |
           touch artifacts/trino-authenticated-authorization-report.json
@@ -197,6 +202,14 @@ jobs:
           uv run python tests/integration/check_trino_authorization.py
           artifacts/trino-authenticated-authorization-report.json --mode ranger
           --authentication-enforced
+      - name: Stop authenticated Trino nodes
+        run: >-
+          docker compose --profile security --profile catalog --profile secure-query stop
+          trino-secure-worker trino-secure-worker-2 trino-secure-coordinator
+      - name: Restore Trino with Ranger enforcement
+        run: >-
+          docker compose --profile query up -d --wait
+          trino-coordinator trino-worker trino-worker-2
       - name: Grant approved break-glass access
         run: |
           uv run python tests/integration/create_break_glass_lease.py \
@@ -258,6 +271,7 @@ jobs:
           docker compose --profile security --profile catalog --profile compute
           --profile query --profile secure-query logs ranger-db ranger-solr ranger-admin
           trino-coordinator trino-security-bootstrap trino-secure-coordinator
+          trino-secure-worker trino-secure-worker-2
       - name: Stop Ranger enforcement profiles
         if: always()
         run: >-
