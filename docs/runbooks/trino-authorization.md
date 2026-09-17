@@ -76,6 +76,10 @@ then executes all Ranger allow, deny, row-filter, and column-mask cases as authe
 users. The CI artifact is separate from the stable release-readiness report set because
 this addition does not revise the public evidence contract.
 
+Compose marks the secure coordinator healthy only after an authenticated `SELECT 1`
+succeeds over TLS. A listening HTTPS socket is not sufficient because Trino can accept
+connections before the password authenticator has finished loading.
+
 The checked-in password database is a local development fixture. Every listed identity
 uses `lakehouse-development-only`; only salted PBKDF2 hashes are stored. The acceptance
 client password can be set with `TRINO_AUTH_PASSWORD`, but it must match the hashes in
