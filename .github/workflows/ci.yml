@@ -204,7 +204,7 @@ jobs:
           --authentication-enforced
       - name: Stop authenticated Trino nodes
         run: >-
-          docker compose --profile secure-query stop
+          docker compose --profile security --profile catalog --profile secure-query stop
           trino-secure-worker trino-secure-worker-2 trino-secure-coordinator
       - name: Restore Trino with Ranger enforcement
         run: >-

@@ -167,6 +167,10 @@ def test_secure_profile_executes_queries_on_two_private_workers() -> None:
     )
     assert "Stop default Trino nodes before secure distributed acceptance" in workflow
     assert "Stop authenticated Trino nodes" in workflow
+    assert (
+        "docker compose --profile security --profile catalog --profile secure-query stop"
+        in workflow
+    )
     assert "Restore Trino with Ranger enforcement" in workflow
 
 
