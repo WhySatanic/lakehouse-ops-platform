@@ -851,16 +851,15 @@ services:
       test:
         - CMD-SHELL
         - >-
-          TRINO_PASSWORD="$${TRINO_AUTH_PASSWORD}" trino
-          --server https://127.0.0.1:8443
-          --user platform_admin
-          --password
-          --truststore-path /etc/trino/security/trino.p12
-          --truststore-type PKCS12
-          --truststore-password "$${TRINO_TLS_KEYSTORE_PASSWORD}"
-          --execute 'SELECT 1' >/dev/null 2>&1
+          curl --silent --show-error --fail
+          --cacert /etc/trino/security/trino.crt
+          --user "platform_admin:$${TRINO_AUTH_PASSWORD}"
+          --request POST
+          --header 'X-Trino-User: platform_admin'
+          --data 'SELECT 1'
+          https://localhost:8443/v1/statement >/dev/null
       interval: 5s
-      timeout: 10s
+      timeout: 5s
       retries: 30
       start_period: 20s
     mem_limit: 1g

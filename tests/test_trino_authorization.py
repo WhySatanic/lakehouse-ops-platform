@@ -122,8 +122,8 @@ def test_secure_profile_requires_tls_password_authentication_and_ranger() -> Non
     assert "TRINO_INTERNAL_SHARED_SECRET" in secure_service
     assert "TRINO_TLS_KEYSTORE_PASSWORD" in secure_service
     assert "TRINO_AUTH_PASSWORD" in secure_service
-    assert "TRINO_PASSWORD=\"$${TRINO_AUTH_PASSWORD}\" trino" in secure_service
-    assert "--execute 'SELECT 1' >/dev/null 2>&1" in secure_service
+    assert "--user \"platform_admin:$${TRINO_AUTH_PASSWORD}\"" in secure_service
+    assert "https://localhost:8443/v1/statement" in secure_service
     assert "--data 'SELECT 1' \"$server/v1/statement\"" in acceptance_script
     assert (
         "docker compose --profile security --profile catalog --profile secure-query \\\n"
