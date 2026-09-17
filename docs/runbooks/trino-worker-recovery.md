@@ -22,6 +22,32 @@ uv run python tests/integration/check_trino_worker_recovery.py \
 Use the published Trino port if it differs from `8080`. For example, the local port
 override `TRINO_HTTP_PORT=18080` requires `http://localhost:18080`.
 
+### Authenticated Ranger profile
+
+After starting Ranger, preparing the Iceberg fixture, synchronizing the Ranger policy,
+and starting all three `secure-query` nodes, copy the generated certificate and run the
+same failure injection through the HTTPS coordinator:
+
+```bash
+docker compose --profile security --profile catalog --profile secure-query \
+  cp trino-secure-coordinator:/etc/trino/security/trino.crt \
+  artifacts/trino-secure-ca.crt
+uv run python tests/integration/exercise_trino_worker_recovery.py \
+  https://localhost:8443 artifacts/trino-authenticated-worker-recovery.json \
+  --mode authenticated-ranger --password lakehouse-development-only \
+  --ca-cert artifacts/trino-secure-ca.crt
+uv run python tests/integration/check_trino_worker_recovery.py \
+  artifacts/trino-authenticated-worker-recovery.json
+```
+
+The development password is a checked-in local fixture, not a production secret. The
+runner verifies the copied certificate, authenticates `platform_admin` for protected
+Iceberg queries, authenticates `lakehouse-operator` for topology evidence, maps the
+observed secure node ID to its exact private worker service, and recreates only that
+service. CI retains this report beside the Ranger audit artifact. Together they prove
+authenticated recovery and Ranger decision delivery; they do not provide a query-level
+join between the recovery report and individual Solr audit documents.
+
 ## Failure injection and restoration
 
 The runner performs these operations in order:
@@ -60,8 +86,8 @@ choose a value that tolerates their measured network pauses without delaying inc
 detection beyond the service objective.
 
 This drill does not prove fault-tolerant execution with an exchange manager, concurrent
-writes during worker loss, coordinator failover, or a metadata database restore. Those
-remain separate capabilities.
+writes during worker loss, coordinator failover, mutual TLS between Trino nodes, or a
+metadata database restore. Those remain separate capabilities.
 
 ## Upgrade from 0.39.0
 

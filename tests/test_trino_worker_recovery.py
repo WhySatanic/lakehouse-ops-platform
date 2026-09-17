@@ -114,6 +114,23 @@ def valid_report() -> dict[str, Any]:
     }
 
 
+def authenticated_report() -> dict[str, Any]:
+    report = valid_report()
+    report["security"] = {
+        "authentication": "password",
+        "authorization": "ranger",
+        "operator_user": "lakehouse-operator",
+        "query_user": "platform_admin",
+        "tls_verified": True,
+        "transport": "https",
+    }
+    report["loss"].update(
+        target_node_id="lakehouse-secure-worker-1",
+        target_service="trino-secure-worker",
+    )
+    return report
+
+
 def test_capture_data_state_returns_query_linked_fingerprint() -> None:
     assert capture_data_state(FakeClient()) == {
         "query_id": "capture-query",
@@ -125,6 +142,34 @@ def test_capture_data_state_returns_query_linked_fingerprint() -> None:
 
 def test_validate_accepts_complete_worker_recovery_evidence() -> None:
     validate_trino_worker_recovery_report(valid_report())
+
+
+def test_validate_accepts_authenticated_ranger_worker_recovery_evidence() -> None:
+    validate_trino_worker_recovery_report(authenticated_report())
+
+
+def test_validate_rejects_unverified_authenticated_transport() -> None:
+    report = authenticated_report()
+    report["security"]["tls_verified"] = False
+
+    with pytest.raises(TrinoWorkerRecoveryError, match="security evidence"):
+        validate_trino_worker_recovery_report(report)
+
+
+def test_authenticated_recovery_is_wired_into_ranger_ci() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    runner = Path("tests/integration/exercise_trino_worker_recovery.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Exercise authenticated abrupt worker recovery" in workflow
+    assert "--mode authenticated-ranger" in workflow
+    assert "artifacts/trino-authenticated-worker-recovery.json" in workflow
+    assert 'choices=("default", "authenticated-ranger")' in runner
+    assert '("security", "catalog", "secure-query")' in runner
+    assert "*compose_profile_args(profile)" in runner
+    assert "container_state(target_service, profile)" in runner
+    assert 'data_user="lakehouse-operator"' in runner
 
 
 @pytest.mark.parametrize(

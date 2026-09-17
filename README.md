@@ -7,7 +7,7 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: version `1.19.0`, stable `1.0.0` control-plane contract, and reproducible
+> Status: version `1.20.0`, stable `1.0.0` control-plane contract, and reproducible
 > reference stack.
 > Open-Meteo ingestion works against the local filesystem and MinIO. Spark writes
 > S3-backed Iceberg bronze and validated silver tables registered in PostgreSQL-backed
@@ -162,7 +162,9 @@ that the remaining worker still serves the Iceberg query path.
 The [Trino abrupt worker recovery runbook](docs/runbooks/trino-worker-recovery.md)
 proves an active task existed on the worker before `SIGKILL`, records the expected
 in-flight query failure, retries against the surviving worker, and verifies unchanged
-Iceberg rows, checksum, and snapshot after full capacity is restored.
+Iceberg rows, checksum, and snapshot after full capacity is restored. The same drill now
+also covers the HTTPS/password-authenticated two-worker profile under Ranger enforcement,
+with verified TLS and retained authorization/audit evidence.
 
 The [Trino resource groups runbook](docs/runbooks/trino-resource-groups.md) defines
 separate ingestion, BI, and ad-hoc budgets, then proves selector assignments and
@@ -307,8 +309,8 @@ The [release-candidate runbook](docs/runbooks/release-candidate.md) describes th
 checkout and deterministic evidence bundle retained with stable releases.
 The [1.0.0 acceptance manifest](docs/releases/1.0.0.md) maps the stable release promise
 to its executable CI evidence and documented limitations.
-The [1.19.0 release notes](docs/releases/1.19.0.md) describe distributed authenticated
-queries through the centralized Ranger policy path.
+The [1.20.0 release notes](docs/releases/1.20.0.md) describe authenticated worker-loss
+recovery through the centralized Ranger policy path.
 
 ## Project principles
 
