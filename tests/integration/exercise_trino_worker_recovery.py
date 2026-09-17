@@ -40,6 +40,7 @@ class RecoveryProfile:
     worker_services: dict[str, str]
     compose_profiles: tuple[str, ...]
     query_user: str
+    data_user: str
     operator_user: str
     password: str | None = None
     verify: ssl.SSLContext | bool = True
@@ -284,8 +285,8 @@ def restore_worker(service: str, profile: RecoveryProfile) -> None:
 
 
 def data_state(server: str, profile: RecoveryProfile) -> dict[str, Any]:
-    with http_client(profile, profile.query_user, 45) as transport, TrinoClient(
-        server, user=profile.query_user, client=transport
+    with http_client(profile, profile.data_user, 45) as transport, TrinoClient(
+        server, user=profile.data_user, client=transport
     ) as client:
         return capture_data_state(client)
 
@@ -296,6 +297,7 @@ def recovery_profile(args: argparse.Namespace) -> RecoveryProfile:
             worker_services=WORKER_SERVICES,
             compose_profiles=("query",),
             query_user="lakehouse-bi-recovery",
+            data_user="lakehouse-operator",
             operator_user="lakehouse-operator",
         )
     if not args.password:
@@ -308,6 +310,7 @@ def recovery_profile(args: argparse.Namespace) -> RecoveryProfile:
         worker_services=SECURE_WORKER_SERVICES,
         compose_profiles=("security", "catalog", "secure-query"),
         query_user="platform_admin",
+        data_user="platform_admin",
         operator_user="lakehouse-operator",
         password=args.password,
         verify=ssl.create_default_context(cafile=str(args.ca_cert)),
