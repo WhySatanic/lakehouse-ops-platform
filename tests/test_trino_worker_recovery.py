@@ -167,6 +167,8 @@ def test_authenticated_recovery_is_wired_into_ranger_ci() -> None:
     assert "artifacts/trino-authenticated-worker-recovery.json" in workflow
     assert 'choices=("default", "authenticated-ranger")' in runner
     assert '("security", "catalog", "secure-query")' in runner
+    assert "*compose_profile_args(profile)" in runner
+    assert "container_state(target_service, profile)" in runner
 
 
 @pytest.mark.parametrize(

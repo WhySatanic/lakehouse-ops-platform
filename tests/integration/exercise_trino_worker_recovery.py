@@ -210,9 +210,26 @@ def wait_for_topology(
     raise RuntimeError(f"Trino topology did not converge: {last}")
 
 
-def container_state(service: str) -> dict[str, Any]:
+def compose_profile_args(profile: RecoveryProfile) -> list[str]:
+    return [
+        option
+        for name in profile.compose_profiles
+        for option in ("--profile", name)
+    ]
+
+
+def container_state(service: str, profile: RecoveryProfile) -> dict[str, Any]:
     container_id = subprocess.check_output(
-        ["docker", "compose", "ps", "--all", "-q", service], text=True
+        [
+            "docker",
+            "compose",
+            *compose_profile_args(profile),
+            "ps",
+            "--all",
+            "-q",
+            service,
+        ],
+        text=True,
     ).strip()
     if not container_id:
         raise RuntimeError(f"Compose container not found: {service}")
@@ -249,16 +266,11 @@ def kill_worker(container_id: str) -> None:
 
 
 def restore_worker(service: str, profile: RecoveryProfile) -> None:
-    compose_profiles = [
-        option
-        for name in profile.compose_profiles
-        for option in ("--profile", name)
-    ]
     subprocess.run(
         [
             "docker",
             "compose",
-            *compose_profiles,
+            *compose_profile_args(profile),
             "up",
             "-d",
             "--wait",
@@ -342,7 +354,7 @@ def main() -> None:
                 server, query_id, profile
             )
             target_service = profile.worker_services[target_node_id]
-            baseline_container = container_state(target_service)
+            baseline_container = container_state(target_service, profile)
             if baseline_container["running"] is not True:
                 raise RuntimeError("target worker is not running before the drill")
             if baseline_container["restart_policy"] != "on-failure":
@@ -375,7 +387,7 @@ def main() -> None:
                 active_workers=1,
                 target_registered=False,
             )
-            stopped_container = container_state(target_service)
+            stopped_container = container_state(target_service, profile)
             if stopped_container["running"] is not False:
                 raise RuntimeError("target worker container remained running after SIGKILL")
             degraded = {
@@ -390,7 +402,7 @@ def main() -> None:
             if restore_required:
                 restore_worker(target_service, profile)
 
-    restored_container = container_state(target_service)
+    restored_container = container_state(target_service, profile)
     restored = {
         **data_state(server, profile),
         "topology": wait_for_topology(
