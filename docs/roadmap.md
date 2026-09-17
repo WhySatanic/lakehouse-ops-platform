@@ -102,6 +102,8 @@ row filtering, impersonation boundaries, and audit events.
     preserved PostgreSQL container identity, and unchanged Iceberg snapshot evidence.
   - [x] Abrupt worker loss with observed in-flight task failure, degraded-cluster retry,
     unchanged Iceberg fingerprint, and restored worker capacity evidence.
+    - [x] Repeat the loss and recovery drill through verified HTTPS/password
+      authentication with Ranger identity and retained audit evidence.
   - [x] PostgreSQL metadata backup, loss injection, and restore with catalog reconciliation,
     verified backup contents, unchanged catalog manifest, and unchanged Iceberg snapshot.
 

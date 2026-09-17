@@ -115,6 +115,7 @@ jobs:
     env:
       RANGER_ADMIN_PASSWORD: rangerR0cks!
       TRINO_ACCESS_CONTROL_PROPERTIES: ./infra/trino/ranger-access-control.properties
+      TRINO_AUTH_PASSWORD: lakehouse-development-only
       TRINO_AUTHORIZATION_MODE: ranger
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -202,6 +203,19 @@ jobs:
           uv run python tests/integration/check_trino_authorization.py
           artifacts/trino-authenticated-authorization-report.json --mode ranger
           --authentication-enforced
+      - name: Exercise authenticated abrupt worker recovery
+        run: |
+          docker compose --profile security --profile catalog --profile secure-query \
+            cp trino-secure-coordinator:/etc/trino/security/trino.crt \
+            artifacts/trino-secure-ca.crt
+          uv run python tests/integration/exercise_trino_worker_recovery.py \
+            https://localhost:8443 artifacts/trino-authenticated-worker-recovery.json \
+            --mode authenticated-ranger --password "$TRINO_AUTH_PASSWORD" \
+            --ca-cert artifacts/trino-secure-ca.crt
+      - name: Verify authenticated worker recovery evidence
+        run: >-
+          uv run python tests/integration/check_trino_worker_recovery.py
+          artifacts/trino-authenticated-worker-recovery.json
       - name: Stop authenticated Trino nodes
         run: >-
           docker compose --profile security --profile catalog --profile secure-query stop
@@ -262,6 +276,7 @@ jobs:
             artifacts/ranger-policy-resync.json
             artifacts/trino-authorization-report.json
             artifacts/trino-authenticated-authorization-report.json
+            artifacts/trino-authenticated-worker-recovery.json
             artifacts/ranger-audit.json
           if-no-files-found: error
           overwrite: true

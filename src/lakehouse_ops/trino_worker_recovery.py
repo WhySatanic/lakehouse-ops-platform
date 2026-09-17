@@ -13,6 +13,10 @@ WORKER_SERVICES = {
     "lakehouse-worker-1": "trino-worker",
     "lakehouse-worker-2": "trino-worker-2",
 }
+SECURE_WORKER_SERVICES = {
+    "lakehouse-secure-worker-1": "trino-secure-worker",
+    "lakehouse-secure-worker-2": "trino-secure-worker-2",
+}
 REMOTE_TASK_MAX_ERROR_DURATION = "15s"
 STATE_SQL = f"""
 SELECT
@@ -75,6 +79,22 @@ def validate_trino_worker_recovery_report(report: dict[str, Any]) -> None:
     if isinstance(duration, bool) or not isinstance(duration, (int, float)) or duration < 0:
         raise TrinoWorkerRecoveryError("worker loss duration is invalid")
 
+    worker_services = WORKER_SERVICES
+    security = report.get("security")
+    if security is not None:
+        if security != {
+            "authentication": "password",
+            "authorization": "ranger",
+            "operator_user": "lakehouse-operator",
+            "query_user": "platform_admin",
+            "tls_verified": True,
+            "transport": "https",
+        }:
+            raise TrinoWorkerRecoveryError(
+                "authenticated worker recovery security evidence is invalid"
+            )
+        worker_services = SECURE_WORKER_SERVICES
+
     baseline = _data_phase(report.get("baseline"), "baseline", 3, 2, True)
     degraded = _data_phase(
         report.get("degraded_recovery"), "degraded recovery", 2, 1, False
@@ -101,9 +121,9 @@ def validate_trino_worker_recovery_report(report: dict[str, Any]) -> None:
     if not isinstance(loss, dict):
         raise TrinoWorkerRecoveryError("worker loss evidence is missing")
     target_node_id = loss.get("target_node_id")
-    if target_node_id not in WORKER_SERVICES:
+    if target_node_id not in worker_services:
         raise TrinoWorkerRecoveryError("worker loss target node is unexpected")
-    if loss.get("target_service") != WORKER_SERVICES[target_node_id]:
+    if loss.get("target_service") != worker_services[target_node_id]:
         raise TrinoWorkerRecoveryError("worker loss target service is unexpected")
     if loss.get("signal") != "SIGKILL":
         raise TrinoWorkerRecoveryError("worker loss signal is not SIGKILL")
