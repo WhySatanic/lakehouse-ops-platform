@@ -66,6 +66,7 @@ improvement, trade-offs, and rollback path.
 ## Phase 4 — centralized access control
 
 - [x] Deny-by-default file policy and negative authorization tests.
+- [x] Opt-in HTTPS transport with password authentication before Ranger authorization.
 - [x] Ranger deployment and Trino plugin configuration.
   - [x] Opt-in Ranger Admin deployment with PostgreSQL, Solr, and Trino service-definition
     readiness evidence.

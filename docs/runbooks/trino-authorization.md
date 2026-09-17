@@ -7,10 +7,11 @@ it into `infra/trino/access-control-rules.json`. Rules are evaluated from top to
 Known identities receive only their declared permissions; final rules deny unmatched
 catalog, table, system-information, and session-property requests.
 
-This is an authorization exercise, not authentication. The local HTTP profile trusts the
-`X-Trino-User` header, so anyone who can reach port 8080 can claim another identity. Do
-not expose this profile outside a trusted development machine. Both the file adapter and
-Ranger enforce the matrix, while authenticated transport remains a separate increment.
+The default local HTTP profile trusts the `X-Trino-User` header, so anyone who can reach
+port 8080 can claim another identity. Do not expose it outside a trusted development
+machine. The opt-in `secure-query` profile adds HTTPS and file password authentication
+before Ranger evaluates the identity. It leaves the existing HTTP development path
+unchanged.
 
 ## Implemented matrix
 
@@ -50,6 +51,47 @@ validator then checks the complete case set and the explicit authentication limi
 
 The report uses schema version `1.0` and is written to
 `artifacts/trino-authorization-report.json`.
+
+## Run the authenticated Ranger check
+
+Start Ranger, Hive Metastore, and the deterministic fixtures as described in the
+[Ranger runbook](ranger-admin.md), then synchronize the policy. Start the secure
+coordinator and run the same authorization matrix through HTTPS:
+
+```bash
+docker compose --profile security --profile catalog --profile secure-query \
+  up -d --wait trino-secure-coordinator
+touch artifacts/trino-authenticated-authorization-report.json
+docker compose --profile security --profile catalog --profile secure-query \
+  run --rm trino-secure-authorization-check
+uv run python tests/integration/check_trino_authorization.py \
+  artifacts/trino-authenticated-authorization-report.json \
+  --mode ranger --authentication-enforced
+```
+
+The bootstrap container creates a 30-day self-signed certificate in a private named
+volume. The acceptance client trusts that exact certificate, proves that an anonymous
+request receives HTTP 401, proves that an incorrect password cannot authenticate, and
+then executes all Ranger allow, deny, row-filter, and column-mask cases as authenticated
+users. The CI artifact is separate from the stable release-readiness report set because
+this addition does not revise the public evidence contract.
+
+Compose marks the secure coordinator healthy only after an authenticated `SELECT 1`
+succeeds over TLS. A listening HTTPS socket is not sufficient because Trino can accept
+connections before the password authenticator has finished loading.
+
+The checked-in password database is a local development fixture. Every listed identity
+uses `lakehouse-development-only`; only salted PBKDF2 hashes are stored. The acceptance
+client password can be set with `TRINO_AUTH_PASSWORD`, but it must match the hashes in
+`password.db`. Override `TRINO_TLS_KEYSTORE_PASSWORD` and
+`TRINO_INTERNAL_SHARED_SECRET` with independent values on persistent local hosts. Never
+use these defaults on a shared host or treat the file authenticator as an enterprise
+identity provider.
+
+To rotate the self-signed key, stop the secure profile and remove only the
+`trino-secure-material` named volume before restarting it. To roll back the capability,
+stop the `secure-query` profile. The default Trino cluster, Iceberg data, and metastore
+state are not changed.
 
 For centralized enforcement, start Ranger, run `lakeops sync-ranger-policy`, set
 `TRINO_ACCESS_CONTROL_PROPERTIES=./infra/trino/ranger-access-control.properties` and

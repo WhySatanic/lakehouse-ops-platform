@@ -87,3 +87,7 @@ extracting archive members to disk.
 Version `1.17.0` adds signed release-candidate provenance without changing the public CLI
 or JSON report contract. The retained Sigstore bundle is release evidence, not a new
 control-plane output.
+
+Version `1.18.0` adds an opt-in authenticated Trino transport and extends private CI
+evidence with authentication results. It does not change a public command or versioned
+JSON contract.

@@ -21,7 +21,12 @@ EXPECTED_CASES = {
 }
 
 
-def validate(report: dict[str, Any], *, expected_mode: str = "file") -> list[str]:
+def validate(
+    report: dict[str, Any],
+    *,
+    expected_mode: str = "file",
+    authentication_enforced: bool = False,
+) -> list[str]:
     errors: list[str] = []
     if report.get("schema_version") != "1.0":
         errors.append("schema_version")
@@ -38,8 +43,15 @@ def validate(report: dict[str, Any], *, expected_mode: str = "file") -> list[str
             errors.append("policy.mode")
         if policy.get("default") != "deny":
             errors.append("policy.default")
-        if policy.get("authentication_enforced") is not False:
+        if policy.get("authentication_enforced") is not authentication_enforced:
             errors.append("policy.authentication_enforced")
+
+    expected_authentication = {
+        "anonymous_request": "denied" if authentication_enforced else "not_tested",
+        "incorrect_password": "denied" if authentication_enforced else "not_tested",
+    }
+    if report.get("authentication") != expected_authentication:
+        errors.append("authentication")
 
     expected_transformations = {
         "analytics_engineer_visible_rows": 1 if expected_mode == "ranger" else 2,
@@ -74,9 +86,14 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("report", type=Path)
     parser.add_argument("--mode", choices=("file", "ranger"), default="file")
+    parser.add_argument("--authentication-enforced", action="store_true")
     args = parser.parse_args()
     report = json.loads(args.report.read_text(encoding="utf-8"))
-    errors = validate(report, expected_mode=args.mode)
+    errors = validate(
+        report,
+        expected_mode=args.mode,
+        authentication_enforced=args.authentication_enforced,
+    )
     if errors:
         raise SystemExit(f"Trino authorization evidence failed: {', '.join(errors)}")
     print(
@@ -85,6 +102,7 @@ def main() -> None:
                 "status": "ready",
                 "policy": "deny-by-default",
                 "mode": args.mode,
+                "authentication_enforced": args.authentication_enforced,
                 "allowed_cases": 6,
                 "denied_cases": 6,
             },

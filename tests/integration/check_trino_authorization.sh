@@ -4,6 +4,12 @@ set -euo pipefail
 server="${TRINO_SERVER:-http://trino-coordinator:8080}"
 report_path="${TRINO_AUTHORIZATION_REPORT_PATH:?TRINO_AUTHORIZATION_REPORT_PATH is required}"
 authorization_mode="${TRINO_AUTHORIZATION_MODE:-file}"
+authentication_enforced="${TRINO_AUTHENTICATION_ENFORCED:-false}"
+authentication_password="${TRINO_AUTH_PASSWORD:-}"
+truststore_path="${TRINO_TRUSTSTORE_PATH:-}"
+truststore_password="${TRINO_TRUSTSTORE_PASSWORD:-}"
+ca_cert_path="${TRINO_CA_CERT_PATH:-}"
+expected_node_count="${TRINO_EXPECTED_NODE_COUNT:-3}"
 expected_silver_rows=2
 expected_checksum_count=2
 if [[ "$authorization_mode" == "ranger" ]]; then
@@ -14,14 +20,41 @@ fi
 query() {
   local user="$1"
   local sql="$2"
-  trino \
-    --server "$server" \
-    --user "$user" \
-    --output-format CSV_UNQUOTED \
-    --execute "$sql" \
-    2>&1 \
-    | tr -d '\r'
+  local -a command=(
+    trino --server "$server" --user "$user" --output-format CSV_UNQUOTED
+  )
+  if [[ "$authentication_enforced" == "true" ]]; then
+    : "${authentication_password:?TRINO_AUTH_PASSWORD is required}"
+    : "${truststore_path:?TRINO_TRUSTSTORE_PATH is required}"
+    : "${truststore_password:?TRINO_TRUSTSTORE_PASSWORD is required}"
+    command+=(--password --truststore-path "$truststore_path" --truststore-type PKCS12)
+    command+=(--truststore-password "$truststore_password")
+    TRINO_PASSWORD="$authentication_password" "${command[@]}" --execute "$sql" 2>&1 \
+      | tr -d '\r'
+    return
+  fi
+  "${command[@]}" --execute "$sql" 2>&1 | tr -d '\r'
 }
+
+if [[ "$authentication_enforced" == "true" ]]; then
+  : "${ca_cert_path:?TRINO_CA_CERT_PATH is required}"
+  anonymous_status="$(curl --silent --show-error --output /dev/null \
+    --write-out '%{http_code}' --cacert "$ca_cert_path" \
+    --request POST --header 'X-Trino-User: platform_admin' \
+    --data 'SELECT 1' "$server/v1/statement")"
+  if [[ "$anonymous_status" != "401" ]]; then
+    printf 'anonymous request returned HTTP %s, expected 401\n' "$anonymous_status" >&2
+    exit 1
+  fi
+
+  if TRINO_PASSWORD=incorrect-password trino --server "$server" --user platform_admin \
+    --password --truststore-path "$truststore_path" \
+    --truststore-type PKCS12 \
+    --truststore-password "$truststore_password" --execute "SELECT 1" >/dev/null 2>&1; then
+    printf 'incorrect password unexpectedly authenticated\n' >&2
+    exit 1
+  fi
+fi
 
 expect_allowed() {
   local case_id="$1"
@@ -65,7 +98,7 @@ expect_allowed analytics_engineer_checksum_visibility analytics_engineer \
 expect_allowed platform_admin_checksum_is_visible platform_admin \
   "SELECT count(object_checksum) FROM lakehouse.silver.weather_hourly" 2
 expect_allowed operator_reads_system lakehouse-operator \
-  "SELECT count(*) FROM system.runtime.nodes" 3
+  "SELECT count(*) FROM system.runtime.nodes" "$expected_node_count"
 
 expect_denied analytics_engineer_cannot_read_bronze analytics_engineer \
   "SELECT count(*) FROM lakehouse.bronze.weather_hourly"
@@ -95,7 +128,11 @@ cat >"$report_path" <<EOF
     "engine": "trino",
     "mode": "$authorization_mode",
     "default": "deny",
-    "authentication_enforced": false
+    "authentication_enforced": $authentication_enforced
+  },
+  "authentication": {
+    "anonymous_request": "$(if [[ "$authentication_enforced" == "true" ]]; then printf denied; else printf not_tested; fi)",
+    "incorrect_password": "$(if [[ "$authentication_enforced" == "true" ]]; then printf denied; else printf not_tested; fi)"
   },
   "transformations": {
     "analytics_engineer_visible_rows": $analytics_visible_rows,

@@ -130,6 +130,8 @@ jobs:
         run: |
           docker compose --profile security config --quiet
           docker compose --profile catalog --profile compute --profile query config --quiet
+          docker compose --profile security --profile catalog --profile compute \
+            --profile secure-query config --quiet
       - name: Build catalog and compute images
         run: >-
           uv run python -m lakehouse_ops.verified_build --attempts 3
@@ -180,6 +182,21 @@ jobs:
         run: >-
           uv run python tests/integration/check_trino_authorization.py
           artifacts/trino-authorization-report.json --mode ranger
+      - name: Start authenticated Trino with Ranger enforcement
+        run: >-
+          docker compose --profile security --profile catalog --profile secure-query
+          up -d --wait --wait-timeout 180 trino-secure-coordinator
+      - name: Exercise authenticated Ranger authorization
+        run: |
+          touch artifacts/trino-authenticated-authorization-report.json
+          chmod 0666 artifacts/trino-authenticated-authorization-report.json
+          docker compose --profile security --profile catalog --profile secure-query \
+            run --rm trino-secure-authorization-check
+      - name: Verify authenticated Ranger evidence
+        run: >-
+          uv run python tests/integration/check_trino_authorization.py
+          artifacts/trino-authenticated-authorization-report.json --mode ranger
+          --authentication-enforced
       - name: Grant approved break-glass access
         run: |
           uv run python tests/integration/create_break_glass_lease.py \
@@ -231,6 +248,7 @@ jobs:
             artifacts/ranger-policy-sync.json
             artifacts/ranger-policy-resync.json
             artifacts/trino-authorization-report.json
+            artifacts/trino-authenticated-authorization-report.json
             artifacts/ranger-audit.json
           if-no-files-found: error
           overwrite: true
@@ -238,12 +256,13 @@ jobs:
         if: failure()
         run: >-
           docker compose --profile security --profile catalog --profile compute
-          --profile query logs ranger-db ranger-solr ranger-admin trino-coordinator
+          --profile query --profile secure-query logs ranger-db ranger-solr ranger-admin
+          trino-coordinator trino-security-bootstrap trino-secure-coordinator
       - name: Stop Ranger enforcement profiles
         if: always()
         run: >-
           docker compose --profile security --profile catalog --profile compute
-          --profile query down --volumes
+          --profile query --profile secure-query down --volumes
 
   lakehouse-integration:
     runs-on: ubuntu-latest
