@@ -203,15 +203,25 @@ jobs:
           uv run python tests/integration/check_trino_authorization.py
           artifacts/trino-authenticated-authorization-report.json --mode ranger
           --authentication-enforced
-      - name: Exercise authenticated abrupt worker recovery
+      - name: Exercise authenticated graceful worker drain
         run: |
           docker compose --profile security --profile catalog --profile secure-query \
             cp trino-secure-coordinator:/etc/trino/security/trino.crt \
             artifacts/trino-secure-ca.crt
-          uv run python tests/integration/exercise_trino_worker_recovery.py \
-            https://localhost:8443 artifacts/trino-authenticated-worker-recovery.json \
+          uv run python tests/integration/exercise_trino_worker_shutdown.py \
+            https://localhost:8443 artifacts/trino-authenticated-worker-shutdown.json \
             --mode authenticated-ranger --password "$TRINO_AUTH_PASSWORD" \
             --ca-cert artifacts/trino-secure-ca.crt
+      - name: Verify authenticated worker shutdown evidence
+        run: >-
+          uv run python tests/integration/check_trino_worker_shutdown.py
+          artifacts/trino-authenticated-worker-shutdown.json
+      - name: Exercise authenticated abrupt worker recovery
+        run: >-
+          uv run python tests/integration/exercise_trino_worker_recovery.py
+          https://localhost:8443 artifacts/trino-authenticated-worker-recovery.json
+          --mode authenticated-ranger --password "$TRINO_AUTH_PASSWORD"
+          --ca-cert artifacts/trino-secure-ca.crt
       - name: Verify authenticated worker recovery evidence
         run: >-
           uv run python tests/integration/check_trino_worker_recovery.py
@@ -257,15 +267,23 @@ jobs:
         run: |
           for _ in $(seq 1 12); do
             docker compose exec -T ranger-solr curl -fsS \
-              'http://localhost:8983/solr/ranger_audits/select?q=repo%3Alakehouse-trino&rows=100&fl=repo,enforcer,reqUser,resource,access,action,result,evtTime&wt=json' \
+              'http://localhost:8983/solr/ranger_audits/select?q=repo%3Alakehouse-trino&rows=500&sort=evtTime%20desc&fl=repo,enforcer,reqUser,resource,access,action,result,evtTime&wt=json' \
               > artifacts/ranger-audit.json
             if uv run python tests/integration/check_ranger_audit.py \
+              artifacts/ranger-audit.json 2>/dev/null && \
+              uv run python tests/integration/check_trino_worker_shutdown_audit.py \
+              artifacts/trino-authenticated-worker-shutdown.json \
               artifacts/ranger-audit.json 2>/dev/null; then
               exit 0
             fi
             sleep 5
           done
           uv run python tests/integration/check_ranger_audit.py artifacts/ranger-audit.json
+      - name: Correlate worker shutdown identities with Ranger audit
+        run: >-
+          uv run python tests/integration/check_trino_worker_shutdown_audit.py
+          artifacts/trino-authenticated-worker-shutdown.json
+          artifacts/ranger-audit.json
       - name: Upload Ranger evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -276,6 +294,7 @@ jobs:
             artifacts/ranger-policy-resync.json
             artifacts/trino-authorization-report.json
             artifacts/trino-authenticated-authorization-report.json
+            artifacts/trino-authenticated-worker-shutdown.json
             artifacts/trino-authenticated-worker-recovery.json
             artifacts/ranger-audit.json
           if-no-files-found: error

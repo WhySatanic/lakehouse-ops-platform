@@ -7,7 +7,7 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: version `1.20.0`, stable `1.0.0` control-plane contract, and reproducible
+> Status: version `1.21.0`, stable `1.0.0` control-plane contract, and reproducible
 > reference stack.
 > Open-Meteo ingestion works against the local filesystem and MinIO. Spark writes
 > S3-backed Iceberg bronze and validated silver tables registered in PostgreSQL-backed
@@ -157,7 +157,9 @@ query the bronze and silver tables, and run the fixture acceptance check.
 
 The [Trino worker shutdown runbook](docs/runbooks/trino-worker-shutdown.md) drains one
 worker through Trino's management API, proves that it leaves discovery, and verifies
-that the remaining worker still serves the Iceberg query path.
+that the remaining worker still serves the Iceberg query path. Its authenticated variant
+observes an active query, drains the assigned private worker through the Ranger-authorized
+operator path, and correlates both identities with retained audit decisions.
 
 The [Trino abrupt worker recovery runbook](docs/runbooks/trino-worker-recovery.md)
 proves an active task existed on the worker before `SIGKILL`, records the expected
@@ -311,6 +313,8 @@ The [1.0.0 acceptance manifest](docs/releases/1.0.0.md) maps the stable release 
 to its executable CI evidence and documented limitations.
 The [1.20.0 release notes](docs/releases/1.20.0.md) describe authenticated worker-loss
 recovery through the centralized Ranger policy path.
+The [1.21.0 release notes](docs/releases/1.21.0.md) describe zero-interruption graceful
+worker drain through the authenticated Ranger topology.
 
 ## Project principles
 
