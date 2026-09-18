@@ -39,6 +39,37 @@ The check fails unless all of these post-conditions hold:
 The report uses schema version `1.0`. The host validator rejects missing, stale, or
 inconsistent evidence rather than inferring success from a container exit code.
 
+## Authenticated Ranger drill
+
+The secure variant proves a stronger boundary: it submits a long-running query through
+the HTTPS coordinator with a verified certificate and password authentication, observes
+an active task on one of the two private workers, and requests graceful shutdown as the
+`lakehouse-operator` identity. The exact in-flight query must finish successfully before
+the worker exits. The surviving worker then serves the Iceberg fingerprint query and the
+drained worker is recreated to restore three-node capacity.
+
+After the Ranger and secure-query profiles are ready and the deterministic tables exist:
+
+```bash
+docker compose --profile security --profile catalog --profile secure-query \
+  cp trino-secure-coordinator:/etc/trino/security/trino.crt \
+  artifacts/trino-secure-ca.crt
+uv run python tests/integration/exercise_trino_worker_shutdown.py \
+  https://localhost:8443 artifacts/trino-authenticated-worker-shutdown.json \
+  --mode authenticated-ranger --password "$TRINO_AUTH_PASSWORD" \
+  --ca-cert artifacts/trino-secure-ca.crt
+uv run python tests/integration/check_trino_worker_shutdown.py \
+  artifacts/trino-authenticated-worker-shutdown.json
+```
+
+CI also correlates the report's `platform_admin` query identity and
+`lakehouse-operator` control identity with allowed decisions retained in the Ranger Solr
+audit export. The evidence therefore covers the authenticated coordinator boundary,
+centralized authorization, task continuity, worker exit, degraded reads, data
+fingerprints, and restored capacity. Worker-to-worker traffic remains on the Compose
+internal HTTP network protected by Trino's shared internal secret; the externally
+reachable coordinator is the TLS/password boundary.
+
 ## Operational boundary
 
 Workers use `restart: on-failure`. An abnormal non-zero exit is restarted, while the
@@ -47,9 +78,11 @@ the local and CI drill bounded. Production values must exceed the longest expect
 duration and the surrounding orchestrator termination timeout must cover both grace
 windows plus task completion.
 
-The drill proves query continuity after scheduler convergence. It does not claim
-fault-tolerant execution for an abrupt worker loss, preserve an in-flight synthetic long
-query, or test authenticated TLS. Those are separate failure and security scenarios.
+The default drill proves query continuity after scheduler convergence. The authenticated
+variant additionally proves zero interruption for one observed synthetic read query. It
+does not claim fault-tolerant execution for abrupt loss, uninterrupted writes, or a
+production grace-period value. Abrupt loss has a separate recovery drill whose expected
+in-flight outcome is failure followed by a degraded-cluster retry.
 
 ## Restore capacity
 
