@@ -203,11 +203,21 @@ jobs:
           uv run python tests/integration/check_trino_authorization.py
           artifacts/trino-authenticated-authorization-report.json --mode ranger
           --authentication-enforced
-      - name: Exercise authenticated graceful worker drain
+      - name: Exercise authenticated Hive Metastore recovery
         run: |
           docker compose --profile security --profile catalog --profile secure-query \
             cp trino-secure-coordinator:/etc/trino/security/trino.crt \
             artifacts/trino-secure-ca.crt
+          uv run python tests/integration/exercise_hive_metastore_recovery.py \
+            https://localhost:8443 artifacts/trino-authenticated-metastore-recovery.json \
+            --mode authenticated-ranger --password "$TRINO_AUTH_PASSWORD" \
+            --ca-cert artifacts/trino-secure-ca.crt
+      - name: Verify authenticated Hive Metastore recovery evidence
+        run: >-
+          uv run python tests/integration/check_hive_metastore_recovery.py
+          artifacts/trino-authenticated-metastore-recovery.json
+      - name: Exercise authenticated graceful worker drain
+        run: |
           uv run python tests/integration/exercise_trino_worker_shutdown.py \
             https://localhost:8443 artifacts/trino-authenticated-worker-shutdown.json \
             --mode authenticated-ranger --password "$TRINO_AUTH_PASSWORD" \
@@ -294,6 +304,7 @@ jobs:
             artifacts/ranger-policy-resync.json
             artifacts/trino-authorization-report.json
             artifacts/trino-authenticated-authorization-report.json
+            artifacts/trino-authenticated-metastore-recovery.json
             artifacts/trino-authenticated-worker-shutdown.json
             artifacts/trino-authenticated-worker-recovery.json
             artifacts/ranger-audit.json

@@ -13,6 +13,13 @@ from lakehouse_ops.trino import TrinoProtocolError, TrinoQueryError, TrinoQueryR
 
 INCIDENT = "hive_metastore_unavailable"
 TABLE = "lakehouse_cache_disabled.silver.weather_hourly"
+AUTHENTICATED_RANGER_SECURITY = {
+    "authentication": "password",
+    "authorization": "ranger",
+    "query_user": "platform_admin",
+    "tls_verified": True,
+    "transport": "https",
+}
 STATE_SQL = f"""
 SELECT
   (SELECT count(*) FROM {TABLE}) AS row_count,
@@ -38,6 +45,7 @@ def run_metastore_recovery(
     stop_metastore: Callable[[], None],
     start_metastore: Callable[[], None],
     *,
+    security: dict[str, Any] | None = None,
     clock: Callable[[], datetime] | None = None,
     monotonic: Callable[[], float] | None = None,
 ) -> dict[str, Any]:
@@ -95,6 +103,8 @@ def run_metastore_recovery(
             ),
         },
     }
+    if security is not None:
+        report["security"] = security
     validate_metastore_recovery_report(report)
     return report
 
@@ -106,6 +116,11 @@ def validate_metastore_recovery_report(report: dict[str, Any]) -> None:
         raise MetastoreRecoveryError("report incident or table is unexpected")
     if not isinstance(report.get("collected_at"), str) or not report["collected_at"]:
         raise MetastoreRecoveryError("report collection time is missing")
+    security = report.get("security")
+    if security is not None and security != AUTHENTICATED_RANGER_SECURITY:
+        raise MetastoreRecoveryError(
+            "authenticated metastore recovery security evidence is invalid"
+        )
     duration = report.get("outage_duration_seconds")
     if isinstance(duration, bool) or not isinstance(duration, (int, float)) or duration < 0:
         raise MetastoreRecoveryError("outage duration is invalid")

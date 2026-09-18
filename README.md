@@ -7,7 +7,7 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: version `1.21.0`, stable `1.0.0` control-plane contract, and reproducible
+> Status: version `1.22.0`, stable `1.0.0` control-plane contract, and reproducible
 > reference stack.
 > Open-Meteo ingestion works against the local filesystem and MinIO. Spark writes
 > S3-backed Iceberg bronze and validated silver tables registered in PostgreSQL-backed
@@ -191,7 +191,8 @@ metadata observations from general JVM and object-store warming.
 The [Hive Metastore outage recovery drill](docs/runbooks/hive-metastore-recovery.md)
 stops only the catalog service while its PostgreSQL metadata database stays online,
 proves that a cache-disabled Trino lookup fails, restores the service, and verifies the
-same Iceberg snapshot and rows through Trino.
+same Iceberg snapshot and rows through Trino. The same recovery boundary is exercised
+through verified HTTPS/password authentication and centralized Ranger authorization.
 
 The [PostgreSQL metadata recovery drill](docs/runbooks/postgresql-metadata-recovery.md)
 creates and verifies a logical metastore backup, stops Hive Metastore, removes its
@@ -315,6 +316,8 @@ The [1.20.0 release notes](docs/releases/1.20.0.md) describe authenticated worke
 recovery through the centralized Ranger policy path.
 The [1.21.0 release notes](docs/releases/1.21.0.md) describe zero-interruption graceful
 worker drain through the authenticated Ranger topology.
+The [1.22.0 release notes](docs/releases/1.22.0.md) describe authenticated Hive Metastore
+outage and recovery through the cache-disabled Ranger query path.
 
 ## Project principles
 

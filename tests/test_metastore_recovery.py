@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from lakehouse_ops.metastore_recovery import (
+    AUTHENTICATED_RANGER_SECURITY,
     MetastoreRecoveryError,
     run_metastore_recovery,
     validate_metastore_recovery_report,
@@ -140,6 +141,45 @@ def test_validate_accepts_complete_report() -> None:
     validate_metastore_recovery_report(valid_report())
 
 
+def test_run_metastore_recovery_records_authenticated_ranger_boundary() -> None:
+    clients = [FakeClient(), FakeClient(fail=True), FakeClient()]
+    states = iter(
+        [
+            topology(metastore=True),
+            topology(metastore=False),
+            topology(metastore=True),
+        ]
+    )
+
+    report = run_metastore_recovery(
+        lambda: clients.pop(0),
+        lambda: next(states),
+        lambda: None,
+        lambda: None,
+        security=AUTHENTICATED_RANGER_SECURITY,
+    )
+
+    assert report["security"] == AUTHENTICATED_RANGER_SECURITY
+
+
+def test_validate_accepts_authenticated_ranger_report() -> None:
+    report = valid_report()
+    report["security"] = dict(AUTHENTICATED_RANGER_SECURITY)
+
+    validate_metastore_recovery_report(report)
+
+
+def test_validate_rejects_unverified_authenticated_transport() -> None:
+    report = valid_report()
+    report["security"] = {
+        **AUTHENTICATED_RANGER_SECURITY,
+        "tls_verified": False,
+    }
+
+    with pytest.raises(MetastoreRecoveryError, match="security evidence"):
+        validate_metastore_recovery_report(report)
+
+
 @pytest.mark.parametrize(
     "mutate, message",
     [
@@ -206,3 +246,16 @@ def test_write_metastore_recovery_report_creates_parent(tmp_path: Path) -> None:
 
     assert json.loads(path.read_text(encoding="utf-8"))["status"] == "recovered"
     assert path.read_text(encoding="utf-8").endswith("\n")
+
+
+def test_authenticated_metastore_recovery_is_wired_into_ranger_ci() -> None:
+    root = Path(__file__).parents[1]
+    runner = (
+        root / "tests/integration/exercise_hive_metastore_recovery.py"
+    ).read_text(encoding="utf-8")
+    workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert 'choices=("default", "authenticated-ranger")' in runner
+    assert "ssl.create_default_context" in runner
+    assert "Exercise authenticated Hive Metastore recovery" in workflow
+    assert "trino-authenticated-metastore-recovery.json" in workflow
