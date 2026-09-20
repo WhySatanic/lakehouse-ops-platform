@@ -110,6 +110,8 @@ row filtering, impersonation boundaries, and audit events.
       authentication with Ranger identity and retained audit evidence.
   - [x] PostgreSQL metadata backup, loss injection, and restore with catalog reconciliation,
     verified backup contents, unchanged catalog manifest, and unchanged Iceberg snapshot.
+    - [x] Repeat destructive metadata recovery through verified HTTPS/password
+      authentication and Ranger while preserving the default HTTP recovery contract.
 
 Exit criterion: a demo script and runbooks can diagnose and recover defined incidents.
 

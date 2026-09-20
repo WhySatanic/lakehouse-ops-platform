@@ -7,7 +7,7 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: version `1.22.0`, stable `1.0.0` control-plane contract, and reproducible
+> Status: version `1.23.0`, stable `1.0.0` control-plane contract, and reproducible
 > reference stack.
 > Open-Meteo ingestion works against the local filesystem and MinIO. Spark writes
 > S3-backed Iceberg bronze and validated silver tables registered in PostgreSQL-backed
@@ -318,6 +318,8 @@ The [1.21.0 release notes](docs/releases/1.21.0.md) describe zero-interruption g
 worker drain through the authenticated Ranger topology.
 The [1.22.0 release notes](docs/releases/1.22.0.md) describe authenticated Hive Metastore
 outage and recovery through the cache-disabled Ranger query path.
+The [1.23.0 release notes](docs/releases/1.23.0.md) describe authenticated PostgreSQL
+metadata backup, destructive loss injection, and restore through the Ranger query path.
 
 ## Project principles
 

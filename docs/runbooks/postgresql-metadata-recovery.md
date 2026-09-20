@@ -46,10 +46,32 @@ docker compose --profile catalog run --rm metastore-schema-check
 docker compose --profile query run --rm trino-query-check
 ```
 
+For the authenticated Ranger topology, copy the generated coordinator certificate and
+run the same destructive drill through the verified client boundary:
+
+```bash
+docker compose --profile security --profile catalog --profile secure-query \
+  cp trino-secure-coordinator:/etc/trino/security/trino.crt \
+  artifacts/trino-secure-ca.crt
+uv run python tests/integration/exercise_metadata_db_recovery.py \
+  https://localhost:8443 \
+  artifacts/trino-authenticated-metadata-db-recovery.json \
+  artifacts/trino-authenticated-metastore-backup.dump \
+  --mode authenticated-ranger \
+  --password "$TRINO_AUTH_PASSWORD" \
+  --ca-cert artifacts/trino-secure-ca.crt
+```
+
+This mode records the exact `platform_admin` password-authenticated, Ranger-authorized,
+TLS-verified boundary. The certificate is trusted explicitly; disabling TLS verification
+or using HTTP is rejected before catalog loss can begin. The default HTTP command remains
+supported for local recovery testing.
+
 The JSON evidence includes the backup SHA-256 and size, backup TOC count, required-table
 coverage, catalog manifest checksum, service topology, Trino query IDs, row counts, current
-snapshot IDs, and total recovery duration. The binary dump is deliberately excluded from
-Git and must be protected according to the operator's backup policy.
+snapshot IDs, optional security boundary, and total recovery duration. The binary dump is
+deliberately excluded from Git and must be protected according to the operator's backup
+policy.
 
 ## Failure handling
 
@@ -77,6 +99,7 @@ database backup contains catalog metadata, not Iceberg metadata and data files.
 
 ## Upgrade notes
 
-No database schema, warehouse, or Compose migration is required. Version 0.41.0 adds a
-host-side recovery runner and CI evidence only. Existing operators can adopt it after
-confirming that the target Compose project is an isolated recovery environment.
+No database schema, warehouse, CLI, or default recovery migration is required. Version
+1.23.0 adds optional authenticated connection arguments and Ranger CI evidence. Existing
+operators can keep the default command or adopt the secure mode after confirming that the
+target Compose project is an isolated recovery environment.

@@ -22,6 +22,13 @@ SELECT
 FROM {TABLE}
 """.strip()
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
+AUTHENTICATED_RANGER_SECURITY = {
+    "authentication": "password",
+    "authorization": "ranger",
+    "query_user": "platform_admin",
+    "tls_verified": True,
+    "transport": "https",
+}
 
 
 class MetadataDbRecoveryError(ValueError):
@@ -45,6 +52,7 @@ def run_metadata_db_recovery(
     restore_database: Callable[[], None],
     start_metastore: Callable[[], None],
     *,
+    security: dict[str, Any] | None = None,
     clock: Callable[[], datetime] | None = None,
     monotonic: Callable[[], float] | None = None,
 ) -> dict[str, Any]:
@@ -124,6 +132,8 @@ def run_metadata_db_recovery(
             "metastore_service_restored": recovery_topology["metastore_running"],
         },
     }
+    if security is not None:
+        report["security"] = dict(security)
     validate_metadata_db_recovery_report(report)
     return report
 
@@ -149,6 +159,9 @@ def validate_metadata_db_recovery_report(report: dict[str, Any]) -> None:
         raise MetadataDbRecoveryError("report is not recovered schema 1.0 evidence")
     if report.get("incident") != INCIDENT or report.get("table") != TABLE:
         raise MetadataDbRecoveryError("report incident or table is unexpected")
+    security = report.get("security")
+    if security is not None and security != AUTHENTICATED_RANGER_SECURITY:
+        raise MetadataDbRecoveryError("authenticated Ranger security evidence is invalid")
     if not _non_empty(report.get("collected_at")):
         raise MetadataDbRecoveryError("report collection time is missing")
     duration = report.get("recovery_duration_seconds")
