@@ -1274,8 +1274,10 @@ services:
         condition: service_started
     environment:
       ALERT_WEBHOOK_SERVER: http://alert-webhook:8080
+      EXPECTED_ALERT_NAME: ${EXPECTED_ALERT_NAME:-LakehouseCoreTargetDown}
       EXPECTED_ALERT_STATUS: ${EXPECTED_ALERT_STATUS:-firing}
-      EXPECTED_ALERT_TARGET: http://trino-coordinator:8080/v1/info
+      EXPECTED_ALERT_TARGET: ${EXPECTED_ALERT_TARGET-http://trino-coordinator:8080/v1/info}
+      EXPECTED_ALERT_COMPONENT: ${EXPECTED_ALERT_COMPONENT:-}
     volumes:
       - ./tests/integration/check_alert_delivery.py:/checks/check_alert_delivery.py:ro
     entrypoint: ["python", "/checks/check_alert_delivery.py"]

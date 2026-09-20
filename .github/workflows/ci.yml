@@ -878,6 +878,12 @@ jobs:
         run: >-
           uv run python tests/integration/check_orphan_removal.py
           artifacts/orphan-removal-report.json
+      - name: Verify ingestion freshness SLO alert delivery
+        env:
+          EXPECTED_ALERT_NAME: LakehouseIngestionFreshnessSLOBreach
+          EXPECTED_ALERT_TARGET: ""
+          EXPECTED_ALERT_COMPONENT: ingestion
+        run: docker compose --profile observability run --rm alert-delivery-check
       - name: Exercise core target alert delivery
         run: |
           docker compose stop trino-coordinator

@@ -61,6 +61,10 @@ The platform SLO recording rules evaluate query success, ingestion freshness, an
 small-file maintenance backlog. The bounded acceptance checker rejects missing traffic,
 failed collection, and breached objectives. See the
 [platform SLO runbook](platform-slos.md) for targets, limitations, and PromQL queries.
+CI also retains an intentionally stale ingestion fixture long enough for
+`LakehouseIngestionFreshnessSLOBreach` to become active, then verifies that Alertmanager
+delivers the exact alert name and `component=ingestion` label to the webhook receiver.
+This proves delivery of a data-quality SLO breach, not only infrastructure reachability.
 
 This profile intentionally does not claim application-level correctness or production
 paging. The freshness age describes the most recent `ingested_at`

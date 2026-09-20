@@ -10,7 +10,14 @@ ALERT_NAME = "LakehouseCoreTargetDown"
 DEFAULT_TARGET = "http://trino-coordinator:8080/v1/info"
 
 
-def has_matching_alert(events: object, status: str, target: str) -> bool:
+def has_matching_alert(
+    events: object,
+    status: str,
+    target: str | None,
+    *,
+    alert_name: str = ALERT_NAME,
+    component: str | None = None,
+) -> bool:
     if not isinstance(events, list):
         return False
     for event in events:
@@ -21,8 +28,9 @@ def has_matching_alert(events: object, status: str, target: str) -> bool:
             if (
                 isinstance(labels, dict)
                 and alert.get("status") == status
-                and labels.get("alertname") == ALERT_NAME
-                and labels.get("instance") == target
+                and labels.get("alertname") == alert_name
+                and (target is None or labels.get("instance") == target)
+                and (component is None or labels.get("component") == component)
             ):
                 return True
     return False
@@ -31,7 +39,9 @@ def has_matching_alert(events: object, status: str, target: str) -> bool:
 def main() -> int:
     server = os.getenv("ALERT_WEBHOOK_SERVER", "http://alert-webhook:8080").rstrip("/")
     expected_status = os.getenv("EXPECTED_ALERT_STATUS", "firing")
-    expected_target = os.getenv("EXPECTED_ALERT_TARGET", DEFAULT_TARGET)
+    expected_name = os.getenv("EXPECTED_ALERT_NAME", ALERT_NAME)
+    expected_target = os.getenv("EXPECTED_ALERT_TARGET", DEFAULT_TARGET) or None
+    expected_component = os.getenv("EXPECTED_ALERT_COMPONENT") or None
     attempts = int(os.getenv("ALERT_CHECK_ATTEMPTS", "30"))
     delay = float(os.getenv("ALERT_CHECK_DELAY_SECONDS", "5"))
     last_error = "no matching alert delivered"
@@ -40,16 +50,23 @@ def main() -> int:
         try:
             with urlopen(f"{server}/events", timeout=5) as response:
                 events = json.load(response)
-            if has_matching_alert(events, expected_status, expected_target):
-                print(f"Alertmanager delivered {expected_status} alert for {expected_target}")
+            if has_matching_alert(
+                events,
+                expected_status,
+                expected_target,
+                alert_name=expected_name,
+                component=expected_component,
+            ):
+                print(f"Alertmanager delivered {expected_status} {expected_name} alert")
                 return 0
         except (OSError, ValueError, KeyError, TypeError) as error:
             last_error = str(error)
         time.sleep(delay)
 
     print(
-        f"Alert delivery check failed for status={expected_status}, "
-        f"target={expected_target}: {last_error}",
+        f"Alert delivery check failed for name={expected_name}, "
+        f"status={expected_status}, target={expected_target}, "
+        f"component={expected_component}: {last_error}",
         file=sys.stderr,
     )
     return 1

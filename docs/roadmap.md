@@ -203,6 +203,14 @@ centralized authorization, observability, and recovery.
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.
 
+## Phase 8 — operational response evidence
+
+- [x] Deliver an ingestion-freshness SLO breach through Alertmanager and verify the exact
+  alert identity and component at the webhook boundary.
+
+Exit criterion: each declared operational objective has a bounded failure drill and
+retained evidence at the notification boundary, not only a valid Prometheus expression.
+
 ## Sustainable contribution rhythm
 
 A strong week contains one or two complete changes, not a fixed number of cosmetic
