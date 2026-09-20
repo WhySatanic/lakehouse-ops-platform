@@ -845,6 +845,7 @@ services:
       - ./infra/trino/ranger-trino-security.xml:/etc/trino/ranger-trino-security.xml:ro
       - ./infra/trino/ranger-trino-audit.xml:/etc/trino/ranger-trino-audit.xml:ro
       - ./infra/trino/catalog/lakehouse.properties:/etc/trino/catalog/lakehouse.properties:ro
+      - ./infra/trino/catalog/lakehouse-cache-disabled.properties:/etc/trino/catalog/lakehouse_cache_disabled.properties:ro
       - trino-secure-material:/etc/trino/security:ro
       - trino-secure-coordinator-data:/data/trino
     healthcheck:
@@ -883,6 +884,7 @@ services:
       - ./infra/trino/ranger-trino-security.xml:/etc/trino/ranger-trino-security.xml:ro
       - ./infra/trino/ranger-trino-audit.xml:/etc/trino/ranger-trino-audit.xml:ro
       - ./infra/trino/catalog/lakehouse.properties:/etc/trino/catalog/lakehouse.properties:ro
+      - ./infra/trino/catalog/lakehouse-cache-disabled.properties:/etc/trino/catalog/lakehouse_cache_disabled.properties:ro
       - trino-secure-worker-data:/data/trino
     mem_limit: 1g
     restart: on-failure
@@ -905,6 +907,7 @@ services:
       - ./infra/trino/ranger-trino-security.xml:/etc/trino/ranger-trino-security.xml:ro
       - ./infra/trino/ranger-trino-audit.xml:/etc/trino/ranger-trino-audit.xml:ro
       - ./infra/trino/catalog/lakehouse.properties:/etc/trino/catalog/lakehouse.properties:ro
+      - ./infra/trino/catalog/lakehouse-cache-disabled.properties:/etc/trino/catalog/lakehouse_cache_disabled.properties:ro
       - trino-secure-worker-2-data:/data/trino
     mem_limit: 1g
     restart: on-failure

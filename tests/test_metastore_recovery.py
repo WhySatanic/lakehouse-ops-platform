@@ -254,8 +254,13 @@ def test_authenticated_metastore_recovery_is_wired_into_ranger_ci() -> None:
         root / "tests/integration/exercise_hive_metastore_recovery.py"
     ).read_text(encoding="utf-8")
     workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    compose = (root / "compose.yaml").read_text(encoding="utf-8")
 
     assert 'choices=("default", "authenticated-ranger")' in runner
     assert "ssl.create_default_context" in runner
     assert "Exercise authenticated Hive Metastore recovery" in workflow
     assert "trino-authenticated-metastore-recovery.json" in workflow
+    assert compose.count(
+        "./infra/trino/catalog/lakehouse-cache-disabled.properties:"
+        "/etc/trino/catalog/lakehouse_cache_disabled.properties:ro"
+    ) == 6
