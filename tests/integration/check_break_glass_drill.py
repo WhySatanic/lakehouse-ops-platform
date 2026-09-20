@@ -24,6 +24,14 @@ def main() -> None:
     _check_sync(revoke, "expired", errors)
     _check_access(allowed, "allowed", errors)
     _check_access(denied, "denied", errors)
+    _check_security(allowed, errors)
+    _check_security(denied, errors)
+    if not allowed.get("query_id"):
+        errors.append("access.allowed.query_id")
+    if not allowed.get("started_at"):
+        errors.append("access.allowed.started_at")
+    if grant.get("break_glass", {}).get("user") != allowed.get("user"):
+        errors.append("access.user")
     if grant.get("break_glass", {}).get("grant_id") != revoke.get("break_glass", {}).get(
         "grant_id"
     ):
@@ -40,6 +48,9 @@ def main() -> None:
                 "user": grant["break_glass"]["user"],
                 "grant": "allowed",
                 "expiry": "denied",
+                "allowed_query_id": allowed["query_id"],
+                "audit_window": {"started_at": allowed["started_at"]},
+                "security": allowed["security"],
             },
             sort_keys=True,
         )
@@ -61,6 +72,18 @@ def _check_sync(report: dict[str, Any], status: str, errors: list[str]) -> None:
 def _check_access(report: dict[str, Any], result: str, errors: list[str]) -> None:
     if report.get("status") != "ready" or report.get("result") != result:
         errors.append(f"access.{result}")
+
+
+def _check_security(report: dict[str, Any], errors: list[str]) -> None:
+    expected = {
+        "authentication": "password",
+        "authorization": "ranger",
+        "query_user": "incident-responder",
+        "tls_verified": True,
+        "transport": "https",
+    }
+    if report.get("security") != expected:
+        errors.append(f"access.{report.get('result', 'unknown')}.security")
 
 
 def _read(path: Path) -> dict[str, Any]:

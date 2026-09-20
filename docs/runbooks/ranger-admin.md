@@ -115,9 +115,11 @@ Lakehouse Ops access after revocation.
 
 Ranger does not schedule this reconciliation. Production automation must run the sync at
 least as frequently as the required revocation window and alert on failures. The CI drill
-proves an initially denied user becomes allowed with an active lease, then becomes denied
-again after expired-lease reconciliation. It does not claim production authentication or
-a highly available scheduler.
+authenticates `incident-responder` with a development password over certificate-verified
+HTTPS, proves an active lease authorizes the protected query, then proves expired-lease
+reconciliation denies the same identity. Retained evidence includes the successful Trino
+query ID and correlated Ranger allow and deny decisions. This does not claim production
+identity lifecycle, secret management, or a highly available scheduler.
 
 The `RANGER_ADMIN_USER` and `RANGER_ADMIN_PASSWORD` values configure only the readiness
 client. On first boot Ranger creates its documented development administrator account.

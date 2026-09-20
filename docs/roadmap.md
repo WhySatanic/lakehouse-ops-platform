@@ -78,6 +78,7 @@ improvement, trade-offs, and rollback path.
   - [x] Trino allow and deny decisions delivered to the Ranger Solr audit store.
   - [x] Row-filter and column-mask policies with live acceptance evidence.
   - [x] Reviewed break-glass grant, expiry, and revocation drill.
+  - [x] Authenticated HTTPS break-glass lifecycle with Ranger audit correlation.
 - [x] S3 service-account policies aligned with engine responsibilities.
   - [x] Idempotent MinIO identities and live allow/deny matrix for ingestion, Spark, and Trino.
   - [x] Run ingestion, Spark, and Trino containers with dedicated credentials instead of
