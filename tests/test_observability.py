@@ -303,9 +303,49 @@ def test_alert_checker_matches_exact_status_and_target() -> None:
     assert not checker.has_matching_alert(events, "firing", "http://other:8080/v1/info")
 
 
+def test_alert_checker_matches_named_component_without_instance() -> None:
+    checker = _load_alert_checker()
+    events = [
+        {
+            "alerts": [
+                {
+                    "status": "firing",
+                    "labels": {
+                        "alertname": "LakehouseIngestionFreshnessSLOBreach",
+                        "component": "ingestion",
+                    },
+                }
+            ]
+        }
+    ]
+
+    assert checker.has_matching_alert(
+        events,
+        "firing",
+        None,
+        alert_name="LakehouseIngestionFreshnessSLOBreach",
+        component="ingestion",
+    )
+    assert not checker.has_matching_alert(
+        events,
+        "firing",
+        None,
+        alert_name="LakehouseMaintenanceBacklogSLOBreach",
+        component="ingestion",
+    )
+    assert not checker.has_matching_alert(
+        events,
+        "firing",
+        None,
+        alert_name="LakehouseIngestionFreshnessSLOBreach",
+        component="maintenance",
+    )
+
+
 def test_platform_slo_rules_cover_declared_objectives() -> None:
     rules = (ROOT / "config" / "observability" / "slo.yml").read_text()
     compose = (ROOT / "compose.yaml").read_text()
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
 
     assert "lakehouse:slo:query_success_ratio5m" in rules
     assert "sum(rate(trino_execution_name_QueryManager_FailedQueries[5m]))" in rules
@@ -314,6 +354,10 @@ def test_platform_slo_rules_cover_declared_objectives() -> None:
     assert "lakehouse:slo:objectives_met" in rules
     assert "./config/observability/slo.yml:/etc/prometheus/rules/slo.yml:ro" in compose
     assert "platform-slo-check:" in compose
+    assert "EXPECTED_ALERT_NAME: ${EXPECTED_ALERT_NAME:-LakehouseCoreTargetDown}" in compose
+    assert "Verify ingestion freshness SLO alert delivery" in workflow
+    assert "EXPECTED_ALERT_NAME: LakehouseIngestionFreshnessSLOBreach" in workflow
+    assert "EXPECTED_ALERT_COMPONENT: ingestion" in workflow
 
 
 def test_platform_slo_checker_requires_finite_in_range_samples() -> None:
