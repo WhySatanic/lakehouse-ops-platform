@@ -54,6 +54,32 @@ The report is accepted only when PostgreSQL stays running with the same containe
 the cache-disabled query fails while Hive Metastore is stopped, and the post-recovery
 query returns the original rows and snapshot.
 
+## Authenticated Ranger drill
+
+The secure variant runs the same cache-disabled failure injection through the HTTPS
+coordinator as `platform_admin`. The client verifies the generated Trino certificate,
+uses password authentication, and then reaches Ranger before catalog access. The report
+records that exact security boundary while retaining the same service-topology and
+Iceberg-state invariants as the default drill.
+
+After the Ranger, catalog, and secure-query profiles are ready:
+
+```bash
+docker compose --profile security --profile catalog --profile secure-query \
+  cp trino-secure-coordinator:/etc/trino/security/trino.crt \
+  artifacts/trino-secure-ca.crt
+uv run python tests/integration/exercise_hive_metastore_recovery.py \
+  https://localhost:8443 artifacts/trino-authenticated-metastore-recovery.json \
+  --mode authenticated-ranger --password "$TRINO_AUTH_PASSWORD" \
+  --ca-cert artifacts/trino-secure-ca.crt
+uv run python tests/integration/check_hive_metastore_recovery.py \
+  artifacts/trino-authenticated-metastore-recovery.json
+```
+
+CI retains this report beside the authenticated Ranger matrix and audit export. It does
+not infer authenticated recovery from the default HTTP report. The default command and
+schema remain compatible; the secure report adds an exact `security` object.
+
 ## Recovery boundary
 
 This is a deliberate Hive Metastore process outage, not metadata-database disaster

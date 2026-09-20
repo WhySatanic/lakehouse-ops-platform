@@ -102,6 +102,8 @@ row filtering, impersonation boundaries, and audit events.
 - [x] Recovery drill for lost worker, unavailable metastore, and restored metadata DB.
   - [x] Hive Metastore service outage and recovery with cache-disabled Trino failure,
     preserved PostgreSQL container identity, and unchanged Iceberg snapshot evidence.
+    - [x] Repeat the outage through verified HTTPS/password authentication and Ranger
+      while preserving the default HTTP recovery contract.
   - [x] Abrupt worker loss with observed in-flight task failure, degraded-cluster retry,
     unchanged Iceberg fingerprint, and restored worker capacity evidence.
     - [x] Repeat the loss and recovery drill through verified HTTPS/password
