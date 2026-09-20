@@ -21,6 +21,13 @@ The verifier repeats semantic validation after artifact download. Presence alone
 pass the gate. It also proves that the core metadata report and all three recovery reports
 refer to the same Iceberg snapshot and the same two-row silver fixture.
 
+The Ranger artifact also contains `authorization-evidence-manifest.json`. It binds every
+retained authorization, recovery, worker-lifecycle, break-glass, and audit JSON report to
+the exact source revision, byte size, individual SHA-256, and a canonical evidence-set
+digest. Release readiness recomputes all 15 file digests after download, so an altered,
+missing, duplicated, renamed, oversized, or wrong-revision report fails before a release
+candidate is built.
+
 ## Run against downloaded CI artifacts
 
 ```bash
@@ -30,6 +37,20 @@ uv run lakeops verify-release-readiness \
   --source-revision "$(git rev-parse HEAD)" \
   --output artifacts/release-readiness.json
 ```
+
+To verify only a downloaded `ranger-evidence` directory without Docker:
+
+```bash
+uv run python tests/integration/check_authorization_evidence_manifest.py \
+  ranger-evidence/authorization-evidence-manifest.json \
+  --evidence-root ranger-evidence \
+  --expected-source-revision "$EXPECTED_SOURCE_REVISION" \
+  --strict-membership
+```
+
+The manifest is a digest index, not a signature. Its trust anchor is the signed
+release-candidate that contains it or the digest-checked GitHub Actions artifact from the
+same workflow run.
 
 The command exits non-zero for a missing or malformed report, unsupported validator,
 failed capability check, path traversal, snapshot drift, or row-count drift. A passing

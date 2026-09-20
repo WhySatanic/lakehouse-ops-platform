@@ -311,6 +311,16 @@ jobs:
           uv run python tests/integration/check_break_glass_audit.py
           artifacts/break-glass-drill.json artifacts/ranger-audit.json
           > artifacts/break-glass-audit.json
+      - name: Build and verify authorization evidence manifest
+        env:
+          SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          uv run python tests/integration/build_authorization_evidence_manifest.py \
+            artifacts --source-revision "$SOURCE_REVISION" \
+            > artifacts/authorization-evidence-manifest.json
+          uv run python tests/integration/check_authorization_evidence_manifest.py \
+            artifacts/authorization-evidence-manifest.json \
+            --evidence-root artifacts --expected-source-revision "$SOURCE_REVISION"
       - name: Stop authenticated Trino nodes
         run: >-
           docker compose --profile security --profile catalog --profile secure-query stop
@@ -340,6 +350,7 @@ jobs:
             artifacts/break-glass-drill.json
             artifacts/break-glass-audit.json
             artifacts/ranger-audit.json
+            artifacts/authorization-evidence-manifest.json
           if-no-files-found: error
           overwrite: true
       - name: Show Ranger logs

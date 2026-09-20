@@ -176,6 +176,9 @@ def test_secure_profile_executes_queries_on_two_private_workers() -> None:
     assert "--server https://localhost:8443 --expect denied" in workflow
     assert workflow.count("--mode authenticated-ranger") >= 6
     assert "check_break_glass_audit.py" in workflow
+    assert "build_authorization_evidence_manifest.py" in workflow
+    assert "check_authorization_evidence_manifest.py" in workflow
+    assert "artifacts/authorization-evidence-manifest.json" in workflow
     assert workflow.index("Correlate break-glass decisions with Ranger audit") < workflow.index(
         "Stop authenticated Trino nodes"
     )
