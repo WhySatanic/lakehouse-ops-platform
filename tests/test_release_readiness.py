@@ -68,6 +68,7 @@ def evidence_reports(snapshot_id: str = "42") -> dict[str, dict[str, Any]]:
         "platform_slos": {
             "schema_version": "1.0",
             "status": "ready",
+            "expected_ingestion_freshness_compliant": 1,
             "objectives": {f"objective-{index}": {"met": True} for index in range(5)},
         },
         "ranger_authorization": authorization("ranger"),
@@ -182,6 +183,17 @@ def test_verify_release_readiness_rejects_report_schema_drift(tmp_path: Path) ->
             source_revision="a" * 40,
             schema_path=candidate,
         )
+
+
+def test_verify_release_readiness_rejects_fixture_breach_as_final_slo_evidence(
+    tmp_path: Path,
+) -> None:
+    reports = evidence_reports()
+    reports["platform_slos"]["expected_ingestion_freshness_compliant"] = 0
+    contract, root = write_bundle(tmp_path, reports)
+
+    with pytest.raises(ReleaseReadinessError, match="final healthy-state evidence"):
+        verify_release_readiness(contract, root, source_revision="a" * 40)
 
 
 def test_verify_release_readiness_rejects_tampered_authorization_sidecar(
