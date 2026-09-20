@@ -3,12 +3,13 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from spark_catalog import build_session
 
 TABLE = "lakehouse.silver.weather_hourly"
+UTC = timezone.utc  # noqa: UP017 - Spark image runs Python 3.10.
 CONTENT_COLUMNS = (
     "object_checksum",
     "source",

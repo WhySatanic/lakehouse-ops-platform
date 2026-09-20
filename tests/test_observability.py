@@ -16,6 +16,9 @@ SLO_CHECK_PATH = ROOT / "tests" / "integration" / "check_platform_slos.py"
 FRESHNESS_RECOVERY_CHECK_PATH = (
     ROOT / "tests" / "integration" / "check_ingestion_freshness_recovery.py"
 )
+FRESHNESS_RECOVERY_EXERCISE_PATH = (
+    ROOT / "tests" / "integration" / "exercise_ingestion_freshness_recovery.py"
+)
 
 
 def _load_checker():
@@ -474,6 +477,13 @@ def test_freshness_recovery_checker_accepts_preserved_content() -> None:
     checker = _load_freshness_recovery_checker()
 
     checker.validate_report(freshness_recovery_report())
+
+
+def test_freshness_recovery_exercise_supports_spark_python_3_10() -> None:
+    source = FRESHNESS_RECOVERY_EXERCISE_PATH.read_text(encoding="utf-8")
+
+    assert "from datetime import UTC" not in source
+    assert "timezone.utc" in source
 
 
 @pytest.mark.parametrize(
