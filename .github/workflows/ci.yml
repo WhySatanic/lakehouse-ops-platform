@@ -216,6 +216,18 @@ jobs:
         run: >-
           uv run python tests/integration/check_hive_metastore_recovery.py
           artifacts/trino-authenticated-metastore-recovery.json
+      - name: Exercise authenticated PostgreSQL metadata recovery
+        run: >-
+          uv run python tests/integration/exercise_metadata_db_recovery.py
+          https://localhost:8443 artifacts/trino-authenticated-metadata-db-recovery.json
+          artifacts/trino-authenticated-metastore-backup.dump
+          --mode authenticated-ranger --password "$TRINO_AUTH_PASSWORD"
+          --ca-cert artifacts/trino-secure-ca.crt
+      - name: Verify authenticated PostgreSQL metadata recovery evidence
+        run: |
+          uv run python tests/integration/check_metadata_db_recovery.py \
+            artifacts/trino-authenticated-metadata-db-recovery.json
+          docker compose --profile catalog run --rm metastore-schema-check
       - name: Exercise authenticated graceful worker drain
         run: |
           uv run python tests/integration/exercise_trino_worker_shutdown.py \
@@ -305,6 +317,7 @@ jobs:
             artifacts/trino-authorization-report.json
             artifacts/trino-authenticated-authorization-report.json
             artifacts/trino-authenticated-metastore-recovery.json
+            artifacts/trino-authenticated-metadata-db-recovery.json
             artifacts/trino-authenticated-worker-shutdown.json
             artifacts/trino-authenticated-worker-recovery.json
             artifacts/ranger-audit.json

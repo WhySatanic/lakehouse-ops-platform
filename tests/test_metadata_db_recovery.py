@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from lakehouse_ops.metadata_db_recovery import (
+    AUTHENTICATED_RANGER_SECURITY,
     REQUIRED_TABLES,
     STATE_SQL,
     MetadataDbRecoveryError,
@@ -204,6 +205,51 @@ def test_validate_accepts_complete_metadata_restore_evidence() -> None:
     validate_metadata_db_recovery_report(valid_report())
 
 
+def test_run_metadata_db_recovery_records_authenticated_ranger_boundary() -> None:
+    clients = [FakeClient(), FakeClient()]
+    states = iter(
+        [
+            topology(metastore=True),
+            topology(metastore=False),
+            topology(metastore=False),
+            topology(metastore=True),
+        ]
+    )
+
+    report = run_metadata_db_recovery(
+        lambda: clients.pop(0),
+        manifest,
+        lambda: next(states),
+        lambda: None,
+        backup,
+        lambda: None,
+        lambda: {"core_table_count": 0},
+        lambda: None,
+        lambda: None,
+        security=AUTHENTICATED_RANGER_SECURITY,
+    )
+
+    assert report["security"] == AUTHENTICATED_RANGER_SECURITY
+
+
+def test_validate_accepts_authenticated_ranger_report() -> None:
+    report = valid_report()
+    report["security"] = dict(AUTHENTICATED_RANGER_SECURITY)
+
+    validate_metadata_db_recovery_report(report)
+
+
+def test_validate_rejects_unverified_authenticated_transport() -> None:
+    report = valid_report()
+    report["security"] = {
+        **AUTHENTICATED_RANGER_SECURITY,
+        "tls_verified": False,
+    }
+
+    with pytest.raises(MetadataDbRecoveryError, match="security evidence"):
+        validate_metadata_db_recovery_report(report)
+
+
 @pytest.mark.parametrize(
     "mutate, message",
     [
@@ -274,3 +320,16 @@ def test_write_metadata_db_recovery_report_creates_parent(tmp_path: Path) -> Non
 
     assert json.loads(path.read_text(encoding="utf-8"))["status"] == "recovered"
     assert path.read_text(encoding="utf-8").endswith("\n")
+
+
+def test_authenticated_metadata_db_recovery_is_wired_into_ranger_ci() -> None:
+    root = Path(__file__).parents[1]
+    runner = (
+        root / "tests/integration/exercise_metadata_db_recovery.py"
+    ).read_text(encoding="utf-8")
+    workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert 'choices=("default", "authenticated-ranger")' in runner
+    assert "ssl.create_default_context" in runner
+    assert "Exercise authenticated PostgreSQL metadata recovery" in workflow
+    assert "trino-authenticated-metadata-db-recovery.json" in workflow
