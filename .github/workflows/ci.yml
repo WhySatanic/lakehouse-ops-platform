@@ -248,14 +248,6 @@ jobs:
         run: >-
           uv run python tests/integration/check_trino_worker_recovery.py
           artifacts/trino-authenticated-worker-recovery.json
-      - name: Stop authenticated Trino nodes
-        run: >-
-          docker compose --profile security --profile catalog --profile secure-query stop
-          trino-secure-worker trino-secure-worker-2 trino-secure-coordinator
-      - name: Restore Trino with Ranger enforcement
-        run: >-
-          docker compose --profile query up -d --wait
-          trino-coordinator trino-worker trino-worker-2
       - name: Grant approved break-glass access
         run: |
           uv run python tests/integration/create_break_glass_lease.py \
@@ -266,7 +258,9 @@ jobs:
       - name: Verify break-glass grant
         run: >-
           uv run python tests/integration/check_break_glass_access.py
-          --server http://localhost:8080 --expect allowed
+          --server https://localhost:8443 --expect allowed
+          --mode authenticated-ranger --password "$TRINO_AUTH_PASSWORD"
+          --ca-cert artifacts/trino-secure-ca.crt
           > artifacts/break-glass-allowed.json
       - name: Expire and revoke break-glass access
         run: |
@@ -278,13 +272,16 @@ jobs:
       - name: Verify break-glass revocation
         run: >-
           uv run python tests/integration/check_break_glass_access.py
-          --server http://localhost:8080 --expect denied
+          --server https://localhost:8443 --expect denied
+          --mode authenticated-ranger --password "$TRINO_AUTH_PASSWORD"
+          --ca-cert artifacts/trino-secure-ca.crt
           > artifacts/break-glass-denied.json
       - name: Verify break-glass drill evidence
         run: >-
           uv run python tests/integration/check_break_glass_drill.py
           artifacts/break-glass-grant.json artifacts/break-glass-allowed.json
           artifacts/break-glass-revoke.json artifacts/break-glass-denied.json
+          > artifacts/break-glass-drill.json
       - name: Wait for Ranger audit evidence
         run: |
           for _ in $(seq 1 12); do
@@ -295,6 +292,9 @@ jobs:
               artifacts/ranger-audit.json 2>/dev/null && \
               uv run python tests/integration/check_trino_worker_shutdown_audit.py \
               artifacts/trino-authenticated-worker-shutdown.json \
+              artifacts/ranger-audit.json 2>/dev/null && \
+              uv run python tests/integration/check_break_glass_audit.py \
+              artifacts/break-glass-drill.json \
               artifacts/ranger-audit.json 2>/dev/null; then
               exit 0
             fi
@@ -306,6 +306,19 @@ jobs:
           uv run python tests/integration/check_trino_worker_shutdown_audit.py
           artifacts/trino-authenticated-worker-shutdown.json
           artifacts/ranger-audit.json
+      - name: Correlate break-glass decisions with Ranger audit
+        run: >-
+          uv run python tests/integration/check_break_glass_audit.py
+          artifacts/break-glass-drill.json artifacts/ranger-audit.json
+          > artifacts/break-glass-audit.json
+      - name: Stop authenticated Trino nodes
+        run: >-
+          docker compose --profile security --profile catalog --profile secure-query stop
+          trino-secure-worker trino-secure-worker-2 trino-secure-coordinator
+      - name: Restore Trino with Ranger enforcement
+        run: >-
+          docker compose --profile query up -d --wait
+          trino-coordinator trino-worker trino-worker-2
       - name: Upload Ranger evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -320,6 +333,12 @@ jobs:
             artifacts/trino-authenticated-metadata-db-recovery.json
             artifacts/trino-authenticated-worker-shutdown.json
             artifacts/trino-authenticated-worker-recovery.json
+            artifacts/break-glass-grant.json
+            artifacts/break-glass-allowed.json
+            artifacts/break-glass-revoke.json
+            artifacts/break-glass-denied.json
+            artifacts/break-glass-drill.json
+            artifacts/break-glass-audit.json
             artifacts/ranger-audit.json
           if-no-files-found: error
           overwrite: true

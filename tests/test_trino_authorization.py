@@ -172,6 +172,13 @@ def test_secure_profile_executes_queries_on_two_private_workers() -> None:
         in workflow
     )
     assert "Restore Trino with Ranger enforcement" in workflow
+    assert "--server https://localhost:8443 --expect allowed" in workflow
+    assert "--server https://localhost:8443 --expect denied" in workflow
+    assert workflow.count("--mode authenticated-ranger") >= 6
+    assert "check_break_glass_audit.py" in workflow
+    assert workflow.index("Correlate break-glass decisions with Ranger audit") < workflow.index(
+        "Stop authenticated Trino nodes"
+    )
 
 
 def test_development_password_file_contains_valid_pbkdf2_hashes() -> None:
@@ -185,6 +192,7 @@ def test_development_password_file_contains_valid_pbkdf2_hashes() -> None:
         "service_ingest",
         "untrusted_user",
         "lakehouse-operator",
+        "incident-responder",
     }
 
     assert {record[0] for record in records} == expected_users
