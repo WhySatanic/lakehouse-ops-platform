@@ -479,6 +479,31 @@ jobs:
         run: |
           mkdir -p artifacts
           docker compose --profile observability run --rm platform-slo-check
+      - name: Verify ingestion freshness SLO alert delivery
+        env:
+          EXPECTED_ALERT_NAME: LakehouseIngestionFreshnessSLOBreach
+          EXPECTED_ALERT_TARGET: ""
+          EXPECTED_ALERT_COMPONENT: ingestion
+          ALERT_CHECK_ATTEMPTS: "72"
+        run: docker compose --profile observability run --rm alert-delivery-check
+      - name: Recover stale ingestion freshness
+        run: |
+          touch artifacts/ingestion-freshness-recovery.json
+          chmod 0666 artifacts/ingestion-freshness-recovery.json
+          docker compose --profile catalog --profile compute run --rm spark-freshness-recovery
+      - name: Verify ingestion freshness recovery evidence
+        run: >-
+          uv run python tests/integration/check_ingestion_freshness_recovery.py
+          artifacts/ingestion-freshness-recovery.json
+      - name: Verify healthy SLO state and resolved freshness alert
+        env:
+          EXPECTED_ALERT_NAME: LakehouseIngestionFreshnessSLOBreach
+          EXPECTED_ALERT_STATUS: resolved
+          EXPECTED_ALERT_TARGET: ""
+          EXPECTED_ALERT_COMPONENT: ingestion
+        run: |
+          docker compose --profile observability run --rm platform-slo-check
+          docker compose --profile observability run --rm alert-delivery-check
       - name: Rehearse Trino upgrade and rollback
         run: >-
           uv run python tests/integration/exercise_trino_upgrade_rehearsal.py
@@ -537,30 +562,6 @@ jobs:
         run: >-
           uv run python tests/integration/check_trino_metadata_cache.py
           artifacts/trino-metadata-cache.json
-      - name: Verify ingestion freshness SLO alert delivery
-        env:
-          EXPECTED_ALERT_NAME: LakehouseIngestionFreshnessSLOBreach
-          EXPECTED_ALERT_TARGET: ""
-          EXPECTED_ALERT_COMPONENT: ingestion
-        run: docker compose --profile observability run --rm alert-delivery-check
-      - name: Recover stale ingestion freshness
-        run: |
-          touch artifacts/ingestion-freshness-recovery.json
-          chmod 0666 artifacts/ingestion-freshness-recovery.json
-          docker compose --profile catalog --profile compute run --rm spark-freshness-recovery
-      - name: Verify ingestion freshness recovery evidence
-        run: >-
-          uv run python tests/integration/check_ingestion_freshness_recovery.py
-          artifacts/ingestion-freshness-recovery.json
-      - name: Verify healthy SLO state and resolved freshness alert
-        env:
-          EXPECTED_ALERT_NAME: LakehouseIngestionFreshnessSLOBreach
-          EXPECTED_ALERT_STATUS: resolved
-          EXPECTED_ALERT_TARGET: ""
-          EXPECTED_ALERT_COMPONENT: ingestion
-        run: |
-          docker compose --profile observability run --rm platform-slo-check
-          docker compose --profile observability run --rm alert-delivery-check
       - name: Exercise Hive Metastore outage and recovery
         run: >-
           uv run python tests/integration/exercise_hive_metastore_recovery.py

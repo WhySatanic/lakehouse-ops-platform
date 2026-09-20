@@ -368,13 +368,18 @@ def test_platform_slo_rules_cover_declared_objectives() -> None:
     assert "./config/observability/slo.yml:/etc/prometheus/rules/slo.yml:ro" in compose
     assert "platform-slo-check:" in compose
     assert "EXPECTED_ALERT_NAME: ${EXPECTED_ALERT_NAME:-LakehouseCoreTargetDown}" in compose
+    assert "ALERT_CHECK_ATTEMPTS: ${ALERT_CHECK_ATTEMPTS:-30}" in compose
     assert "Verify ingestion freshness SLO alert delivery" in workflow
     assert "EXPECTED_ALERT_NAME: LakehouseIngestionFreshnessSLOBreach" in workflow
     assert "EXPECTED_ALERT_COMPONENT: ingestion" in workflow
+    assert 'ALERT_CHECK_ATTEMPTS: "72"' in workflow
     assert "spark-freshness-recovery:" in compose
     assert "Recover stale ingestion freshness" in workflow
     assert "Verify healthy SLO state and resolved freshness alert" in workflow
     assert "artifacts/ingestion-freshness-recovery.json" in workflow
+    assert workflow.index("Verify ingestion freshness SLO alert delivery") < workflow.index(
+        "Rehearse Trino upgrade and rollback"
+    )
 
 
 def test_platform_slo_checker_requires_finite_in_range_samples() -> None:

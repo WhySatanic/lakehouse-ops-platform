@@ -1305,6 +1305,7 @@ services:
       EXPECTED_ALERT_STATUS: ${EXPECTED_ALERT_STATUS:-firing}
       EXPECTED_ALERT_TARGET: ${EXPECTED_ALERT_TARGET-http://trino-coordinator:8080/v1/info}
       EXPECTED_ALERT_COMPONENT: ${EXPECTED_ALERT_COMPONENT:-}
+      ALERT_CHECK_ATTEMPTS: ${ALERT_CHECK_ATTEMPTS:-30}
     volumes:
       - ./tests/integration/check_alert_delivery.py:/checks/check_alert_delivery.py:ro
     entrypoint: ["python", "/checks/check_alert_delivery.py"]
