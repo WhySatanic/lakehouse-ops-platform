@@ -7,6 +7,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from lakehouse_ops.authorization_evidence import (
+    AuthorizationEvidenceError,
+    validate_authorization_evidence_manifest,
+)
 from lakehouse_ops.digests import normalized_text_digest
 from lakehouse_ops.metadata_db_recovery import validate_metadata_db_recovery_report
 from lakehouse_ops.metastore_recovery import validate_metastore_recovery_report
@@ -86,6 +90,8 @@ def verify_release_readiness(
         path = _resolve_evidence_path(evidence_root, relative_path)
         report = _load_object(path, key)
         _validate_report(validator, report)
+        if key == "ranger_authorization":
+            _validate_authorization_evidence(path.parent, source_revision)
         reports[key] = report
         verified.append(
             {
@@ -177,6 +183,24 @@ def _validate_report(name: str, report: dict[str, Any]) -> None:
         validator(report)
     except (KeyError, TypeError, ValueError, RuntimeError) as error:
         raise ReleaseReadinessError(f"{name} evidence is invalid: {error}") from error
+
+
+def _validate_authorization_evidence(root: Path, source_revision: str) -> None:
+    manifest = _load_object(
+        root / "authorization-evidence-manifest.json",
+        "authorization evidence manifest",
+    )
+    try:
+        validate_authorization_evidence_manifest(
+            manifest,
+            root,
+            expected_source_revision=source_revision,
+            strict_membership=True,
+        )
+    except AuthorizationEvidenceError as error:
+        raise ReleaseReadinessError(
+            f"authorization evidence manifest is invalid: {error}"
+        ) from error
 
 
 def _validate_iceberg_metadata(report: dict[str, Any]) -> None:

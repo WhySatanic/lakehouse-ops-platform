@@ -197,6 +197,8 @@ centralized authorization, observability, and recovery.
   bundle, and enforce repository, workflow, source, issuer, and runner identity in CI.
 - [x] Execute authenticated Ranger acceptance through two private Trino workers while
   excluding the secure coordinator from task scheduling.
+- [x] Bind every retained Ranger authorization report to a bounded, source-revision-aware
+  manifest that release readiness verifies offline before signing.
 
 Exit criterion: each supply-chain increment has an explicit trust boundary, a repeatable
 refresh procedure, and a CI check that rejects silent source drift.

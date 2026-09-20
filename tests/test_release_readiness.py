@@ -8,6 +8,10 @@ from typing import Any
 import pytest
 
 import lakehouse_ops.release_readiness as readiness
+from lakehouse_ops.authorization_evidence import (
+    REQUIRED_AUTHORIZATION_EVIDENCE,
+    build_authorization_evidence_manifest,
+)
 from lakehouse_ops.release_readiness import (
     ReleaseReadinessError,
     verify_release_readiness,
@@ -82,6 +86,8 @@ def evidence_reports(snapshot_id: str = "42") -> dict[str, dict[str, Any]]:
 
 def write_bundle(tmp_path: Path, reports: dict[str, dict[str, Any]]) -> tuple[Path, Path]:
     root = tmp_path / "evidence"
+    ranger_root = root / "ranger-evidence"
+    ranger_root.mkdir(parents=True)
     entries = []
     validators = {
         "core_metadata": "iceberg_metadata",
@@ -94,10 +100,27 @@ def write_bundle(tmp_path: Path, reports: dict[str, dict[str, Any]]) -> tuple[Pa
         "clickhouse_serving": "clickhouse_serving",
     }
     for key, report in reports.items():
-        path = root / f"{key}.json"
+        relative_path = (
+            "ranger-evidence/trino-authorization-report.json"
+            if key == "ranger_authorization"
+            else f"{key}.json"
+        )
+        path = root / relative_path
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(report), encoding="utf-8")
-        entries.append({"key": key, "path": f"{key}.json", "validator": validators[key]})
+        entries.append(
+            {"key": key, "path": relative_path, "validator": validators[key]}
+        )
+    for name in REQUIRED_AUTHORIZATION_EVIDENCE:
+        path = ranger_root / name
+        if not path.exists():
+            path.write_text('{"status":"ready"}\n', encoding="utf-8")
+    authorization_manifest = build_authorization_evidence_manifest(
+        ranger_root, source_revision="a" * 40
+    )
+    (ranger_root / "authorization-evidence-manifest.json").write_text(
+        json.dumps(authorization_manifest), encoding="utf-8"
+    )
     contract = tmp_path / "contract.json"
     contract.write_text(
         json.dumps(
@@ -121,13 +144,13 @@ def test_verify_release_readiness_attests_cross_profile_invariants(tmp_path: Pat
     report = verify_release_readiness(
         contract,
         root,
-        source_revision="abc123",
+        source_revision="a" * 40,
         clock=lambda: datetime(2026, 9, 1, tzinfo=UTC),
     )
 
     assert report["status"] == "ready"
     assert report["target_release"] == "1.0.0"
-    assert report["source_revision"] == "abc123"
+    assert report["source_revision"] == "a" * 40
     assert len(report["evidence"]) == 8
     assert all(len(item["sha256"]) == 64 for item in report["evidence"])
     assert report["invariants"] == {
@@ -156,19 +179,30 @@ def test_verify_release_readiness_rejects_report_schema_drift(tmp_path: Path) ->
         verify_release_readiness(
             contract,
             root,
-            source_revision="abc123",
+            source_revision="a" * 40,
             schema_path=candidate,
         )
+
+
+def test_verify_release_readiness_rejects_tampered_authorization_sidecar(
+    tmp_path: Path,
+) -> None:
+    contract, root = write_bundle(tmp_path, evidence_reports())
+    sidecar = root / "ranger-evidence" / "break-glass-audit.json"
+    sidecar.write_text('{"tampered": true}\n', encoding="utf-8")
+
+    with pytest.raises(ReleaseReadinessError, match="authorization evidence manifest"):
+        verify_release_readiness(contract, root, source_revision="a" * 40)
 
 
 def test_contract_digest_is_stable_across_checkout_line_endings(tmp_path: Path) -> None:
     contract, root = write_bundle(tmp_path, evidence_reports())
     content = json.loads(contract.read_text(encoding="utf-8"))
     contract.write_bytes((json.dumps(content, indent=2) + "\n").encode())
-    lf_report = verify_release_readiness(contract, root, source_revision="abc123")
+    lf_report = verify_release_readiness(contract, root, source_revision="a" * 40)
     contract.write_bytes(contract.read_bytes().replace(b"\n", b"\r\n"))
 
-    crlf_report = verify_release_readiness(contract, root, source_revision="abc123")
+    crlf_report = verify_release_readiness(contract, root, source_revision="a" * 40)
 
     assert crlf_report["contract_sha256"] == lf_report["contract_sha256"]
 
@@ -181,7 +215,7 @@ def test_verify_release_readiness_rejects_cross_recovery_snapshot_drift(
     contract, root = write_bundle(tmp_path, reports)
 
     with pytest.raises(ReleaseReadinessError, match="snapshot invariant"):
-        verify_release_readiness(contract, root, source_revision="abc123")
+        verify_release_readiness(contract, root, source_revision="a" * 40)
 
 
 def test_verify_release_readiness_rejects_path_escape(tmp_path: Path) -> None:
@@ -191,7 +225,7 @@ def test_verify_release_readiness_rejects_path_escape(tmp_path: Path) -> None:
     contract.write_text(json.dumps(value), encoding="utf-8")
 
     with pytest.raises(ReleaseReadinessError, match="remain below root"):
-        verify_release_readiness(contract, root, source_revision="abc123")
+        verify_release_readiness(contract, root, source_revision="a" * 40)
 
 
 def test_verify_release_readiness_rejects_unknown_validator(tmp_path: Path) -> None:
@@ -201,7 +235,7 @@ def test_verify_release_readiness_rejects_unknown_validator(tmp_path: Path) -> N
     contract.write_text(json.dumps(value), encoding="utf-8")
 
     with pytest.raises(ReleaseReadinessError, match="unsupported readiness validator"):
-        verify_release_readiness(contract, root, source_revision="abc123")
+        verify_release_readiness(contract, root, source_revision="a" * 40)
 
 
 def test_verify_release_readiness_rejects_unproven_ranger_transformations(
@@ -214,7 +248,7 @@ def test_verify_release_readiness_rejects_unproven_ranger_transformations(
     contract, root = write_bundle(tmp_path, reports)
 
     with pytest.raises(ReleaseReadinessError, match="transformations"):
-        verify_release_readiness(contract, root, source_revision="abc123")
+        verify_release_readiness(contract, root, source_revision="a" * 40)
 
 
 @pytest.mark.parametrize(
