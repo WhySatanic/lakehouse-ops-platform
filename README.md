@@ -77,6 +77,11 @@ The `lakeops` CLI fetches a bounded weather forecast, validates the columnar res
 and writes the original payload to an idempotent, checksum-addressed landing path.
 Writes are atomic so a failed process cannot expose a partial object.
 
+For relational SQL and pipeline practice, the deterministic
+[commerce fixture](docs/runbooks/commerce-training-fixture.md) generates linked customers,
+products, orders, and payments with exact counts of NULLs, duplicates, late events, and
+invalid payments. It uses only synthetic local data and verifies checksums on rerun.
+
 ```bash
 uv sync --dev
 uv run lakeops ingest-weather \
