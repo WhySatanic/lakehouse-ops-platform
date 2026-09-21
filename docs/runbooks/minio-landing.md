@@ -45,6 +45,20 @@ uv run --env-file .env lakeops ingest-weather \
 Run the same command twice. The first response must contain `"created": true`; the
 second must return the same checksum with `"created": false`.
 
+To land the deterministic relational training data, generate a fixture and pass its
+reported batch directory to `land-commerce-fixture`. The command verifies local
+checksums, uses conditional S3 writes, and publishes the manifest last:
+
+```bash
+uv run lakeops generate-commerce-fixture --output data/commerce
+uv run --env-file .env lakeops land-commerce-fixture \
+  --fixture data/commerce/batch_id=<batch-id> \
+  --s3-bucket lakehouse
+```
+
+Safe retries report zero newly created objects. A checksum conflict is an error and no
+existing object is overwritten.
+
 Audit every retained JSON version before a recovery and inventory delete markers:
 
 ```bash

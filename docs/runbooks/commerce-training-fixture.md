@@ -10,6 +10,22 @@ Generate the default dataset:
 uv run lakeops generate-commerce-fixture --output data/commerce
 ```
 
+The command prints the generated batch directory. Land that exact directory in MinIO
+after starting `minio` and running `minio-init`:
+
+```bash
+uv run --env-file .env lakeops land-commerce-fixture \
+  --fixture data/commerce/batch_id=<batch-id> \
+  --s3-bucket lakehouse
+```
+
+The destination is
+`s3://lakehouse/landing/source=commerce/batch_id=<batch-id>/`. Four JSONL table objects
+are written before `manifest.json`. The manifest is the commit marker, so downstream
+jobs must process only batch prefixes that contain it. A retry returns `"created": 0`
+after downloading and verifying each existing object's checksum. A local checksum
+mismatch or conflicting S3 object fails the command instead of silently replacing data.
+
 The default batch contains 10,000 customers, 1,000 products, 100,000 canonical orders,
 100,000 payments, and 1,000 repeated order rows. It also includes exact, documented
 quality cases:

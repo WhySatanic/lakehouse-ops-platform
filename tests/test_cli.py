@@ -128,6 +128,43 @@ def test_generate_commerce_fixture_command(
     assert Path(report["path"], "manifest.json").is_file()
 
 
+def test_land_commerce_fixture_command(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    fixture_report = cli.generate_commerce_fixture(
+        tmp_path,
+        cli.CommerceFixtureConfig(
+            customers=4,
+            products=2,
+            orders=6,
+            null_customer_emails=1,
+            duplicate_orders=1,
+            late_orders=1,
+            invalid_payments=1,
+        ),
+    )
+    s3_client = FakeS3Client()
+    monkeypatch.setattr(cli, "_create_s3_client", lambda args: s3_client)
+
+    exit_code = cli.main(
+        [
+            "land-commerce-fixture",
+            "--fixture",
+            str(fixture_report.path),
+            "--s3-bucket",
+            "lakehouse",
+        ]
+    )
+
+    report = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert report["created"] == 5
+    assert report["objects"] == 5
+    assert report["path"].startswith("s3://lakehouse/landing/source=commerce/")
+
+
 def test_ingest_weather_command_lands_payload(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
