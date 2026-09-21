@@ -484,6 +484,7 @@ def test_freshness_recovery_exercise_supports_spark_python_3_10() -> None:
 
     assert "from datetime import UTC" not in source
     assert "timezone.utc" in source
+    assert ".with_suffix(" not in source
 
 
 @pytest.mark.parametrize(

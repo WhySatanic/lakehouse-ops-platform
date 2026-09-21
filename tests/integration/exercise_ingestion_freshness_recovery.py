@@ -54,11 +54,9 @@ def _table_state(spark) -> dict[str, object]:
 
 def _write_report(path: Path, report: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(f"{path.suffix}.tmp")
-    temporary.write_text(
+    path.write_text(
         json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
-    temporary.replace(path)
 
 
 def main() -> None:
