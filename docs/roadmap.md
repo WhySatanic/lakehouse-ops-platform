@@ -207,6 +207,9 @@ refresh procedure, and a CI check that rejects silent source drift.
 
 - [x] Deliver an ingestion-freshness SLO breach through Alertmanager and verify the exact
   alert identity and component at the webhook boundary.
+- [x] Recover the stale-ingestion incident through Spark, preserve business content and
+  cardinality, advance the Iceberg snapshot, and verify the resolved alert plus healthy
+  final release evidence.
 
 Exit criterion: each declared operational objective has a bounded failure drill and
 retained evidence at the notification boundary, not only a valid Prometheus expression.

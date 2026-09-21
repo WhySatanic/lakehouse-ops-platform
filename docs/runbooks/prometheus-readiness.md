@@ -65,6 +65,11 @@ CI also retains an intentionally stale ingestion fixture long enough for
 `LakehouseIngestionFreshnessSLOBreach` to become active, then verifies that Alertmanager
 delivers the exact alert name and `component=ingestion` label to the webhook receiver.
 This proves delivery of a data-quality SLO breach, not only infrastructure reachability.
+The recovery drill then updates only the silver table's `ingested_at` values through
+Spark, proves the row count and non-freshness content fingerprint are unchanged, and
+requires a new Iceberg snapshot. Prometheus must observe the healthy freshness objective,
+Alertmanager must deliver the matching resolved event, and the final retained
+`platform-slos.json` must describe the healthy state rather than the injected breach.
 
 This profile intentionally does not claim application-level correctness or production
 paging. The freshness age describes the most recent `ingested_at`

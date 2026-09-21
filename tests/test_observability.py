@@ -13,6 +13,12 @@ OPERATIONAL_CHECK_PATH = (
 )
 ALERT_CHECK_PATH = ROOT / "tests" / "integration" / "check_alert_delivery.py"
 SLO_CHECK_PATH = ROOT / "tests" / "integration" / "check_platform_slos.py"
+FRESHNESS_RECOVERY_CHECK_PATH = (
+    ROOT / "tests" / "integration" / "check_ingestion_freshness_recovery.py"
+)
+FRESHNESS_RECOVERY_EXERCISE_PATH = (
+    ROOT / "tests" / "integration" / "exercise_ingestion_freshness_recovery.py"
+)
 
 
 def _load_checker():
@@ -59,6 +65,16 @@ def _load_alert_checker():
 
 def _load_slo_checker():
     spec = importlib.util.spec_from_file_location("check_platform_slos", SLO_CHECK_PATH)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_freshness_recovery_checker():
+    spec = importlib.util.spec_from_file_location(
+        "check_ingestion_freshness_recovery", FRESHNESS_RECOVERY_CHECK_PATH
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -355,9 +371,18 @@ def test_platform_slo_rules_cover_declared_objectives() -> None:
     assert "./config/observability/slo.yml:/etc/prometheus/rules/slo.yml:ro" in compose
     assert "platform-slo-check:" in compose
     assert "EXPECTED_ALERT_NAME: ${EXPECTED_ALERT_NAME:-LakehouseCoreTargetDown}" in compose
+    assert "ALERT_CHECK_ATTEMPTS: ${ALERT_CHECK_ATTEMPTS:-30}" in compose
     assert "Verify ingestion freshness SLO alert delivery" in workflow
     assert "EXPECTED_ALERT_NAME: LakehouseIngestionFreshnessSLOBreach" in workflow
     assert "EXPECTED_ALERT_COMPONENT: ingestion" in workflow
+    assert 'ALERT_CHECK_ATTEMPTS: "72"' in workflow
+    assert "spark-freshness-recovery:" in compose
+    assert "Recover stale ingestion freshness" in workflow
+    assert "Verify healthy SLO state and resolved freshness alert" in workflow
+    assert "artifacts/ingestion-freshness-recovery.json" in workflow
+    assert workflow.index("Verify ingestion freshness SLO alert delivery") < workflow.index(
+        "Rehearse Trino upgrade and rollback"
+    )
 
 
 def test_platform_slo_checker_requires_finite_in_range_samples() -> None:
@@ -418,3 +443,73 @@ def test_platform_slo_checker_accepts_declared_stale_fixture_state(
     assert report["expected_ingestion_freshness_compliant"] == 0
     assert len(report["objectives"]) == 5
     assert all(objective["met"] is True for objective in report["objectives"].values())
+
+
+def freshness_recovery_report() -> dict[str, object]:
+    digest = "a" * 64
+    return {
+        "schema_version": "1.0",
+        "status": "succeeded",
+        "table": "lakehouse.silver.weather_hourly",
+        "recovered_at": "2026-09-20T15:00:00Z",
+        "before": {
+            "snapshot_id": "41",
+            "row_count": 2,
+            "latest_ingested_at": "2026-09-20T14:00:00Z",
+            "content_sha256": digest,
+        },
+        "after": {
+            "snapshot_id": "42",
+            "row_count": 2,
+            "latest_ingested_at": "2026-09-20T15:00:00Z",
+            "content_sha256": digest,
+        },
+        "invariants": {
+            "row_count_preserved": True,
+            "content_preserved": True,
+            "snapshot_advanced": True,
+            "freshness_recovered": True,
+        },
+    }
+
+
+def test_freshness_recovery_checker_accepts_preserved_content() -> None:
+    checker = _load_freshness_recovery_checker()
+
+    checker.validate_report(freshness_recovery_report())
+
+
+def test_freshness_recovery_exercise_supports_spark_python_3_10() -> None:
+    source = FRESHNESS_RECOVERY_EXERCISE_PATH.read_text(encoding="utf-8")
+
+    assert "from datetime import UTC" not in source
+    assert "timezone.utc" in source
+    assert ".with_suffix(" not in source
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (lambda report: report["after"].update(row_count=3), "row count"),
+        (
+            lambda report: report["after"].update(content_sha256="b" * 64),
+            "business content",
+        ),
+        (lambda report: report["after"].update(snapshot_id="41"), "snapshot"),
+        (
+            lambda report: report["before"].update(
+                latest_ingested_at="2026-09-20T14:50:00Z"
+            ),
+            "was not stale",
+        ),
+    ],
+)
+def test_freshness_recovery_checker_rejects_broken_invariants(
+    mutation, message: str
+) -> None:
+    checker = _load_freshness_recovery_checker()
+    report = freshness_recovery_report()
+    mutation(report)
+
+    with pytest.raises(ValueError, match=message):
+        checker.validate_report(report)

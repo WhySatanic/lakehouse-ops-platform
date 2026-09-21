@@ -368,6 +368,33 @@ services:
     command: ["/opt/spark/bin/spark-submit", "/opt/lakehouse/jobs/silver_weather.py"]
     restart: "no"
 
+  spark-freshness-recovery:
+    image: lakehouse-ops/spark-iceberg:3.5.9-1.11.0
+    profiles: ["compute"]
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+    environment:
+      LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
+      LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_SPARK_USER:-lakeops-spark}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SPARK_PASSWORD:-spark-development-only}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      HIVE_METASTORE_URI: thrift://hive-metastore:9083
+      SPARK_MASTER: local[2]
+      PYTHONPATH: /opt/lakehouse/jobs
+      FRESHNESS_RECOVERY_REPORT_PATH: /opt/lakehouse/artifacts/ingestion-freshness-recovery.json
+    volumes:
+      - ./jobs/spark:/opt/lakehouse/jobs:ro
+      - ./tests/integration/exercise_ingestion_freshness_recovery.py:/opt/lakehouse/tests/exercise_ingestion_freshness_recovery.py:ro
+      - ./artifacts:/opt/lakehouse/artifacts
+    command:
+      [
+        "/opt/spark/bin/spark-submit",
+        "/opt/lakehouse/tests/exercise_ingestion_freshness_recovery.py",
+      ]
+    restart: "no"
+
   spark-maintenance-fixture:
     image: lakehouse-ops/spark-iceberg:3.5.9-1.11.0
     profiles: ["compute"]
@@ -1278,6 +1305,7 @@ services:
       EXPECTED_ALERT_STATUS: ${EXPECTED_ALERT_STATUS:-firing}
       EXPECTED_ALERT_TARGET: ${EXPECTED_ALERT_TARGET-http://trino-coordinator:8080/v1/info}
       EXPECTED_ALERT_COMPONENT: ${EXPECTED_ALERT_COMPONENT:-}
+      ALERT_CHECK_ATTEMPTS: ${ALERT_CHECK_ATTEMPTS:-30}
     volumes:
       - ./tests/integration/check_alert_delivery.py:/checks/check_alert_delivery.py:ro
     entrypoint: ["python", "/checks/check_alert_delivery.py"]

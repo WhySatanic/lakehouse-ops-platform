@@ -246,6 +246,8 @@ def _validate_authorization(report: dict[str, Any], mode: str) -> None:
 def _validate_platform_slos(report: dict[str, Any]) -> None:
     if report.get("schema_version") != "1.0" or report.get("status") != "ready":
         raise ValueError("platform SLO report is not ready schema 1.0 evidence")
+    if report.get("expected_ingestion_freshness_compliant") != 1:
+        raise ValueError("platform SLO report is not final healthy-state evidence")
     objectives = report.get("objectives")
     if not isinstance(objectives, dict) or len(objectives) != 5:
         raise ValueError("platform SLO report does not cover five objectives")
