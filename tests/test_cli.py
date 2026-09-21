@@ -91,6 +91,43 @@ def test_version_command_reports_package_version(
     assert capsys.readouterr().out == f"lakeops {__version__}\n"
 
 
+def test_generate_commerce_fixture_command(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    exit_code = cli.main(
+        [
+            "generate-commerce-fixture",
+            "--output",
+            str(tmp_path),
+            "--customers",
+            "4",
+            "--products",
+            "2",
+            "--orders",
+            "6",
+            "--null-customer-emails",
+            "1",
+            "--duplicate-orders",
+            "2",
+            "--late-orders",
+            "1",
+            "--invalid-payments",
+            "1",
+        ]
+    )
+
+    report = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert report["created"] is True
+    assert report["tables"] == {
+        "customers": 4,
+        "orders": 8,
+        "payments": 6,
+        "products": 2,
+    }
+    assert Path(report["path"], "manifest.json").is_file()
+
+
 def test_ingest_weather_command_lands_payload(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

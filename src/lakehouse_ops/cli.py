@@ -35,6 +35,11 @@ from lakehouse_ops.ingestion.batch import (
     load_location_manifest,
     run_batch,
 )
+from lakehouse_ops.ingestion.commerce_fixture import (
+    CommerceFixtureConfig,
+    CommerceFixtureError,
+    generate_commerce_fixture,
+)
 from lakehouse_ops.ingestion.landing import FileLandingZone
 from lakehouse_ops.ingestion.models import Location, WeatherPayload
 from lakehouse_ops.ingestion.open_meteo import OpenMeteoClient
@@ -90,6 +95,21 @@ def build_parser() -> argparse.ArgumentParser:
     batch.add_argument("--forecast-days", type=int, default=3)
     batch.add_argument("--max-workers", type=int, default=4)
     _add_landing_arguments(batch)
+
+    commerce = subparsers.add_parser(
+        "generate-commerce-fixture",
+        help="generate deterministic customers, products, orders, and payments",
+    )
+    commerce.add_argument("--output", type=Path, default=Path("data/commerce"))
+    commerce.add_argument("--customers", type=int, default=10_000)
+    commerce.add_argument("--products", type=int, default=1_000)
+    commerce.add_argument("--orders", type=int, default=100_000)
+    commerce.add_argument("--null-customer-emails", type=int, default=1_000)
+    commerce.add_argument("--duplicate-orders", type=int, default=1_000)
+    commerce.add_argument("--late-orders", type=int, default=1_000)
+    commerce.add_argument("--invalid-payments", type=int, default=1_000)
+    commerce.add_argument("--seed", type=int, default=20260921)
+    commerce.add_argument("--batch-at", default="2026-01-31T00:00:00+00:00")
 
     doctor = subparsers.add_parser("doctor", help="check landing backend readiness")
     _add_landing_arguments(doctor)
@@ -407,6 +427,24 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(report.as_dict(), sort_keys=True))
         return 1 if report.failed else 0
+    if args.command == "generate-commerce-fixture":
+        try:
+            config = CommerceFixtureConfig(
+                customers=args.customers,
+                products=args.products,
+                orders=args.orders,
+                null_customer_emails=args.null_customer_emails,
+                duplicate_orders=args.duplicate_orders,
+                late_orders=args.late_orders,
+                invalid_payments=args.invalid_payments,
+                seed=args.seed,
+                batch_at=args.batch_at,
+            )
+            report = generate_commerce_fixture(args.output, config)
+        except (OSError, CommerceFixtureError) as error:
+            parser.error(str(error))
+        print(json.dumps(report.as_dict(), sort_keys=True))
+        return 0
     if args.command == "doctor":
         if args.backend == "file":
             if args.require_versioning:

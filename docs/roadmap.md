@@ -214,6 +214,22 @@ refresh procedure, and a CI check that rejects silent source drift.
 Exit criterion: each declared operational objective has a bounded failure drill and
 retained evidence at the notification boundary, not only a valid Prometheus expression.
 
+## Phase 9 — end-to-end data engineering practice
+
+- [x] Generate a content-addressed, reproducible commerce source fixture with linked
+  customers, products, orders, and payments plus exact NULL, duplicate, late-event, and
+  invalid-payment counts.
+- [ ] Land commerce batches in MinIO and incrementally merge validated Spark/Iceberg
+  bronze and silver tables with bounded replay and backfill state.
+- [ ] Model customer history with SCD2 and publish a tested daily gold mart for revenue,
+  orders, customers, and payment-quality measures.
+- [ ] Schedule the pipeline with retries, freshness checks, and actionable notifications.
+- [ ] Measure runtime, memory, file growth, maintenance, and recovery as volume increases.
+
+Exit criterion: one documented command and one scheduled path take a reproducible source
+batch through quality checks into a Trino-queryable gold mart, with safe reruns, bounded
+late-data correction, freshness monitoring, and retained operational evidence.
+
 ## Sustainable contribution rhythm
 
 A strong week contains one or two complete changes, not a fixed number of cosmetic
