@@ -40,6 +40,10 @@ from lakehouse_ops.ingestion.commerce_fixture import (
     CommerceFixtureError,
     generate_commerce_fixture,
 )
+from lakehouse_ops.ingestion.commerce_s3_landing import (
+    CommerceLandingError,
+    CommerceS3LandingZone,
+)
 from lakehouse_ops.ingestion.landing import FileLandingZone
 from lakehouse_ops.ingestion.models import Location, WeatherPayload
 from lakehouse_ops.ingestion.open_meteo import OpenMeteoClient
@@ -110,6 +114,22 @@ def build_parser() -> argparse.ArgumentParser:
     commerce.add_argument("--invalid-payments", type=int, default=1_000)
     commerce.add_argument("--seed", type=int, default=20260921)
     commerce.add_argument("--batch-at", default="2026-01-31T00:00:00+00:00")
+
+    commerce_landing = subparsers.add_parser(
+        "land-commerce-fixture",
+        help="land a verified commerce fixture in MinIO/S3",
+    )
+    commerce_landing.add_argument("--fixture", required=True, type=Path)
+    commerce_landing.add_argument("--s3-bucket", default=os.getenv("LAKEOPS_S3_BUCKET"))
+    commerce_landing.add_argument(
+        "--s3-prefix", default=os.getenv("LAKEOPS_S3_PREFIX", "landing")
+    )
+    commerce_landing.add_argument(
+        "--s3-endpoint-url", default=os.getenv("LAKEOPS_S3_ENDPOINT_URL")
+    )
+    commerce_landing.add_argument(
+        "--s3-region", default=os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+    )
 
     doctor = subparsers.add_parser("doctor", help="check landing backend readiness")
     _add_landing_arguments(doctor)
@@ -442,6 +462,17 @@ def main(argv: list[str] | None = None) -> int:
             )
             report = generate_commerce_fixture(args.output, config)
         except (OSError, CommerceFixtureError) as error:
+            parser.error(str(error))
+        print(json.dumps(report.as_dict(), sort_keys=True))
+        return 0
+    if args.command == "land-commerce-fixture":
+        if not args.s3_bucket:
+            parser.error("--s3-bucket is required")
+        try:
+            report = CommerceS3LandingZone(
+                _create_s3_client(args), bucket=args.s3_bucket, prefix=args.s3_prefix
+            ).write(args.fixture)
+        except (OSError, CommerceLandingError) as error:
             parser.error(str(error))
         print(json.dumps(report.as_dict(), sort_keys=True))
         return 0

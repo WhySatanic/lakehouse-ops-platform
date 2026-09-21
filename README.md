@@ -81,6 +81,8 @@ For relational SQL and pipeline practice, the deterministic
 [commerce fixture](docs/runbooks/commerce-training-fixture.md) generates linked customers,
 products, orders, and payments with exact counts of NULLs, duplicates, late events, and
 invalid payments. It uses only synthetic local data and verifies checksums on rerun.
+Generated batches can be landed in MinIO with conditional writes. The table files are
+uploaded first and the verified manifest is published last as the batch commit marker.
 
 ```bash
 uv sync --dev

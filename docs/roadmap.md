@@ -219,8 +219,10 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
 - [x] Generate a content-addressed, reproducible commerce source fixture with linked
   customers, products, orders, and payments plus exact NULL, duplicate, late-event, and
   invalid-payment counts.
-- [ ] Land commerce batches in MinIO and incrementally merge validated Spark/Iceberg
-  bronze and silver tables with bounded replay and backfill state.
+- [x] Land checksum-verified commerce batches in MinIO with deterministic keys,
+  conflict-safe retries, and a manifest commit marker.
+- [ ] Incrementally merge validated commerce data into Spark/Iceberg bronze and silver
+  tables with bounded replay and backfill state.
 - [ ] Model customer history with SCD2 and publish a tested daily gold mart for revenue,
   orders, customers, and payment-quality measures.
 - [ ] Schedule the pipeline with retries, freshness checks, and actionable notifications.
