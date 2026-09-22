@@ -155,6 +155,7 @@ def write_bronze(spark: SparkSession, source: DataFrame) -> dict[str, int | str]
 
 def main() -> None:
     input_root = Path(os.environ.get("BRONZE_INPUT_ROOT", "/opt/lakehouse/input"))
+    weather_input = input_root / "source=open_meteo"
     spark = build_session("lakehouse-ops-bronze-weather")
     spark.sparkContext.setLogLevel("WARN")
     try:
@@ -162,7 +163,7 @@ def main() -> None:
             spark.read.schema(source_schema())
             .option("multiLine", "true")
             .option("recursiveFileLookup", "true")
-            .json(str(input_root))
+            .json(str(weather_input))
         )
         source_documents = validate_source(raw)
         transformed = transform_source(raw)
