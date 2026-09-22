@@ -83,6 +83,8 @@ products, orders, and payments with exact counts of NULLs, duplicates, late even
 invalid payments. It uses only synthetic local data and verifies checksums on rerun.
 Generated batches can be landed in MinIO with conditional writes. The table files are
 uploaded first and the verified manifest is published last as the batch commit marker.
+The same runbook shows how to plan a bounded incremental batch, checkpoint it only after
+downstream success, and request an explicit replay without moving normal progress.
 
 ```bash
 uv sync --dev

@@ -165,6 +165,58 @@ def test_land_commerce_fixture_command(
     assert report["path"].startswith("s3://lakehouse/landing/source=commerce/")
 
 
+def test_plan_and_commit_commerce_batch_commands(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    fixture = cli.generate_commerce_fixture(
+        tmp_path / "fixture",
+        cli.CommerceFixtureConfig(
+            customers=4,
+            products=2,
+            orders=6,
+            null_customer_emails=1,
+            duplicate_orders=1,
+            late_orders=1,
+            invalid_payments=1,
+        ),
+    )
+    s3_client = FakeS3Client()
+    cli.CommerceS3LandingZone(s3_client, bucket="lakehouse").write(fixture.path)
+    monkeypatch.setattr(cli, "_create_s3_client", lambda args: s3_client)
+    state = tmp_path / "state.json"
+
+    plan_code = cli.main(
+        [
+            "plan-commerce-batches",
+            "--s3-bucket",
+            "lakehouse",
+            "--state",
+            str(state),
+        ]
+    )
+    plan = json.loads(capsys.readouterr().out)
+    commit_code = cli.main(
+        [
+            "commit-commerce-batch",
+            "--s3-bucket",
+            "lakehouse",
+            "--state",
+            str(state),
+            "--batch-id",
+            plan["batches"][0]["batch_id"],
+        ]
+    )
+    commit = json.loads(capsys.readouterr().out)
+
+    assert plan_code == 0
+    assert plan["selected_batches"] == 1
+    assert commit_code == 0
+    assert commit["created"] is True
+    assert state.is_file()
+
+
 def test_ingest_weather_command_lands_payload(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

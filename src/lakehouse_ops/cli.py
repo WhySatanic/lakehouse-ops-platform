@@ -35,6 +35,10 @@ from lakehouse_ops.ingestion.batch import (
     load_location_manifest,
     run_batch,
 )
+from lakehouse_ops.ingestion.commerce_batches import (
+    CommerceBatchError,
+    CommerceBatchPlanner,
+)
 from lakehouse_ops.ingestion.commerce_fixture import (
     CommerceFixtureConfig,
     CommerceFixtureError,
@@ -130,6 +134,21 @@ def build_parser() -> argparse.ArgumentParser:
     commerce_landing.add_argument(
         "--s3-region", default=os.getenv("AWS_DEFAULT_REGION", "us-east-1")
     )
+
+    commerce_plan = subparsers.add_parser(
+        "plan-commerce-batches",
+        help="plan a bounded set of committed commerce batches",
+    )
+    _add_commerce_batch_arguments(commerce_plan)
+    commerce_plan.add_argument("--max-batches", type=int, default=1)
+    commerce_plan.add_argument("--replay-batch", action="append", default=[])
+
+    commerce_commit = subparsers.add_parser(
+        "commit-commerce-batch",
+        help="checkpoint a commerce batch after downstream success",
+    )
+    _add_commerce_batch_arguments(commerce_commit)
+    commerce_commit.add_argument("--batch-id", required=True)
 
     doctor = subparsers.add_parser("doctor", help="check landing backend readiness")
     _add_landing_arguments(doctor)
@@ -476,6 +495,27 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(str(error))
         print(json.dumps(report.as_dict(), sort_keys=True))
         return 0
+    if args.command in {"plan-commerce-batches", "commit-commerce-batch"}:
+        if not args.s3_bucket:
+            parser.error("--s3-bucket is required")
+        planner = CommerceBatchPlanner(
+            _create_s3_client(args),
+            bucket=args.s3_bucket,
+            prefix=args.s3_prefix,
+            state_path=args.state,
+        )
+        try:
+            if args.command == "plan-commerce-batches":
+                report = planner.plan(
+                    max_batches=args.max_batches,
+                    replay_batches=tuple(args.replay_batch),
+                )
+            else:
+                report = planner.commit(args.batch_id)
+        except (OSError, CommerceBatchError) as error:
+            parser.error(str(error))
+        print(json.dumps(report, sort_keys=True))
+        return 0
     if args.command == "doctor":
         if args.backend == "file":
             if args.require_versioning:
@@ -726,6 +766,20 @@ def _create_s3_client(args: argparse.Namespace) -> Any:
         "s3",
         endpoint_url=args.s3_endpoint_url,
         region_name=args.s3_region,
+    )
+
+
+def _add_commerce_batch_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--state", type=Path, default=Path("data/state/commerce-batches.json")
+    )
+    parser.add_argument("--s3-bucket", default=os.getenv("LAKEOPS_S3_BUCKET"))
+    parser.add_argument("--s3-prefix", default=os.getenv("LAKEOPS_S3_PREFIX", "landing"))
+    parser.add_argument(
+        "--s3-endpoint-url", default=os.getenv("LAKEOPS_S3_ENDPOINT_URL")
+    )
+    parser.add_argument(
+        "--s3-region", default=os.getenv("AWS_DEFAULT_REGION", "us-east-1")
     )
 
 
