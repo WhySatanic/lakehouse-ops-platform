@@ -418,6 +418,12 @@ jobs:
           uv run lakeops audit-landing --backend s3 --s3-bucket lakehouse
           --s3-prefix landing
           --s3-endpoint-url http://localhost:9000 --include-versions
+      - name: Sync bronze input
+        run: docker compose --profile compute run --rm bronze-input-sync
+      - name: Write Iceberg bronze table
+        run: docker compose --profile catalog --profile compute run --rm spark-bronze
+      - name: Verify idempotent replay
+        run: docker compose --profile catalog --profile compute run --rm spark-bronze
       - name: Generate and land commerce fixture
         env:
           AWS_ACCESS_KEY_ID: lakeops-ingest
@@ -436,12 +442,8 @@ jobs:
           uv run lakeops land-commerce-fixture \
             --fixture "data/commerce-ci/batch_id=${COMMERCE_BATCH_ID}" \
             --s3-bucket lakehouse --s3-endpoint-url http://localhost:9000
-      - name: Sync bronze input
+      - name: Sync commerce bronze input
         run: docker compose --profile compute run --rm bronze-input-sync
-      - name: Write Iceberg bronze table
-        run: docker compose --profile catalog --profile compute run --rm spark-bronze
-      - name: Verify idempotent replay
-        run: docker compose --profile catalog --profile compute run --rm spark-bronze
       - name: Write commerce Iceberg bronze tables
         run: >-
           docker compose --profile catalog --profile compute run --rm
