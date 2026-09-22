@@ -84,7 +84,9 @@ invalid payments. It uses only synthetic local data and verifies checksums on re
 Generated batches can be landed in MinIO with conditional writes. The table files are
 uploaded first and the verified manifest is published last as the batch commit marker.
 The same runbook shows how to plan a bounded incremental batch, checkpoint it only after
-downstream success, and request an explicit replay without moving normal progress.
+downstream success, and request an explicit replay without moving normal progress. The
+selected batch can be merged idempotently into four raw Iceberg bronze tables without
+discarding the fixture's intentional duplicate order rows.
 
 ```bash
 uv sync --dev

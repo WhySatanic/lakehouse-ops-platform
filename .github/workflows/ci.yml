@@ -424,6 +424,34 @@ jobs:
         run: docker compose --profile catalog --profile compute run --rm spark-bronze
       - name: Verify idempotent replay
         run: docker compose --profile catalog --profile compute run --rm spark-bronze
+      - name: Generate and land commerce fixture
+        env:
+          AWS_ACCESS_KEY_ID: lakeops-ingest
+          AWS_SECRET_ACCESS_KEY: ingest-development-only
+        run: |
+          mkdir -p artifacts
+          uv run lakeops generate-commerce-fixture \
+            --output data/commerce-ci \
+            --customers 40 --products 20 --orders 60 \
+            --null-customer-emails 4 --duplicate-orders 6 \
+            --late-orders 5 --invalid-payments 7 \
+            > artifacts/commerce-fixture.json
+          COMMERCE_BATCH_ID="$(uv run python -c \
+            'import json; print(json.load(open("artifacts/commerce-fixture.json"))["batch_id"])')"
+          echo "COMMERCE_BATCH_ID=${COMMERCE_BATCH_ID}" >> "$GITHUB_ENV"
+          uv run lakeops land-commerce-fixture \
+            --fixture "data/commerce-ci/batch_id=${COMMERCE_BATCH_ID}" \
+            --s3-bucket lakehouse --s3-endpoint-url http://localhost:9000
+      - name: Sync commerce bronze input
+        run: docker compose --profile compute run --rm bronze-input-sync
+      - name: Write commerce Iceberg bronze tables
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          spark-commerce-bronze
+      - name: Verify idempotent commerce replay
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          spark-commerce-bronze
       - name: Verify catalog registration
         run: >-
           docker compose --profile catalog --profile compute run --rm

@@ -75,6 +75,22 @@ Pass each returned `path` to the downstream Spark job. Advance the checkpoint on
 that job and its quality checks succeed:
 
 ```bash
+$env:COMMERCE_BATCH_ID = "<batch-id>"
+docker compose --profile compute run --rm bronze-input-sync
+docker compose --profile catalog --profile compute run --rm spark-commerce-bronze
+```
+
+The Spark job verifies the local copy against the committed manifest, checks required
+values and exact source row counts, then merges all four files into
+`lakehouse.bronze.commerce_customers`, `commerce_products`, `commerce_orders`, and
+`commerce_payments`. Each raw row receives a source hash plus an occurrence number. That
+keeps the intentionally repeated order rows while making an identical batch replay insert
+zero rows. A partial four-table attempt can be rerun safely.
+
+After the Spark report returns `"status": "ready"` and its table post-conditions pass,
+advance the planner checkpoint:
+
+```bash
 uv run --env-file .env lakeops commit-commerce-batch \
   --s3-bucket lakehouse \
   --state data/state/commerce-batches.json \
@@ -97,5 +113,5 @@ uv run --env-file .env lakeops plan-commerce-batches \
 
 Replay planning never changes the normal checkpoint. More replay IDs than
 `--max-batches`, duplicate IDs, and IDs without a committed manifest are rejected.
-Spark ingestion, Iceberg silver models, SCD2 customer history, and the gold daily mart
-remain separate executable increments rather than claimed capabilities here.
+Iceberg silver models, SCD2 customer history, and the gold daily mart remain separate
+executable increments rather than claimed capabilities here.
