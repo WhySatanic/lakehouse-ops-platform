@@ -223,6 +223,8 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
   conflict-safe retries, and a manifest commit marker.
 - [ ] Incrementally merge validated commerce data into Spark/Iceberg bronze and silver
   tables with bounded replay and backfill state.
+  - [x] Discover committed landing batches, plan bounded work, and atomically checkpoint
+    successful batches without advancing state during replay.
 - [ ] Model customer history with SCD2 and publish a tested daily gold mart for revenue,
   orders, customers, and payment-quality measures.
 - [ ] Schedule the pipeline with retries, freshness checks, and actionable notifications.

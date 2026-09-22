@@ -58,6 +58,44 @@ uv run lakeops generate-commerce-fixture \
 ```
 
 The fixture is synthetic, deterministic, and requires no external API or paid service.
-This increment intentionally stops at reproducible source generation. Spark ingestion,
-Iceberg silver models, SCD2 customer history, and the gold daily mart are separate
-executable increments rather than claimed capabilities here.
+
+## Plan incremental processing
+
+List only batches whose checksum-verified `manifest.json` commit marker is present, then
+select one unprocessed batch in source event-time order:
+
+```bash
+uv run --env-file .env lakeops plan-commerce-batches \
+  --s3-bucket lakehouse \
+  --state data/state/commerce-batches.json \
+  --max-batches 1
+```
+
+Pass each returned `path` to the downstream Spark job. Advance the checkpoint only after
+that job and its quality checks succeed:
+
+```bash
+uv run --env-file .env lakeops commit-commerce-batch \
+  --s3-bucket lakehouse \
+  --state data/state/commerce-batches.json \
+  --batch-id <batch-id>
+```
+
+The checkpoint is written atomically. A repeated commit is a no-op. Planning fails if a
+processed manifest has changed, so the same batch ID cannot silently acquire different
+content. Table objects without a valid commit marker are ignored.
+
+For a deliberate retry or backfill, name every batch and keep the same explicit bound:
+
+```bash
+uv run --env-file .env lakeops plan-commerce-batches \
+  --s3-bucket lakehouse \
+  --state data/state/commerce-batches.json \
+  --max-batches 1 \
+  --replay-batch <batch-id>
+```
+
+Replay planning never changes the normal checkpoint. More replay IDs than
+`--max-batches`, duplicate IDs, and IDs without a committed manifest are rejected.
+Spark ingestion, Iceberg silver models, SCD2 customer history, and the gold daily mart
+remain separate executable increments rather than claimed capabilities here.
