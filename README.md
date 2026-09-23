@@ -88,6 +88,8 @@ downstream success, and request an explicit replay without moving normal progres
 selected batch can be merged idempotently into four raw Iceberg bronze tables without
 discarding the fixture's intentional duplicate order rows. A bounded payment silver step
 retains invalid amounts as queryable reject evidence and reconciles every selected row.
+An order silver step keeps one deterministic survivor, retains duplicate evidence, checks
+selected-batch references, and marks late events without rejecting them.
 
 ```bash
 uv sync --dev

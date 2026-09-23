@@ -80,6 +80,8 @@ docker compose --profile compute run --rm bronze-input-sync
 docker compose --profile catalog --profile compute run --rm spark-commerce-bronze
 docker compose --profile catalog --profile compute run --rm spark-commerce-payment-silver
 docker compose --profile catalog --profile compute run --rm commerce-payment-silver-check
+docker compose --profile catalog --profile compute run --rm spark-commerce-order-silver
+docker compose --profile catalog --profile compute run --rm commerce-order-silver-check
 ```
 
 The Spark job verifies the local copy against the committed manifest, checks required
@@ -93,7 +95,13 @@ The payment silver job reads only the selected bronze batch. Positive, non-NULL 
 with complete payment identity enter `lakehouse.silver.commerce_payments`; invalid rows
 enter `lakehouse.silver.commerce_payment_rejects` with explicit quality errors. The job
 reconciles valid plus rejected rows to bronze and uses stable merge keys, so replay changes
-neither table's cardinality. Customers, products, and orders remain bronze-only for now.
+neither table's cardinality. Customers and products remain bronze-only for now.
+
+The order silver job keeps one deterministic survivor per order ID, validates arithmetic
+and selected-batch customer/product references, and retains duplicate or invalid rows in
+`lakehouse.silver.commerce_order_rejects`. Valid rows expose `is_late` when the event is
+more than 30 days older than the batch timestamp. Reconciliation and stable merge keys
+make the step safe to replay.
 
 After the Spark report returns `"status": "ready"` and its table post-conditions pass,
 advance the planner checkpoint:
@@ -121,5 +129,5 @@ uv run --env-file .env lakeops plan-commerce-batches \
 
 Replay planning never changes the normal checkpoint. More replay IDs than
 `--max-batches`, duplicate IDs, and IDs without a committed manifest are rejected.
-The remaining Iceberg silver models, SCD2 customer history, and the gold daily mart remain
-separate executable increments rather than claimed capabilities here.
+The remaining customer and product silver models, SCD2 customer history, and the gold
+daily mart remain separate executable increments rather than claimed capabilities here.
