@@ -229,6 +229,8 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
     preserving repeated source rows and inserting zero rows on identical replay.
   - [x] Split selected commerce payments into valid and rejected Iceberg silver tables,
     reconcile source counts, and make identical replay cardinality-neutral.
+  - [x] Deduplicate and validate selected commerce orders into Iceberg silver, retain
+    rejected duplicates, verify references, and expose bounded late-event status.
 - [ ] Model customer history with SCD2 and publish a tested daily gold mart for revenue,
   orders, customers, and payment-quality measures.
 - [ ] Schedule the pipeline with retries, freshness checks, and actionable notifications.
