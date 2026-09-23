@@ -78,6 +78,8 @@ that job and its quality checks succeed:
 $env:COMMERCE_BATCH_ID = "<batch-id>"
 docker compose --profile compute run --rm bronze-input-sync
 docker compose --profile catalog --profile compute run --rm spark-commerce-bronze
+docker compose --profile catalog --profile compute run --rm spark-commerce-payment-silver
+docker compose --profile catalog --profile compute run --rm commerce-payment-silver-check
 ```
 
 The Spark job verifies the local copy against the committed manifest, checks required
@@ -86,6 +88,12 @@ values and exact source row counts, then merges all four files into
 `commerce_payments`. Each raw row receives a source hash plus an occurrence number. That
 keeps the intentionally repeated order rows while making an identical batch replay insert
 zero rows. A partial four-table attempt can be rerun safely.
+
+The payment silver job reads only the selected bronze batch. Positive, non-NULL amounts
+with complete payment identity enter `lakehouse.silver.commerce_payments`; invalid rows
+enter `lakehouse.silver.commerce_payment_rejects` with explicit quality errors. The job
+reconciles valid plus rejected rows to bronze and uses stable merge keys, so replay changes
+neither table's cardinality. Customers, products, and orders remain bronze-only for now.
 
 After the Spark report returns `"status": "ready"` and its table post-conditions pass,
 advance the planner checkpoint:
@@ -113,5 +121,5 @@ uv run --env-file .env lakeops plan-commerce-batches \
 
 Replay planning never changes the normal checkpoint. More replay IDs than
 `--max-batches`, duplicate IDs, and IDs without a committed manifest are rejected.
-Iceberg silver models, SCD2 customer history, and the gold daily mart remain separate
-executable increments rather than claimed capabilities here.
+The remaining Iceberg silver models, SCD2 customer history, and the gold daily mart remain
+separate executable increments rather than claimed capabilities here.

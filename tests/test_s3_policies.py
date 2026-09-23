@@ -75,6 +75,8 @@ def test_runtime_services_do_not_use_minio_root_credentials() -> None:
         "bronze-input-sync",
         "spark-bronze",
         "spark-commerce-bronze",
+        "spark-commerce-payment-silver",
+        "commerce-payment-silver-check",
         "spark-silver",
         "trino-coordinator",
         "trino-worker",
