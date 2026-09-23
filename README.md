@@ -86,7 +86,8 @@ uploaded first and the verified manifest is published last as the batch commit m
 The same runbook shows how to plan a bounded incremental batch, checkpoint it only after
 downstream success, and request an explicit replay without moving normal progress. The
 selected batch can be merged idempotently into four raw Iceberg bronze tables without
-discarding the fixture's intentional duplicate order rows.
+discarding the fixture's intentional duplicate order rows. A bounded payment silver step
+retains invalid amounts as queryable reject evidence and reconciles every selected row.
 
 ```bash
 uv sync --dev

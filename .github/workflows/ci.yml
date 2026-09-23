@@ -452,6 +452,18 @@ jobs:
         run: >-
           docker compose --profile catalog --profile compute run --rm
           spark-commerce-bronze
+      - name: Build commerce payment silver tables
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          spark-commerce-payment-silver
+      - name: Verify idempotent commerce payment replay
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          spark-commerce-payment-silver
+      - name: Verify commerce payment silver contract
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          commerce-payment-silver-check
       - name: Verify catalog registration
         run: >-
           docker compose --profile catalog --profile compute run --rm
