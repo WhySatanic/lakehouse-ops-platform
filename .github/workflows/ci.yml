@@ -476,6 +476,18 @@ jobs:
         run: >-
           docker compose --profile catalog --profile compute run --rm
           commerce-order-silver-check
+      - name: Build commerce product silver tables
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          spark-commerce-product-silver
+      - name: Verify idempotent commerce product replay
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          spark-commerce-product-silver
+      - name: Verify commerce product silver contract
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          commerce-product-silver-check
       - name: Verify catalog registration
         run: >-
           docker compose --profile catalog --profile compute run --rm
