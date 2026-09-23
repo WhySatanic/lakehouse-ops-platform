@@ -90,6 +90,8 @@ discarding the fixture's intentional duplicate order rows. A bounded payment sil
 retains invalid amounts as queryable reject evidence and reconciles every selected row.
 An order silver step keeps one deterministic survivor, retains duplicate evidence, checks
 selected-batch references, and marks late events without rejecting them.
+Product silver validates identifiers, descriptions, and positive pricing while preserving
+invalid or duplicate rows as queryable evidence.
 
 ```bash
 uv sync --dev
