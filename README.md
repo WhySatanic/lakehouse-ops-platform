@@ -94,6 +94,8 @@ Product silver validates identifiers, descriptions, and positive pricing while p
 invalid or duplicate rows as queryable evidence.
 Customer silver preserves intentional NULL emails as valid completeness evidence while
 rejecting malformed non-NULL emails, missing required values, and duplicate identities.
+Customer history tracks changed names and email completeness as deterministic Iceberg
+SCD2 versions, with one current row and guarded forward-only effective periods.
 
 ```bash
 uv sync --dev

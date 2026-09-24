@@ -586,6 +586,87 @@ services:
       ]
     restart: "no"
 
+  spark-commerce-customer-scd2:
+    image: lakehouse-ops/spark-iceberg:3.5.9-1.11.0
+    profiles: ["compute"]
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+    environment:
+      LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
+      LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_SPARK_USER:-lakeops-spark}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SPARK_PASSWORD:-spark-development-only}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      HIVE_METASTORE_URI: thrift://hive-metastore:9083
+      COMMERCE_BATCH_ID: ${COMMERCE_BATCH_ID:-}
+      SPARK_MASTER: local[2]
+      PYTHONPATH: /opt/lakehouse/jobs
+    volumes:
+      - ./jobs/spark:/opt/lakehouse/jobs:ro
+    command:
+      [
+        "/opt/spark/bin/spark-submit",
+        "/opt/lakehouse/jobs/commerce_customer_scd2.py",
+      ]
+    restart: "no"
+
+  commerce-customer-history-seed:
+    image: lakehouse-ops/spark-iceberg:3.5.9-1.11.0
+    profiles: ["compute"]
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+    environment:
+      LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
+      LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_SPARK_USER:-lakeops-spark}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SPARK_PASSWORD:-spark-development-only}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      HIVE_METASTORE_URI: thrift://hive-metastore:9083
+      COMMERCE_BATCH_ID: ${COMMERCE_BATCH_ID:-}
+      COMMERCE_HISTORY_BATCH_ID: ${COMMERCE_HISTORY_BATCH_ID:-}
+      SPARK_MASTER: local[2]
+      PYTHONPATH: /opt/lakehouse/jobs
+    volumes:
+      - ./jobs/spark:/opt/lakehouse/jobs:ro
+      - ./tests/integration/seed_commerce_customer_history.py:/opt/lakehouse/tests/seed_commerce_customer_history.py:ro
+    command:
+      [
+        "/opt/spark/bin/spark-submit",
+        "/opt/lakehouse/tests/seed_commerce_customer_history.py",
+      ]
+    restart: "no"
+
+  commerce-customer-scd2-check:
+    image: lakehouse-ops/spark-iceberg:3.5.9-1.11.0
+    profiles: ["compute"]
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+    environment:
+      LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
+      LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_SPARK_USER:-lakeops-spark}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SPARK_PASSWORD:-spark-development-only}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      HIVE_METASTORE_URI: thrift://hive-metastore:9083
+      COMMERCE_BATCH_ID: ${COMMERCE_BATCH_ID:-}
+      EXPECTED_COMMERCE_CUSTOMER_HISTORY_ROWS: ${EXPECTED_COMMERCE_CUSTOMER_HISTORY_ROWS:-41}
+      EXPECTED_COMMERCE_CUSTOMER_CURRENT_ROWS: ${EXPECTED_COMMERCE_CUSTOMER_CURRENT_ROWS:-40}
+      EXPECTED_COMMERCE_CUSTOMER_VERSIONED_ROWS: ${EXPECTED_COMMERCE_CUSTOMER_VERSIONED_ROWS:-1}
+      SPARK_MASTER: local[2]
+      PYTHONPATH: /opt/lakehouse/jobs
+    volumes:
+      - ./jobs/spark:/opt/lakehouse/jobs:ro
+      - ./tests/integration/check_commerce_customer_scd2.py:/opt/lakehouse/tests/check_commerce_customer_scd2.py:ro
+    command:
+      [
+        "/opt/spark/bin/spark-submit",
+        "/opt/lakehouse/tests/check_commerce_customer_scd2.py",
+      ]
+    restart: "no"
+
   spark-silver:
     image: lakehouse-ops/spark-iceberg:3.5.9-1.11.0
     build:
