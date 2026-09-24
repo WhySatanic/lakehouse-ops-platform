@@ -86,6 +86,7 @@ docker compose --profile catalog --profile compute run --rm spark-commerce-produ
 docker compose --profile catalog --profile compute run --rm commerce-product-silver-check
 docker compose --profile catalog --profile compute run --rm spark-commerce-customer-silver
 docker compose --profile catalog --profile compute run --rm commerce-customer-silver-check
+docker compose --profile catalog --profile compute run --rm spark-commerce-customer-scd2
 ```
 
 The Spark job verifies the local copy against the committed manifest, checks required
@@ -118,6 +119,14 @@ non-NULL emails, and duplicate customer IDs remain queryable in
 `commerce_customer_rejects`. Exact reconciliation and stable merge keys make identical
 replay cardinality-neutral.
 
+The SCD2 job reads one explicit customer silver batch and writes
+`lakehouse.gold.dim_customers_scd2`. A tracked name, email, missing-email, or registration
+timestamp change expires the previous current row at the batch timestamp and inserts a
+deterministic new version. Unchanged customers produce no version. The job fails when a
+changed batch is not newer than current history, and verifies one current row plus valid
+effective periods after each run. Run batches in ascending `source_batch_at` order;
+identical replay inserts zero rows.
+
 After the Spark report returns `"status": "ready"` and its table post-conditions pass,
 advance the planner checkpoint:
 
@@ -144,5 +153,5 @@ uv run --env-file .env lakeops plan-commerce-batches \
 
 Replay planning never changes the normal checkpoint. More replay IDs than
 `--max-batches`, duplicate IDs, and IDs without a committed manifest are rejected.
-SCD2 customer history and the gold daily mart remain separate executable increments
-rather than claimed capabilities here.
+The gold daily mart remains a separate executable increment rather than a claimed
+capability here.

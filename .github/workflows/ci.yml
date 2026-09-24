@@ -500,6 +500,41 @@ jobs:
         run: >-
           docker compose --profile catalog --profile compute run --rm
           commerce-customer-silver-check
+      - name: Build initial commerce customer history
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          spark-commerce-customer-scd2
+      - name: Seed one changed customer batch
+        run: |
+          export COMMERCE_HISTORY_BATCH_ID="${COMMERCE_BATCH_ID}-history"
+          echo "COMMERCE_HISTORY_BATCH_ID=${COMMERCE_HISTORY_BATCH_ID}" >> "$GITHUB_ENV"
+          docker compose --profile catalog --profile compute run --rm \
+            commerce-customer-history-seed
+      - name: Apply changed commerce customer history
+        run: >-
+          COMMERCE_BATCH_ID="${COMMERCE_HISTORY_BATCH_ID}"
+          docker compose --profile catalog --profile compute run --rm
+          spark-commerce-customer-scd2
+      - name: Verify idempotent commerce customer history replay
+        run: >-
+          COMMERCE_BATCH_ID="${COMMERCE_HISTORY_BATCH_ID}"
+          docker compose --profile catalog --profile compute run --rm
+          spark-commerce-customer-scd2
+      - name: Verify commerce customer SCD2 contract
+        run: >-
+          COMMERCE_BATCH_ID="${COMMERCE_HISTORY_BATCH_ID}"
+          docker compose --profile catalog --profile compute run --rm
+          commerce-customer-scd2-check
+      - name: Reject out-of-order commerce customer history
+        run: |
+          if docker compose --profile catalog --profile compute run --rm \
+            spark-commerce-customer-scd2; then
+            echo "expected the older changed batch to be rejected"
+            exit 1
+          fi
+          COMMERCE_BATCH_ID="${COMMERCE_HISTORY_BATCH_ID}" \
+            docker compose --profile catalog --profile compute run --rm \
+            commerce-customer-scd2-check
       - name: Verify catalog registration
         run: >-
           docker compose --profile catalog --profile compute run --rm
