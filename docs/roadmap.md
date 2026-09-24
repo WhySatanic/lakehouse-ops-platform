@@ -233,6 +233,9 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
     rejected duplicates, verify references, and expose bounded late-event status.
   - [x] Validate selected commerce products into Iceberg silver, retain invalid or
     duplicate rows as evidence, reconcile exact counts, and make replay neutral.
+  - [x] Validate selected commerce customers into Iceberg silver, retain intentional
+    NULL emails with explicit completeness evidence, reject bad or duplicate rows,
+    reconcile exact counts, and make replay neutral.
 - [ ] Model customer history with SCD2 and publish a tested daily gold mart for revenue,
   orders, customers, and payment-quality measures.
 - [ ] Schedule the pipeline with retries, freshness checks, and actionable notifications.
