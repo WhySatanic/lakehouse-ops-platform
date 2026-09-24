@@ -92,6 +92,8 @@ An order silver step keeps one deterministic survivor, retains duplicate evidenc
 selected-batch references, and marks late events without rejecting them.
 Product silver validates identifiers, descriptions, and positive pricing while preserving
 invalid or duplicate rows as queryable evidence.
+Customer silver preserves intentional NULL emails as valid completeness evidence while
+rejecting malformed non-NULL emails, missing required values, and duplicate identities.
 
 ```bash
 uv sync --dev

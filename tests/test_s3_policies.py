@@ -81,6 +81,8 @@ def test_runtime_services_do_not_use_minio_root_credentials() -> None:
         "commerce-order-silver-check",
         "spark-commerce-product-silver",
         "commerce-product-silver-check",
+        "spark-commerce-customer-silver",
+        "commerce-customer-silver-check",
         "spark-silver",
         "trino-coordinator",
         "trino-worker",

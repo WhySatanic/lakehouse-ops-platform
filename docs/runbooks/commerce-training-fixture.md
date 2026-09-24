@@ -84,6 +84,8 @@ docker compose --profile catalog --profile compute run --rm spark-commerce-order
 docker compose --profile catalog --profile compute run --rm commerce-order-silver-check
 docker compose --profile catalog --profile compute run --rm spark-commerce-product-silver
 docker compose --profile catalog --profile compute run --rm commerce-product-silver-check
+docker compose --profile catalog --profile compute run --rm spark-commerce-customer-silver
+docker compose --profile catalog --profile compute run --rm commerce-customer-silver-check
 ```
 
 The Spark job verifies the local copy against the committed manifest, checks required
@@ -109,6 +111,12 @@ The product silver job enforces complete identifiers and descriptions plus a pos
 unit price. One deterministic row per product ID enters `lakehouse.silver.commerce_products`;
 invalid or duplicate rows remain queryable in `commerce_product_rejects`. Exact
 reconciliation and stable merge keys make identical replay cardinality-neutral.
+
+The customer silver job keeps intentional NULL emails as valid rows and exposes
+`email_is_missing` for completeness measurement. Missing required values, malformed
+non-NULL emails, and duplicate customer IDs remain queryable in
+`commerce_customer_rejects`. Exact reconciliation and stable merge keys make identical
+replay cardinality-neutral.
 
 After the Spark report returns `"status": "ready"` and its table post-conditions pass,
 advance the planner checkpoint:
@@ -136,5 +144,5 @@ uv run --env-file .env lakeops plan-commerce-batches \
 
 Replay planning never changes the normal checkpoint. More replay IDs than
 `--max-batches`, duplicate IDs, and IDs without a committed manifest are rejected.
-The remaining customer silver model, SCD2 customer history, and the gold daily mart
-remain separate executable increments rather than claimed capabilities here.
+SCD2 customer history and the gold daily mart remain separate executable increments
+rather than claimed capabilities here.
