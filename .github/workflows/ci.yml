@@ -535,6 +535,18 @@ jobs:
           COMMERCE_BATCH_ID="${COMMERCE_HISTORY_BATCH_ID}" \
             docker compose --profile catalog --profile compute run --rm \
             commerce-customer-scd2-check
+      - name: Build commerce daily gold mart
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          spark-commerce-daily-gold
+      - name: Verify idempotent commerce daily gold replay
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          spark-commerce-daily-gold
+      - name: Verify commerce daily gold contract
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          commerce-daily-gold-check
       - name: Verify catalog registration
         run: >-
           docker compose --profile catalog --profile compute run --rm
@@ -571,6 +583,8 @@ jobs:
         env:
           TRINO_SERVER_IMAGE: trinodb/trino:482
         run: docker compose --profile query run --rm trino-query-check
+      - name: Query commerce daily gold through Trino
+        run: docker compose --profile query run --rm commerce-daily-gold-trino-check
       - name: Start Prometheus readiness collection
         run: >-
           docker compose --profile observability up -d
