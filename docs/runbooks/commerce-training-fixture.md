@@ -163,7 +163,10 @@ uv run --env-file .env lakeops commit-commerce-batch \
 
 The checkpoint is written atomically. A repeated commit is a no-op. Planning fails if a
 processed manifest has changed, so the same batch ID cannot silently acquire different
-content. Table objects without a valid commit marker are ignored.
+content. A new commit must be for the earliest unprocessed source batch; attempting to
+skip an older committed batch fails without changing the checkpoint. Process batches in
+the order returned by `plan-commerce-batches`, especially before updating SCD2 history.
+Table objects without a valid commit marker are ignored.
 
 For a deliberate retry or backfill, name every batch and keep the same explicit bound:
 
