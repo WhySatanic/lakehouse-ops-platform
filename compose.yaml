@@ -2,7 +2,11 @@ name: lakehouse-ops
 
 services:
   minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    image: lakehouse-ops/minio-tools:2025-09-07
+    build:
+      context: .
+      dockerfile: infra/minio/Dockerfile
+    entrypoint: ["minio"]
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lakeops}
@@ -21,7 +25,10 @@ services:
     restart: unless-stopped
 
   minio-init:
-    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    image: lakehouse-ops/minio-tools:2025-09-07
+    build:
+      context: .
+      dockerfile: infra/minio/Dockerfile
     depends_on:
       minio:
         condition: service_healthy
@@ -63,7 +70,7 @@ services:
     restart: "no"
 
   minio-access-check:
-    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    image: lakehouse-ops/minio-tools:2025-09-07
     depends_on:
       minio-init:
         condition: service_completed_successfully
@@ -258,7 +265,7 @@ services:
     restart: unless-stopped
 
   landing-fixture:
-    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    image: lakehouse-ops/minio-tools:2025-09-07
     profiles: ["compute"]
     depends_on:
       minio-init:
@@ -279,7 +286,7 @@ services:
     restart: "no"
 
   silver-landing-fixture:
-    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    image: lakehouse-ops/minio-tools:2025-09-07
     profiles: ["compute"]
     depends_on:
       minio-init:
@@ -299,7 +306,7 @@ services:
     restart: "no"
 
   bronze-input-sync:
-    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    image: lakehouse-ops/minio-tools:2025-09-07
     profiles: ["compute"]
     depends_on:
       landing-fixture:
@@ -667,6 +674,59 @@ services:
       ]
     restart: "no"
 
+  spark-commerce-daily-gold:
+    image: lakehouse-ops/spark-iceberg:3.5.9-1.11.0
+    profiles: ["compute"]
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+    environment:
+      LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
+      LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_SPARK_USER:-lakeops-spark}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SPARK_PASSWORD:-spark-development-only}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      HIVE_METASTORE_URI: thrift://hive-metastore:9083
+      COMMERCE_BATCH_ID: ${COMMERCE_BATCH_ID:-}
+      SPARK_MASTER: local[2]
+      PYTHONPATH: /opt/lakehouse/jobs
+    volumes:
+      - ./jobs/spark:/opt/lakehouse/jobs:ro
+    command:
+      [
+        "/opt/spark/bin/spark-submit",
+        "/opt/lakehouse/jobs/gold_commerce_daily.py",
+      ]
+    restart: "no"
+
+  commerce-daily-gold-check:
+    image: lakehouse-ops/spark-iceberg:3.5.9-1.11.0
+    profiles: ["compute"]
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+    environment:
+      LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
+      LAKEOPS_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_SPARK_USER:-lakeops-spark}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SPARK_PASSWORD:-spark-development-only}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      HIVE_METASTORE_URI: thrift://hive-metastore:9083
+      COMMERCE_BATCH_ID: ${COMMERCE_BATCH_ID:-}
+      EXPECTED_COMMERCE_GOLD_ORDERS: ${EXPECTED_COMMERCE_GOLD_ORDERS:-60}
+      EXPECTED_COMMERCE_GOLD_REJECTS: ${EXPECTED_COMMERCE_GOLD_REJECTS:-7}
+      SPARK_MASTER: local[2]
+      PYTHONPATH: /opt/lakehouse/jobs
+    volumes:
+      - ./jobs/spark:/opt/lakehouse/jobs:ro
+      - ./tests/integration/check_commerce_daily_gold.py:/opt/lakehouse/tests/check_commerce_daily_gold.py:ro
+    command:
+      [
+        "/opt/spark/bin/spark-submit",
+        "/opt/lakehouse/tests/check_commerce_daily_gold.py",
+      ]
+    restart: "no"
+
   spark-silver:
     image: lakehouse-ops/spark-iceberg:3.5.9-1.11.0
     build:
@@ -985,7 +1045,7 @@ services:
     restart: "no"
 
   bronze-storage-check:
-    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    image: lakehouse-ops/minio-tools:2025-09-07
     profiles: ["compute"]
     depends_on:
       spark-bronze:
@@ -1027,7 +1087,7 @@ services:
     restart: "no"
 
   silver-storage-check:
-    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    image: lakehouse-ops/minio-tools:2025-09-07
     profiles: ["compute"]
     depends_on:
       minio-init:
@@ -1302,6 +1362,26 @@ services:
     volumes:
       - ./tests/integration/check_trino.sh:/checks/check_trino.sh:ro
     entrypoint: ["/bin/bash", "/checks/check_trino.sh"]
+    restart: "no"
+
+  commerce-daily-gold-trino-check:
+    image: trinodb/trino:483@sha256:db58cc93e593a2706553745f276bb119c9810e69918be56ecde088ba7ccb0534
+    profiles: ["query"]
+    depends_on:
+      trino-coordinator:
+        condition: service_healthy
+      trino-worker:
+        condition: service_healthy
+      trino-worker-2:
+        condition: service_healthy
+    environment:
+      TRINO_SERVER: http://trino-coordinator:8080
+      COMMERCE_BATCH_ID: ${COMMERCE_BATCH_ID:-}
+      EXPECTED_COMMERCE_GOLD_ORDERS: ${EXPECTED_COMMERCE_GOLD_ORDERS:-60}
+      EXPECTED_COMMERCE_GOLD_REJECTS: ${EXPECTED_COMMERCE_GOLD_REJECTS:-7}
+    volumes:
+      - ./tests/integration/check_commerce_daily_gold_trino.sh:/checks/check_commerce_daily_gold_trino.sh:ro
+    entrypoint: ["/bin/bash", "/checks/check_commerce_daily_gold_trino.sh"]
     restart: "no"
 
   trino-authorization-check:

@@ -60,7 +60,7 @@ jobs:
         run: >-
           uv run python -m lakehouse_ops.verified_build --attempts 3
           --delay-seconds 5 -- docker compose --profile catalog --profile compute build
-          hive-metastore spark-bronze spark-silver
+          minio hive-metastore spark-bronze spark-silver
       - name: Start core lakehouse services
         run: >-
           docker compose --profile catalog --profile compute up -d --wait
@@ -137,7 +137,7 @@ jobs:
         run: >-
           uv run python -m lakehouse_ops.verified_build --attempts 3
           --delay-seconds 5 -- docker compose --profile catalog --profile compute build
-          hive-metastore spark-bronze spark-silver
+          minio hive-metastore spark-bronze spark-silver
       - name: Start Ranger Admin dependencies
         run: >-
           docker compose --profile security up -d --wait --wait-timeout 420
@@ -368,7 +368,7 @@ jobs:
 
   lakehouse-integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -390,7 +390,7 @@ jobs:
         run: >-
           uv run python -m lakehouse_ops.verified_build --attempts 3
           --delay-seconds 5 -- docker compose --profile catalog --profile compute build
-          hive-metastore spark-bronze spark-silver
+          minio hive-metastore spark-bronze spark-silver
       - name: Start core services
         run: >-
           docker compose --profile catalog --profile compute up -d --wait
@@ -535,6 +535,18 @@ jobs:
           COMMERCE_BATCH_ID="${COMMERCE_HISTORY_BATCH_ID}" \
             docker compose --profile catalog --profile compute run --rm \
             commerce-customer-scd2-check
+      - name: Build commerce daily gold mart
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          spark-commerce-daily-gold
+      - name: Verify idempotent commerce daily gold replay
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          spark-commerce-daily-gold
+      - name: Verify commerce daily gold contract
+        run: >-
+          docker compose --profile catalog --profile compute run --rm
+          commerce-daily-gold-check
       - name: Verify catalog registration
         run: >-
           docker compose --profile catalog --profile compute run --rm
@@ -563,14 +575,18 @@ jobs:
         run: docker compose --profile compute run --rm silver-storage-check
       - name: Start Trino coordinator and workers
         env:
-          TRINO_SERVER_IMAGE: trinodb/trino:482
+          TRINO_SERVER_IMAGE: trinodb/trino:482@sha256:90b35b7c603eaa1f889bf03981a62b75f998ee6c0f851d9f4e341b49a57022b6
         run: >-
           docker compose --profile query up -d --wait
           trino-coordinator trino-worker trino-worker-2
       - name: Query Iceberg tables through Trino
         env:
-          TRINO_SERVER_IMAGE: trinodb/trino:482
+          TRINO_SERVER_IMAGE: trinodb/trino:482@sha256:90b35b7c603eaa1f889bf03981a62b75f998ee6c0f851d9f4e341b49a57022b6
         run: docker compose --profile query run --rm trino-query-check
+      - name: Query commerce daily gold through Trino
+        env:
+          TRINO_SERVER_IMAGE: trinodb/trino:482@sha256:90b35b7c603eaa1f889bf03981a62b75f998ee6c0f851d9f4e341b49a57022b6
+        run: docker compose --profile query run --rm commerce-daily-gold-trino-check
       - name: Start Prometheus readiness collection
         run: >-
           docker compose --profile observability up -d

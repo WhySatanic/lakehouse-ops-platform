@@ -5,12 +5,14 @@
 `config/images.lock.json` binds every external image used by:
 
 - `compose.yaml` runtime and check services;
-- the Hive Metastore and Spark Dockerfile `FROM` instructions;
+- the Hive Metastore, MinIO source-build, and Spark Dockerfile `FROM` instructions;
 - the source and target of the Trino upgrade rehearsal.
 
 Local images under `lakehouse-ops/` remain source-built and are intentionally outside
 the registry lock. Each external reference keeps its human-readable tag and appends the
 reviewed multi-platform manifest digest.
+The MinIO server and mc client are built from fixed upstream Go release tags in
+`infra/minio/Dockerfile`; the lock covers their external build and runtime base images.
 
 ## Verify coverage
 

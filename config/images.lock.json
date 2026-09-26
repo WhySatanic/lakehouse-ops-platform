@@ -2,6 +2,10 @@
   "schema_version": "1.0",
   "images": [
     {
+      "tag": "alpine:3.23",
+      "digest": "sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0"
+    },
+    {
       "tag": "apache/hive:4.0.0",
       "digest": "sha256:c0b241c544d341c16a6d8cafcb801a071be9b02054a5add255e9a0e826095e88"
     },
@@ -30,6 +34,10 @@
       "digest": "sha256:a1701c2180249361737a99a01bc770db39381640e4d631825d38ff4535efa47d"
     },
     {
+      "tag": "golang:1.24.13-alpine3.23",
+      "digest": "sha256:8bee1901f1e530bfb4a7850aa7a479d17ae3a18beb6e09064ed54cfd245b7191"
+    },
+    {
       "tag": "postgres:17.10-alpine3.23",
       "digest": "sha256:8189a1f6e40904781fc9e2612687877791d21679866db58b1de996b31fc312e4"
     },
@@ -48,14 +56,6 @@
     {
       "tag": "python:3.12-alpine3.22",
       "digest": "sha256:a190708a2dec1bd18b1decb539f8e8f5407abaa9bf39cacda583f7f8c11db322"
-    },
-    {
-      "tag": "quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z",
-      "digest": "sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727"
-    },
-    {
-      "tag": "quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z",
-      "digest": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e"
     },
     {
       "tag": "trinodb/trino:482",

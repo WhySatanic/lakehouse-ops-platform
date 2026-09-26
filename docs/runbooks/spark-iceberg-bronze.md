@@ -17,7 +17,7 @@ store boundaries are the same ones a distributed Spark deployment would use.
 Create `.env` from `.env.example`, then start MinIO, PostgreSQL, and Hive Metastore:
 
 ```bash
-docker compose --env-file .env --profile catalog --profile compute build hive-metastore spark-bronze
+docker compose --env-file .env --profile catalog --profile compute build minio hive-metastore spark-bronze
 docker compose --env-file .env --profile catalog --profile compute up -d --wait minio metastore-db hive-metastore
 docker compose --env-file .env run --rm minio-init
 ```

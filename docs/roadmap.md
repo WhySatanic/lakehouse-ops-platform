@@ -236,11 +236,12 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
   - [x] Validate selected commerce customers into Iceberg silver, retain intentional
     NULL emails with explicit completeness evidence, reject bad or duplicate rows,
     reconcile exact counts, and make replay neutral.
-- [ ] Model customer history with SCD2 and publish a tested daily gold mart for revenue,
+- [x] Model customer history with SCD2 and publish a tested daily gold mart for revenue,
   orders, customers, and payment-quality measures.
   - [x] Maintain replay-safe customer SCD2 history with deterministic versions, one
     current row, contiguous effective periods, and rejection of out-of-order changes.
-  - [ ] Publish the tested daily gold mart.
+  - [x] Publish the tested batch-scoped daily gold mart with order-day revenue, buying
+    customers, and payment-quality measures, including replay and Trino checks.
 - [ ] Schedule the pipeline with retries, freshness checks, and actionable notifications.
 - [ ] Measure runtime, memory, file growth, maintenance, and recovery as volume increases.
 

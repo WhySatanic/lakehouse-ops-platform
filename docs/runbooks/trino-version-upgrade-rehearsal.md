@@ -55,8 +55,13 @@ version:
 TRINO_SERVER_IMAGE=trinodb/trino:482@sha256:90b35b7c603eaa1f889bf03981a62b75f998ee6c0f851d9f4e341b49a57022b6 \
   docker compose --profile query up -d --wait \
   trino-coordinator trino-worker trino-worker-2
-docker compose --profile query run --rm trino-query-check
+TRINO_SERVER_IMAGE=trinodb/trino:482@sha256:90b35b7c603eaa1f889bf03981a62b75f998ee6c0f851d9f4e341b49a57022b6 \
+  docker compose --profile query run --rm trino-query-check
 ```
+
+Keep the same pinned source-image override on every intervening `docker compose run`
+that depends on Trino, including the commerce gold query check. Otherwise Compose
+recreates the source cluster with the normal 483 default before the rehearsal begins.
 
 Run and validate the complete transition:
 

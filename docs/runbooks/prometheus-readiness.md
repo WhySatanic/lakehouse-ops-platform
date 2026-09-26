@@ -11,6 +11,7 @@ Start the lakehouse services first, then start the collectors and run the bounde
 acceptance check:
 
 ```bash
+docker compose --profile catalog --profile compute build minio
 docker compose --profile catalog --profile compute up -d --wait minio metastore-db hive-metastore
 docker compose --profile query up -d --wait trino-coordinator trino-worker trino-worker-2
 docker compose --profile observability up -d \

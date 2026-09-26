@@ -87,6 +87,8 @@ docker compose --profile catalog --profile compute run --rm commerce-product-sil
 docker compose --profile catalog --profile compute run --rm spark-commerce-customer-silver
 docker compose --profile catalog --profile compute run --rm commerce-customer-silver-check
 docker compose --profile catalog --profile compute run --rm spark-commerce-customer-scd2
+docker compose --profile catalog --profile compute run --rm spark-commerce-daily-gold
+docker compose --profile catalog --profile compute run --rm commerce-daily-gold-check
 ```
 
 The Spark job verifies the local copy against the committed manifest, checks required
@@ -100,7 +102,7 @@ The payment silver job reads only the selected bronze batch. Positive, non-NULL 
 with complete payment identity enter `lakehouse.silver.commerce_payments`; invalid rows
 enter `lakehouse.silver.commerce_payment_rejects` with explicit quality errors. The job
 reconciles valid plus rejected rows to bronze and uses stable merge keys, so replay changes
-neither table's cardinality. Customers and products remain bronze-only for now.
+neither table's cardinality.
 
 The order silver job keeps one deterministic survivor per order ID, validates arithmetic
 and selected-batch customer/product references, and retains duplicate or invalid rows in
@@ -126,6 +128,28 @@ deterministic new version. Unchanged customers produce no version. The job fails
 changed batch is not newer than current history, and verifies one current row plus valid
 effective periods after each run. Run batches in ascending `source_batch_at` order;
 identical replay inserts zero rows.
+
+The daily gold job reads one explicitly selected batch of validated orders, customers,
+products, and payments and publishes `lakehouse.gold.commerce_daily`. Its grain is
+`(source_batch_id, order_day)`; `order_day` is the UTC date of the order event, including
+late orders. `order_count`, distinct `buyer_count`, and `ordered_amount_cents` describe
+accepted orders. `captured_revenue_cents` sums valid captured payments only; it is not
+gross order value. Captured, noncaptured, rejected, and missing-payment counts expose
+payment quality. Multiple payment records per order are aggregated before joining, so
+they cannot multiply order counts or ordered amount. Payment records that cannot be
+attributed to a validated order, unreconciled silver tables, and orders referencing
+unvalidated customers or products stop the job before any gold write. An identical replay
+inserts zero rows; conflicting existing rows fail instead of silently changing history.
+The mart is batch-scoped, not a cross-batch deduplicated business ledger. Query it through
+Trino after the serving profile starts:
+
+```sql
+SELECT order_day, order_count, buyer_count, captured_revenue_cents,
+       rejected_payment_count
+FROM lakehouse.gold.commerce_daily
+WHERE source_batch_id = '<batch-id>'
+ORDER BY order_day;
+```
 
 After the Spark report returns `"status": "ready"` and its table post-conditions pass,
 advance the planner checkpoint:
@@ -153,5 +177,3 @@ uv run --env-file .env lakeops plan-commerce-batches \
 
 Replay planning never changes the normal checkpoint. More replay IDs than
 `--max-batches`, duplicate IDs, and IDs without a committed manifest are rejected.
-The gold daily mart remains a separate executable increment rather than a claimed
-capability here.

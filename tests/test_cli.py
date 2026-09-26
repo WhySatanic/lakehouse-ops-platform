@@ -1181,6 +1181,29 @@ def test_verify_image_lock_command(
     }
 
 
+def test_verify_image_lock_covers_minio_source_build_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, object] = {}
+
+    def fake_verify(
+        lock: Path,
+        compose: Path,
+        dockerfiles: list[Path],
+        upgrade_plan: Path,
+        schema: Path,
+    ) -> dict[str, str]:
+        observed["dockerfiles"] = dockerfiles
+        return {"schema_version": "1.0", "status": "ready"}
+
+    monkeypatch.setattr(cli, "verify_image_lock", fake_verify)
+
+    assert cli.main(["verify-image-lock"]) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "ready"
+    assert Path("infra/minio/Dockerfile") in observed["dockerfiles"]
+
+
 def test_build_release_candidate_command(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

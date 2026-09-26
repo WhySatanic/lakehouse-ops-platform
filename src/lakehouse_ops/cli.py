@@ -677,6 +677,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "verify-image-lock":
         dockerfiles = args.dockerfile or [
             Path("infra/hive-metastore/Dockerfile"),
+            Path("infra/minio/Dockerfile"),
             Path("infra/spark/Dockerfile"),
         ]
         try:
