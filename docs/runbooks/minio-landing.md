@@ -11,9 +11,20 @@ Copy-Item .env.example .env
 Start MinIO and wait for its health endpoint, then create the private lakehouse bucket:
 
 ```bash
+docker compose --env-file .env build minio
 docker compose --env-file .env up -d --wait minio
 docker compose --env-file .env run --rm minio-init
 ```
+
+The public Quay MinIO and mc images pinned by older checkouts stopped serving anonymous
+pulls. This checkout builds both tools locally from their fixed open-source Go release
+tags. The Dockerfile and both build-base digests are covered by `verify-image-lock`.
+If upgrading an existing stack, rebuild `minio`, then recreate only that service with
+the same `minio-data` volume before running `minio-init`; do not run `down --volumes`.
+Verify `/minio/health/live`, the bucket versioning check below, and the least-privilege
+identity check after the switch. The source tags are unchanged; this is a delivery-path
+change, not a bucket migration. A clean checkout needs network access to the Go module
+proxy and Alpine package repository for its first build.
 
 MinIO exposes its S3 endpoint on `http://localhost:9000` and its console on
 `http://localhost:9001`. If either port is already in use, change `MINIO_API_PORT`,
