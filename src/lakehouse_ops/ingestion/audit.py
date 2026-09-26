@@ -177,7 +177,7 @@ def _audit_object(root: Path, path: Path) -> AuditItem:
         errors.append(f"cannot read JSON: {error}")
         return AuditItem(relative.as_posix(), "invalid", tuple(errors))
 
-    return _audit_content(relative, content)
+    return audit_landing_content(relative, content)
 
 
 def _audit_s3_object(
@@ -194,7 +194,7 @@ def _audit_s3_object(
 
     metadata = response.get("Metadata")
     metadata_checksum = metadata.get("sha256") if isinstance(metadata, dict) else None
-    item = _audit_content(relative, body, metadata_checksum=metadata_checksum)
+    item = audit_landing_content(relative, body, metadata_checksum=metadata_checksum)
     if metadata_checksum is not None:
         return item
     return AuditItem(
@@ -226,7 +226,7 @@ def _audit_s3_version(
 
     metadata = response.get("Metadata")
     metadata_checksum = metadata.get("sha256") if isinstance(metadata, dict) else None
-    item = _audit_content(relative, body, metadata_checksum=metadata_checksum)
+    item = audit_landing_content(relative, body, metadata_checksum=metadata_checksum)
     errors = item.errors
     if metadata_checksum is None:
         errors = (*errors, "object metadata checksum is missing")
@@ -239,7 +239,7 @@ def _audit_s3_version(
     )
 
 
-def _audit_content(
+def audit_landing_content(
     relative: Path, content: str | bytes, *, metadata_checksum: object | None = None
 ) -> AuditItem:
     errors = _validate_layout(relative)

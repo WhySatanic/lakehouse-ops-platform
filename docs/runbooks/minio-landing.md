@@ -55,6 +55,12 @@ uv run --env-file .env lakeops ingest-weather \
 
 Run the same command twice. The first response must contain `"created": true`; the
 second must return the same checksum with `"created": false`.
+On a conditional-write replay, the adapter reads the existing object and validates
+its payload, path, declared checksum, and S3 checksum metadata before reporting
+`created: false`.
+If it reports an existing-object conflict, do not overwrite the key. Run
+`lakeops audit-landing --backend s3 --include-versions` and inspect the retained
+versions before recovery.
 
 To land the deterministic relational training data, generate a fixture and pass its
 reported batch directory to `land-commerce-fixture`. The command verifies local
