@@ -90,6 +90,20 @@ def test_commit_is_atomic_idempotent_and_advances_incremental_plan(
     assert [batch["batch_id"] for batch in plan["batches"]] == ["bbbbbbbbbbbbbbbb"]
 
 
+def test_commit_cannot_skip_an_earlier_unprocessed_batch(
+    client: FakeS3Client, tmp_path: Path
+) -> None:
+    state_path = tmp_path / "state.json"
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state_path)
+
+    with pytest.raises(CommerceBatchError, match="earlier unprocessed batch"):
+        planner.commit("bbbbbbbbbbbbbbbb")
+
+    assert not state_path.exists()
+    assert planner.commit("aaaaaaaaaaaaaaaa")["created"] is True
+    assert planner.commit("bbbbbbbbbbbbbbbb")["created"] is True
+
+
 def test_explicit_replay_is_bounded_and_does_not_move_checkpoint(
     client: FakeS3Client, tmp_path: Path
 ) -> None:

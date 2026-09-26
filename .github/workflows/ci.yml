@@ -71,6 +71,8 @@ jobs:
           docker compose run --rm minio-access-check
       - name: Verify weather S3 conditional replay
         run: LAKEOPS_RUN_S3_SMOKE=1 uv run pytest tests/integration/test_weather_s3_replay.py -q -o addopts=''
+      - name: Verify commerce checkpoint ordering in MinIO
+        run: LAKEOPS_RUN_S3_SMOKE=1 uv run pytest tests/integration/test_commerce_checkpoint_order.py -q -o addopts=''
       - name: Prepare Iceberg tables with Spark
         run: |
           docker compose --profile compute run --rm landing-fixture

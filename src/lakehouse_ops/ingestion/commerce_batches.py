@@ -90,7 +90,8 @@ class CommerceBatchPlanner:
         }
 
     def commit(self, batch_id: str) -> dict[str, Any]:
-        batches = {batch.batch_id: batch for batch in self.discover()}
+        ordered_batches = self.discover()
+        batches = {batch.batch_id: batch for batch in ordered_batches}
         if batch_id not in batches:
             raise CommerceBatchError(f"batch is not committed: {batch_id}")
         state = _load_state(self._state_path)
@@ -100,6 +101,13 @@ class CommerceBatchPlanner:
         existing = processed.get(batch_id)
         if existing:
             return {"batch_id": batch_id, "created": False, "state": str(self._state_path)}
+        next_batch = next(
+            batch for batch in ordered_batches if batch.batch_id not in processed
+        )
+        if next_batch.batch_id != batch_id:
+            raise CommerceBatchError(
+                f"cannot skip earlier unprocessed batch: {next_batch.batch_id}"
+            )
         processed[batch_id] = {
             "batch_at": batch.batch_at,
             "manifest_sha256": batch.manifest_sha256,
