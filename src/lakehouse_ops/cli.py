@@ -11,6 +11,7 @@ import boto3
 from lakehouse_ops import __version__
 from lakehouse_ops.access_policy import AccessPolicyError, render_trino_policy
 from lakehouse_ops.break_glass import BreakGlassError
+from lakehouse_ops.commerce_gold_gate import CommerceGoldGateError, check_commerce_gold
 from lakehouse_ops.control_plane_contract import (
     ControlPlaneContractError,
     refresh_control_plane_schema_digests,
@@ -149,6 +150,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_commerce_batch_arguments(commerce_commit)
     commerce_commit.add_argument("--batch-id", required=True)
+
+    commerce_gold = subparsers.add_parser(
+        "check-commerce-gold", help="verify a selected commerce gold batch through Trino"
+    )
+    commerce_gold.add_argument("--batch-id", required=True)
+    commerce_gold.add_argument(
+        "--server", default=os.getenv("TRINO_SERVER", "http://localhost:8080")
+    )
+    commerce_gold.add_argument("--user", default="lakehouse-ops")
 
     doctor = subparsers.add_parser("doctor", help="check landing backend readiness")
     _add_landing_arguments(doctor)
@@ -515,6 +525,14 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, CommerceBatchError) as error:
             parser.error(str(error))
         print(json.dumps(report, sort_keys=True))
+        return 0
+    if args.command == "check-commerce-gold":
+        try:
+            with TrinoClient(args.server, user=args.user) as client:
+                report = check_commerce_gold(client.query, args.batch_id)
+        except CommerceGoldGateError as error:
+            parser.error(str(error))
+        print(json.dumps(report.as_dict(), sort_keys=True))
         return 0
     if args.command == "doctor":
         if args.backend == "file":

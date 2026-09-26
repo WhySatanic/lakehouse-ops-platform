@@ -152,7 +152,18 @@ ORDER BY order_day;
 ```
 
 After the Spark report returns `"status": "ready"` and its table post-conditions pass,
-advance the planner checkpoint:
+verify the selected batch through a healthy Trino query profile. This general check is
+not tied to the synthetic fixture's expected counts; it fails when the batch has no
+queryable gold rows or any day has missing, zero, or negative order counts or negative
+captured revenue:
+
+```bash
+uv run --env-file .env lakeops check-commerce-gold \
+  --batch-id <batch-id> \
+  --server http://localhost:8080
+```
+
+Only after both checks succeed, advance the planner checkpoint:
 
 ```bash
 uv run --env-file .env lakeops commit-commerce-batch \
