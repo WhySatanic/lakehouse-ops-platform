@@ -217,6 +217,32 @@ def test_plan_and_commit_commerce_batch_commands(
     assert state.is_file()
 
 
+def test_check_commerce_gold_command(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    class FakeTrinoClient:
+        def __init__(self, server: str, *, user: str) -> None:
+            assert server == "http://localhost:8080"
+            assert user == "lakehouse-ops"
+
+        def __enter__(self) -> FakeTrinoClient:
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+        def query(self, sql: str) -> list[dict[str, int]]:
+            assert "source_batch_id = 'aaaaaaaaaaaaaaaa'" in sql
+            return [
+                {"days": 2, "orders": 6, "captured_revenue_cents": 900, "invalid_days": 0}
+            ]
+
+    monkeypatch.setattr(cli, "TrinoClient", FakeTrinoClient)
+
+    assert cli.main(["check-commerce-gold", "--batch-id", "a" * 16]) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "ready"
+
+
 def test_ingest_weather_command_lands_payload(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
