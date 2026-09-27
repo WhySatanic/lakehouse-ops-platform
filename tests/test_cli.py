@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from types import TracebackType
@@ -36,11 +37,13 @@ class FakeS3Client:
     def __init__(self) -> None:
         self.objects: dict[tuple[str, str], bytes] = {}
         self.metadata: dict[tuple[str, str], dict[str, str]] = {}
+        self.last_modified: dict[tuple[str, str], datetime] = {}
 
     def put_object(self, **kwargs: Any) -> dict[str, Any]:
         object_id = (kwargs["Bucket"], kwargs["Key"])
         self.objects[object_id] = kwargs["Body"]
         self.metadata[object_id] = kwargs["Metadata"]
+        self.last_modified[object_id] = datetime.now(UTC)
         return {"ETag": '"test"'}
 
     def get_bucket_location(self, **kwargs: Any) -> dict[str, Any]:
@@ -55,7 +58,7 @@ class FakeS3Client:
         prefix = kwargs.get("Prefix", "")
         return {
             "Contents": [
-                {"Key": key}
+                {"Key": key, "LastModified": self.last_modified[(bucket, key)]}
                 for bucket, key in sorted(self.objects)
                 if bucket == kwargs["Bucket"] and key.startswith(prefix)
             ],
@@ -215,6 +218,36 @@ def test_plan_and_commit_commerce_batch_commands(
     assert commit_code == 0
     assert commit["created"] is True
     assert state.is_file()
+
+
+def test_check_commerce_source_freshness_command(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    fixture = cli.generate_commerce_fixture(
+        tmp_path / "fixture",
+        cli.CommerceFixtureConfig(
+            customers=4,
+            products=2,
+            orders=6,
+            null_customer_emails=1,
+            duplicate_orders=1,
+            late_orders=1,
+            invalid_payments=1,
+        ),
+    )
+    s3_client = FakeS3Client()
+    cli.CommerceS3LandingZone(s3_client, bucket="lakehouse").write(fixture.path)
+    monkeypatch.setattr(cli, "_create_s3_client", lambda args: s3_client)
+    args = ["check-commerce-source-freshness", "--s3-bucket", "lakehouse"]
+
+    assert cli.main(args) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "ready"
+    manifest = next(key for key in s3_client.last_modified if key[1].endswith("manifest.json"))
+    s3_client.last_modified[manifest] = datetime.now(UTC) - timedelta(hours=1)
+    assert cli.main(args) == 1
+    assert json.loads(capsys.readouterr().out)["reason"] == "age_limit_exceeded"
 
 
 def test_check_commerce_gold_command(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -17,8 +18,11 @@ from lakehouse_ops.ingestion.commerce_batches import (
 class FakeS3Client:
     def __init__(self) -> None:
         self.objects: dict[str, tuple[bytes, dict[str, str]]] = {}
+        self.last_modified: dict[str, datetime] = {}
 
-    def add_manifest(self, batch_id: str, batch_at: str) -> None:
+    def add_manifest(
+        self, batch_id: str, batch_at: str, *, committed_at: datetime | None = None
+    ) -> None:
         body = (
             json.dumps(
                 {
@@ -41,10 +45,18 @@ class FakeS3Client:
                 "source": "commerce",
             },
         )
+        if committed_at is not None:
+            self.last_modified[key] = committed_at
 
     def list_objects_v2(self, **kwargs: Any) -> dict[str, Any]:
         keys = sorted(key for key in self.objects if key.startswith(kwargs["Prefix"]))
-        return {"Contents": [{"Key": key} for key in keys], "IsTruncated": False}
+        return {
+            "Contents": [
+                {"Key": key, "LastModified": self.last_modified.get(key)}
+                for key in keys
+            ],
+            "IsTruncated": False,
+        }
 
     def get_object(self, **kwargs: Any) -> dict[str, Any]:
         body, metadata = self.objects[kwargs["Key"]]
@@ -57,6 +69,53 @@ def client() -> FakeS3Client:
     result.add_manifest("bbbbbbbbbbbbbbbb", "2026-02-01T00:00:00Z")
     result.add_manifest("aaaaaaaaaaaaaaaa", "2026-01-01T00:00:00Z")
     return result
+
+
+def test_source_freshness_uses_commit_time_not_event_time(tmp_path: Path) -> None:
+    now = datetime(2026, 9, 27, 20, 0, tzinfo=UTC)
+    client = FakeS3Client()
+    client.add_manifest(
+        "aaaaaaaaaaaaaaaa", "2026-01-01T00:00:00Z", committed_at=now - timedelta(seconds=30)
+    )
+    client.add_manifest(
+        "bbbbbbbbbbbbbbbb", "2026-02-01T00:00:00Z", committed_at=now - timedelta(hours=1)
+    )
+    state = tmp_path / "state.json"
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state)
+
+    fresh = planner.check_source_freshness(max_age_seconds=60, now=now)
+    stale = planner.check_source_freshness(max_age_seconds=20, now=now)
+
+    assert fresh["status"] == "ready"
+    assert fresh["latest_batch_id"] == "aaaaaaaaaaaaaaaa"
+    assert fresh["latest_committed_at"] == "2026-09-27T19:59:30Z"
+    assert fresh["age_seconds"] == 30
+    assert stale["status"] == "stale"
+    assert stale["reason"] == "age_limit_exceeded"
+    assert not state.exists()
+
+    just_over_limit = planner.check_source_freshness(
+        max_age_seconds=30, now=now + timedelta(milliseconds=1)
+    )
+    assert just_over_limit["status"] == "stale"
+    assert just_over_limit["age_seconds"] == 31
+
+
+def test_source_freshness_fails_closed_without_commits_or_timestamp(
+    tmp_path: Path,
+) -> None:
+    now = datetime(2026, 9, 27, 20, 0, tzinfo=UTC)
+    client = FakeS3Client()
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=tmp_path / "state.json")
+    empty = planner.check_source_freshness(max_age_seconds=60, now=now)
+    assert empty["status"] == "stale"
+    assert empty["reason"] == "no_committed_batches"
+
+    client.add_manifest("aaaaaaaaaaaaaaaa", "2026-01-01T00:00:00Z")
+    with pytest.raises(CommerceBatchError, match="missing a committed manifest timestamp"):
+        planner.check_source_freshness(max_age_seconds=60, now=now)
+    with pytest.raises(CommerceBatchError, match="must be positive"):
+        planner.check_source_freshness(max_age_seconds=0, now=now)
 
 
 def test_plans_unprocessed_committed_batches_in_event_time_order(
