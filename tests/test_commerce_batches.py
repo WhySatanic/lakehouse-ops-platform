@@ -118,6 +118,55 @@ def test_source_freshness_fails_closed_without_commits_or_timestamp(
         planner.check_source_freshness(max_age_seconds=0, now=now)
 
 
+def test_backlog_freshness_tracks_oldest_pending_commit(tmp_path: Path) -> None:
+    now = datetime(2026, 9, 27, 20, 0, tzinfo=UTC)
+    client = FakeS3Client()
+    client.add_manifest(
+        "aaaaaaaaaaaaaaaa", "2026-01-01T00:00:00Z", committed_at=now - timedelta(seconds=20)
+    )
+    client.add_manifest(
+        "bbbbbbbbbbbbbbbb", "2026-02-01T00:00:00Z", committed_at=now - timedelta(seconds=80)
+    )
+    state = tmp_path / "checkpoint.json"
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state)
+
+    stale = planner.check_backlog_freshness(max_age_seconds=60, now=now)
+    assert stale["status"] == "stale"
+    assert stale["reason"] == "pending_age_limit_exceeded"
+    assert stale["oldest_pending_batch_id"] == "bbbbbbbbbbbbbbbb"
+    assert stale["pending_batches"] == 2
+    assert stale["age_seconds"] == 80
+    assert not state.exists()
+
+    planner.commit("aaaaaaaaaaaaaaaa")
+    assert planner.check_backlog_freshness(max_age_seconds=60, now=now)["pending_batches"] == 1
+    planner.commit("bbbbbbbbbbbbbbbb")
+    clear = planner.check_backlog_freshness(max_age_seconds=60, now=now)
+    assert clear["status"] == "ready"
+    assert clear["pending_batches"] == 0
+    assert clear["age_seconds"] is None
+
+
+def test_backlog_freshness_fails_closed_on_missing_timestamp_or_bad_checkpoint(
+    tmp_path: Path,
+) -> None:
+    now = datetime(2026, 9, 27, 20, 0, tzinfo=UTC)
+    client = FakeS3Client()
+    state = tmp_path / "checkpoint.json"
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state)
+    assert planner.check_backlog_freshness(max_age_seconds=60, now=now)["status"] == "ready"
+
+    client.add_manifest("aaaaaaaaaaaaaaaa", "2026-01-01T00:00:00Z")
+    with pytest.raises(CommerceBatchError, match="missing a committed manifest timestamp"):
+        planner.check_backlog_freshness(max_age_seconds=60, now=now)
+    with pytest.raises(CommerceBatchError, match="must be positive"):
+        planner.check_backlog_freshness(max_age_seconds=0, now=now)
+
+    state.write_text("not json", encoding="utf-8")
+    with pytest.raises(CommerceBatchError, match="checkpoint is unreadable"):
+        planner.check_backlog_freshness(max_age_seconds=60, now=now)
+
+
 def test_plans_unprocessed_committed_batches_in_event_time_order(
     client: FakeS3Client, tmp_path: Path
 ) -> None:

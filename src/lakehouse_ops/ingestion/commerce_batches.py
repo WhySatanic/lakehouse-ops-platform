@@ -156,6 +156,53 @@ class CommerceBatchPlanner:
             "max_age_seconds": max_age_seconds,
         }
 
+    def check_backlog_freshness(
+        self, *, max_age_seconds: int, now: datetime | None = None
+    ) -> dict[str, Any]:
+        if max_age_seconds < 1:
+            raise CommerceBatchError("max_age_seconds must be positive")
+        observed_at = now or datetime.now(UTC)
+        if observed_at.tzinfo is None:
+            raise CommerceBatchError("observation time must include a timezone")
+        batches = self.discover()
+        by_id = {batch.batch_id: batch for batch in batches}
+        state = _load_state(self._state_path)
+        _verify_processed_content(state, by_id)
+        pending = [
+            batch for batch in batches if batch.batch_id not in state["processed_batches"]
+        ]
+        if not pending:
+            return {
+                "status": "ready",
+                "reason": None,
+                "pending_batches": 0,
+                "oldest_pending_batch_id": None,
+                "oldest_committed_at": None,
+                "age_seconds": None,
+                "max_age_seconds": max_age_seconds,
+            }
+        timestamped = [
+            (batch.committed_at, batch)
+            for batch in pending
+            if batch.committed_at is not None
+        ]
+        if len(timestamped) != len(pending):
+            raise CommerceBatchError("S3 listing is missing a committed manifest timestamp")
+        committed_at, oldest = min(timestamped, key=lambda item: item[0])
+        age_seconds = max(0, math.ceil((observed_at - committed_at).total_seconds()))
+        stale = age_seconds > max_age_seconds
+        return {
+            "status": "stale" if stale else "ready",
+            "reason": "pending_age_limit_exceeded" if stale else None,
+            "pending_batches": len(pending),
+            "oldest_pending_batch_id": oldest.batch_id,
+            "oldest_committed_at": committed_at.astimezone(UTC)
+            .isoformat()
+            .replace("+00:00", "Z"),
+            "age_seconds": age_seconds,
+            "max_age_seconds": max_age_seconds,
+        }
+
     def discover(self) -> list[CommerceBatch]:
         root = "/".join(
             part for part in (self._prefix, "source=commerce") if part
