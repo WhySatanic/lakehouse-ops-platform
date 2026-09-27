@@ -26,6 +26,20 @@ jobs must process only batch prefixes that contain it. A retry returns `"created
 after downloading and verifying each existing object's checksum. A local checksum
 mismatch or conflicting S3 object fails the command instead of silently replacing data.
 
+Check that a committed source batch landed recently before running scheduled work:
+
+```bash
+uv run --env-file .env lakeops check-commerce-source-freshness \
+  --s3-bucket lakehouse --max-age-seconds 900
+```
+
+The command checks the S3 modification time of the newest checksum-verified manifest,
+not the fixture's `batch_at` event time or the age of a downstream gold table. It prints
+JSON with the latest batch, commit time, age, and status. Exit code 0 means `ready`;
+exit code 1 means `stale` because no committed batch exists or its age exceeds the
+configured limit. An invalid manifest or missing S3 timestamp fails closed as an error.
+This source check does not yet schedule or retry the downstream pipeline.
+
 The default batch contains 10,000 customers, 1,000 products, 100,000 canonical orders,
 100,000 payments, and 1,000 repeated order rows. It also includes exact, documented
 quality cases:

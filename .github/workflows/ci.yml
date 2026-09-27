@@ -446,6 +446,14 @@ jobs:
           uv run lakeops land-commerce-fixture \
             --fixture "data/commerce-ci/batch_id=${COMMERCE_BATCH_ID}" \
             --s3-bucket lakehouse --s3-endpoint-url http://localhost:9000
+      - name: Check freshly committed commerce source
+        env:
+          AWS_ACCESS_KEY_ID: lakeops-ingest
+          AWS_SECRET_ACCESS_KEY: ingest-development-only
+        run: >-
+          uv run lakeops check-commerce-source-freshness
+          --s3-bucket lakehouse --s3-endpoint-url http://localhost:9000
+          --max-age-seconds 900
       - name: Sync commerce bronze input
         run: docker compose --profile compute run --rm bronze-input-sync
       - name: Write commerce Iceberg bronze tables

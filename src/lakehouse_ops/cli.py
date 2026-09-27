@@ -151,6 +151,13 @@ def build_parser() -> argparse.ArgumentParser:
     _add_commerce_batch_arguments(commerce_commit)
     commerce_commit.add_argument("--batch-id", required=True)
 
+    commerce_freshness = subparsers.add_parser(
+        "check-commerce-source-freshness",
+        help="check age of the latest committed commerce manifest in MinIO/S3",
+    )
+    _add_commerce_s3_arguments(commerce_freshness)
+    commerce_freshness.add_argument("--max-age-seconds", type=int, default=900)
+
     commerce_gold = subparsers.add_parser(
         "check-commerce-gold", help="verify a selected commerce gold batch through Trino"
     )
@@ -526,6 +533,18 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(str(error))
         print(json.dumps(report, sort_keys=True))
         return 0
+    if args.command == "check-commerce-source-freshness":
+        if not args.s3_bucket:
+            parser.error("--s3-bucket is required")
+        planner = CommerceBatchPlanner(
+            _create_s3_client(args), bucket=args.s3_bucket, prefix=args.s3_prefix
+        )
+        try:
+            report = planner.check_source_freshness(max_age_seconds=args.max_age_seconds)
+        except (OSError, CommerceBatchError) as error:
+            parser.error(str(error))
+        print(json.dumps(report, sort_keys=True))
+        return 0 if report["status"] == "ready" else 1
     if args.command == "check-commerce-gold":
         try:
             with TrinoClient(args.server, user=args.user) as client:
@@ -792,6 +811,10 @@ def _add_commerce_batch_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--state", type=Path, default=Path("data/state/commerce-batches.json")
     )
+    _add_commerce_s3_arguments(parser)
+
+
+def _add_commerce_s3_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--s3-bucket", default=os.getenv("LAKEOPS_S3_BUCKET"))
     parser.add_argument("--s3-prefix", default=os.getenv("LAKEOPS_S3_PREFIX", "landing"))
     parser.add_argument(

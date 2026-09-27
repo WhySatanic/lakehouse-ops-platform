@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import tempfile
@@ -27,6 +28,7 @@ class CommerceBatch:
     batch_at: str
     manifest_sha256: str
     path: str
+    committed_at: datetime | None = None
 
     def as_dict(self) -> dict[str, str]:
         return {
@@ -43,7 +45,7 @@ class CommerceBatchPlanner:
         client: S3Client,
         *,
         bucket: str,
-        state_path: Path,
+        state_path: Path = Path("data/state/commerce-batches.json"),
         prefix: str = "landing",
     ) -> None:
         if not bucket:
@@ -115,6 +117,45 @@ class CommerceBatchPlanner:
         _write_state(self._state_path, state)
         return {"batch_id": batch_id, "created": True, "state": str(self._state_path)}
 
+    def check_source_freshness(
+        self, *, max_age_seconds: int, now: datetime | None = None
+    ) -> dict[str, Any]:
+        if max_age_seconds < 1:
+            raise CommerceBatchError("max_age_seconds must be positive")
+        observed_at = now or datetime.now(UTC)
+        if observed_at.tzinfo is None:
+            raise CommerceBatchError("observation time must include a timezone")
+        batches = self.discover()
+        if not batches:
+            return {
+                "status": "stale",
+                "reason": "no_committed_batches",
+                "latest_batch_id": None,
+                "latest_committed_at": None,
+                "age_seconds": None,
+                "max_age_seconds": max_age_seconds,
+            }
+        timestamped = [
+            (batch.committed_at, batch)
+            for batch in batches
+            if batch.committed_at is not None
+        ]
+        if len(timestamped) != len(batches):
+            raise CommerceBatchError("S3 listing is missing a committed manifest timestamp")
+        committed_at, latest = max(timestamped, key=lambda item: item[0])
+        age_seconds = max(0, math.ceil((observed_at - committed_at).total_seconds()))
+        stale = age_seconds > max_age_seconds
+        return {
+            "status": "stale" if stale else "ready",
+            "reason": "age_limit_exceeded" if stale else None,
+            "latest_batch_id": latest.batch_id,
+            "latest_committed_at": committed_at.astimezone(UTC)
+            .isoformat()
+            .replace("+00:00", "Z"),
+            "age_seconds": age_seconds,
+            "max_age_seconds": max_age_seconds,
+        }
+
     def discover(self) -> list[CommerceBatch]:
         root = "/".join(
             part for part in (self._prefix, "source=commerce") if part
@@ -122,7 +163,7 @@ class CommerceBatchPlanner:
         manifest_pattern = re.compile(
             rf"^{re.escape(root)}/batch_id=([0-9a-f]{{16}})/manifest\.json$"
         )
-        keys: list[tuple[str, str]] = []
+        keys: list[tuple[str, str, object]] = []
         continuation: str | None = None
         while True:
             request: dict[str, Any] = {"Bucket": self._bucket, "Prefix": f"{root}/"}
@@ -133,17 +174,20 @@ class CommerceBatchPlanner:
                 key = item.get("Key", "")
                 match = manifest_pattern.fullmatch(key)
                 if match:
-                    keys.append((match.group(1), key))
+                    keys.append((match.group(1), key, item.get("LastModified")))
             if not response.get("IsTruncated"):
                 break
             continuation = response.get("NextContinuationToken")
             if not continuation:
                 raise CommerceBatchError("S3 listing is truncated without a continuation token")
 
-        batches = [self._read_manifest(batch_id, key) for batch_id, key in keys]
+        batches = [
+            self._read_manifest(batch_id, key, committed_at)
+            for batch_id, key, committed_at in keys
+        ]
         return sorted(batches, key=lambda batch: (batch.batch_at, batch.batch_id))
 
-    def _read_manifest(self, batch_id: str, key: str) -> CommerceBatch:
+    def _read_manifest(self, batch_id: str, key: str, committed_at: object) -> CommerceBatch:
         response = self._client.get_object(Bucket=self._bucket, Key=key)
         metadata = response.get("Metadata", {})
         body_stream = response["Body"]
@@ -176,6 +220,11 @@ class CommerceBatchPlanner:
             batch_at=parsed_batch_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
             manifest_sha256=checksum,
             path=f"s3://{self._bucket}/{key.removesuffix('manifest.json')}",
+            committed_at=(
+                committed_at
+                if isinstance(committed_at, datetime) and committed_at.tzinfo
+                else None
+            ),
         )
 
 
