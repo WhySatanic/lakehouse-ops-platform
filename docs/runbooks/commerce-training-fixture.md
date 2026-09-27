@@ -40,6 +40,23 @@ exit code 1 means `stale` because no committed batch exists or its age exceeds t
 configured limit. An invalid manifest or missing S3 timestamp fails closed as an error.
 This source check does not yet schedule or retry the downstream pipeline.
 
+Check whether committed batches have waited too long for the local processing
+checkpoint to advance:
+
+```bash
+uv run --env-file .env lakeops check-commerce-backlog \
+  --s3-bucket lakehouse --state data/state/commerce-batches.json \
+  --max-age-seconds 900
+```
+
+The JSON report names the oldest unprocessed commit and pending count. Exit code 1
+means its S3 commit is older than the limit; exit code 0 means the backlog is within
+the limit or empty. An empty backlog is not proof that new source data is arriving,
+so run this alongside `check-commerce-source-freshness`. A missing or changed
+processed manifest, unreadable checkpoint, or missing S3 timestamp is an error.
+The check reads but never advances the checkpoint; only downstream success should
+call `commit-commerce-batch`.
+
 The default batch contains 10,000 customers, 1,000 products, 100,000 canonical orders,
 100,000 payments, and 1,000 repeated order rows. It also includes exact, documented
 quality cases:

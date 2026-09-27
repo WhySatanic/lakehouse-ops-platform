@@ -158,6 +158,13 @@ def build_parser() -> argparse.ArgumentParser:
     _add_commerce_s3_arguments(commerce_freshness)
     commerce_freshness.add_argument("--max-age-seconds", type=int, default=900)
 
+    commerce_backlog = subparsers.add_parser(
+        "check-commerce-backlog",
+        help="check age of unprocessed committed commerce batches",
+    )
+    _add_commerce_batch_arguments(commerce_backlog)
+    commerce_backlog.add_argument("--max-age-seconds", type=int, default=900)
+
     commerce_gold = subparsers.add_parser(
         "check-commerce-gold", help="verify a selected commerce gold batch through Trino"
     )
@@ -541,6 +548,21 @@ def main(argv: list[str] | None = None) -> int:
         )
         try:
             report = planner.check_source_freshness(max_age_seconds=args.max_age_seconds)
+        except (OSError, CommerceBatchError) as error:
+            parser.error(str(error))
+        print(json.dumps(report, sort_keys=True))
+        return 0 if report["status"] == "ready" else 1
+    if args.command == "check-commerce-backlog":
+        if not args.s3_bucket:
+            parser.error("--s3-bucket is required")
+        planner = CommerceBatchPlanner(
+            _create_s3_client(args),
+            bucket=args.s3_bucket,
+            prefix=args.s3_prefix,
+            state_path=args.state,
+        )
+        try:
+            report = planner.check_backlog_freshness(max_age_seconds=args.max_age_seconds)
         except (OSError, CommerceBatchError) as error:
             parser.error(str(error))
         print(json.dumps(report, sort_keys=True))

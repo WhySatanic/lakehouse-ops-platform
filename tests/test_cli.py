@@ -200,6 +200,15 @@ def test_plan_and_commit_commerce_batch_commands(
         ]
     )
     plan = json.loads(capsys.readouterr().out)
+    backlog_args = [
+        "check-commerce-backlog", "--s3-bucket", "lakehouse", "--state", str(state)
+    ]
+    assert cli.main(backlog_args) == 0
+    assert json.loads(capsys.readouterr().out)["pending_batches"] == 1
+    manifest = next(key for key in s3_client.last_modified if key[1].endswith("manifest.json"))
+    s3_client.last_modified[manifest] = datetime.now(UTC) - timedelta(hours=1)
+    assert cli.main(backlog_args) == 1
+    assert json.loads(capsys.readouterr().out)["reason"] == "pending_age_limit_exceeded"
     commit_code = cli.main(
         [
             "commit-commerce-batch",
@@ -218,6 +227,8 @@ def test_plan_and_commit_commerce_batch_commands(
     assert commit_code == 0
     assert commit["created"] is True
     assert state.is_file()
+    assert cli.main(backlog_args) == 0
+    assert json.loads(capsys.readouterr().out)["pending_batches"] == 0
 
 
 def test_check_commerce_source_freshness_command(

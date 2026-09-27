@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -52,6 +53,12 @@ def test_real_minio_checkpoint_cannot_skip_older_batch(tmp_path: Path) -> None:
     planner = CommerceBatchPlanner(
         client, bucket=bucket, prefix=prefix, state_path=state_path
     )
+    assert planner.check_backlog_freshness(max_age_seconds=900)["pending_batches"] == 2
+    overdue = planner.check_backlog_freshness(
+        max_age_seconds=900, now=datetime.now(UTC) + timedelta(hours=1)
+    )
+    assert overdue["status"] == "stale"
+    assert overdue["pending_batches"] == 2
 
     with pytest.raises(CommerceBatchError, match="earlier unprocessed batch"):
         planner.commit(later.batch_id)
@@ -60,3 +67,4 @@ def test_real_minio_checkpoint_cannot_skip_older_batch(tmp_path: Path) -> None:
     assert planner.commit(earlier.batch_id)["created"] is True
     assert planner.commit(later.batch_id)["created"] is True
     assert planner.plan(max_batches=1)["selected_batches"] == 0
+    assert planner.check_backlog_freshness(max_age_seconds=900)["pending_batches"] == 0
