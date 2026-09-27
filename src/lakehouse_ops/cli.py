@@ -165,14 +165,17 @@ def build_parser() -> argparse.ArgumentParser:
     _add_commerce_batch_arguments(commerce_backlog)
     commerce_backlog.add_argument("--max-age-seconds", type=int, default=900)
 
+    commerce_complete = subparsers.add_parser(
+        "complete-commerce-batch",
+        help="verify selected commerce gold in Trino before advancing its checkpoint",
+    )
+    _add_commerce_batch_arguments(commerce_complete)
+    _add_commerce_gold_arguments(commerce_complete)
+
     commerce_gold = subparsers.add_parser(
         "check-commerce-gold", help="verify a selected commerce gold batch through Trino"
     )
-    commerce_gold.add_argument("--batch-id", required=True)
-    commerce_gold.add_argument(
-        "--server", default=os.getenv("TRINO_SERVER", "http://localhost:8080")
-    )
-    commerce_gold.add_argument("--user", default="lakehouse-ops")
+    _add_commerce_gold_arguments(commerce_gold)
 
     doctor = subparsers.add_parser("doctor", help="check landing backend readiness")
     _add_landing_arguments(doctor)
@@ -567,6 +570,27 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(str(error))
         print(json.dumps(report, sort_keys=True))
         return 0 if report["status"] == "ready" else 1
+    if args.command == "complete-commerce-batch":
+        if not args.s3_bucket:
+            parser.error("--s3-bucket is required")
+        planner = CommerceBatchPlanner(
+            _create_s3_client(args),
+            bucket=args.s3_bucket,
+            prefix=args.s3_prefix,
+            state_path=args.state,
+        )
+        try:
+            with TrinoClient(args.server, user=args.user) as client:
+                verification = check_commerce_gold(client.query, args.batch_id)
+            checkpoint = planner.commit(args.batch_id)
+        except (OSError, CommerceBatchError, CommerceGoldGateError) as error:
+            parser.error(str(error))
+        print(json.dumps({
+            "status": "ready",
+            "verification": verification.as_dict(),
+            "checkpoint": checkpoint,
+        }, sort_keys=True))
+        return 0
     if args.command == "check-commerce-gold":
         try:
             with TrinoClient(args.server, user=args.user) as client:
@@ -834,6 +858,12 @@ def _add_commerce_batch_arguments(parser: argparse.ArgumentParser) -> None:
         "--state", type=Path, default=Path("data/state/commerce-batches.json")
     )
     _add_commerce_s3_arguments(parser)
+
+
+def _add_commerce_gold_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--batch-id", required=True)
+    parser.add_argument("--server", default=os.getenv("TRINO_SERVER", "http://localhost:8080"))
+    parser.add_argument("--user", default="lakehouse-ops")
 
 
 def _add_commerce_s3_arguments(parser: argparse.ArgumentParser) -> None:
