@@ -346,6 +346,9 @@ def test_run_commerce_batch_command_preserves_state_on_failure_and_skips_idle(
     tmp_path: Path,
 ) -> None:
     from lakehouse_ops.commerce_pipeline import COMMERCE_STAGES, CommercePipelineError
+    from lakehouse_ops.commerce_runner_lock import CommerceRunnerBusyError, commerce_runner_lock
+
+    monkeypatch.chdir(tmp_path)
 
     fixture = cli.generate_commerce_fixture(tmp_path / "fixture", cli.CommerceFixtureConfig(
         customers=4, products=2, orders=6, null_customer_emails=1,
@@ -353,12 +356,28 @@ def test_run_commerce_batch_command_preserves_state_on_failure_and_skips_idle(
     ))
     s3_client = FakeS3Client()
     cli.CommerceS3LandingZone(s3_client, bucket="lakehouse").write(fixture.path)
-    monkeypatch.setattr(cli, "_create_s3_client", lambda args: s3_client)
     state = tmp_path / "checkpoint.json"
     stages = []
     statements = []
 
+    def create_s3(args: object) -> FakeS3Client:
+        with pytest.raises(CommerceRunnerBusyError), commerce_runner_lock():
+            pytest.fail("runner lock must cover S3 access")
+        return s3_client
+
+    original_commit = cli.CommerceBatchPlanner.commit
+
+    def commit(planner: Any, batch_id: str, **kwargs: Any) -> dict[str, Any]:
+        with pytest.raises(CommerceRunnerBusyError), commerce_runner_lock():
+            pytest.fail("runner lock must cover checkpoint completion")
+        return original_commit(planner, batch_id, **kwargs)
+
+    monkeypatch.setattr(cli, "_create_s3_client", create_s3)
+    monkeypatch.setattr(cli.CommerceBatchPlanner, "commit", commit)
+
     def execute(service: str, batch: dict[str, str], *, bucket: str) -> None:
+        with pytest.raises(CommerceRunnerBusyError), commerce_runner_lock():
+            pytest.fail("runner lock must cover Compose execution")
         assert bucket == "lakehouse"
         assert batch["batch_id"] == fixture.batch_id
         assert not state.exists()
@@ -377,6 +396,8 @@ def test_run_commerce_batch_command_preserves_state_on_failure_and_skips_idle(
             pass
 
         def query(self, sql: str) -> list[dict[str, int]]:
+            with pytest.raises(CommerceRunnerBusyError), commerce_runner_lock():
+                pytest.fail("runner lock must cover Trino verification")
             assert len(stages) == len(COMMERCE_STAGES)
             assert not state.exists()
             statements.append(sql)
@@ -409,6 +430,43 @@ def test_run_commerce_batch_command_preserves_state_on_failure_and_skips_idle(
         cli.main([*args, "--s3-prefix", "other"])
     assert error.value.code == 2
     assert "requires --s3-prefix landing" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("checkpoint", ["one.json", "another.json"])
+def test_run_commerce_workspace_lock_rejects_competitor_before_s3(
+    checkpoint: str, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str], tmp_path: Path,
+) -> None:
+    from lakehouse_ops.commerce_runner_lock import commerce_runner_lock
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli, "_create_s3_client", lambda args: pytest.fail("must not access S3"))
+    with commerce_runner_lock(), pytest.raises(SystemExit) as error:
+        cli.main(["run-commerce-batch", "--s3-bucket", "lakehouse", "--state", checkpoint])
+    assert error.value.code == 2
+    captured = capsys.readouterr()
+    assert "another commerce runner holds" in captured.err
+    assert captured.out == ""
+    assert not (tmp_path / checkpoint).exists()
+
+
+def test_run_commerce_releases_lock_after_s3_failure(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path,
+) -> None:
+    from lakehouse_ops.commerce_runner_lock import commerce_runner_lock
+
+    monkeypatch.chdir(tmp_path)
+
+    def fail(args: object) -> None:
+        raise OSError("S3 unavailable")
+
+    monkeypatch.setattr(cli, "_create_s3_client", fail)
+    with pytest.raises(SystemExit) as error:
+        cli.main(["run-commerce-batch", "--s3-bucket", "lakehouse"])
+    assert error.value.code == 2
+    assert "S3 unavailable" in capsys.readouterr().err
+    with commerce_runner_lock():
+        pass
 
 
 @pytest.mark.parametrize(

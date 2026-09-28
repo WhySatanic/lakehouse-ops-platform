@@ -8,6 +8,7 @@ import pytest
 
 from lakehouse_ops import cli
 from lakehouse_ops.commerce_gold_gate import check_commerce_gold_with_retry
+from lakehouse_ops.commerce_runner_lock import commerce_runner_lock
 
 
 def test_fault_drill_delegates_recovery_and_retains_attempt_evidence(
@@ -37,7 +38,8 @@ def test_fault_drill_delegates_recovery_and_retains_attempt_evidence(
 
     def command(arguments: list[str]) -> int:
         assert arguments == ["run-commerce-batch", "--attempts", "3"]
-        with cli.TrinoClient("http://test.invalid", user="test") as trino:
+        with commerce_runner_lock(), cli.TrinoClient("http://test.invalid", user="test") as trino:
+            cli.run_compose_stage("bronze-input-sync", {}, bucket="test")
             report = check_commerce_gold_with_retry(
                 trino.query, "a" * 16, attempts=3, delay_seconds=0,
             )
@@ -46,10 +48,13 @@ def test_fault_drill_delegates_recovery_and_retains_attempt_evidence(
 
     monkeypatch.setattr(httpx, "Client", client)
     monkeypatch.setattr(cli, "main", command)
+    monkeypatch.setattr(cli, "run_compose_stage", lambda *args, **kwargs: None)
+    monkeypatch.chdir(tmp_path)
     evidence = tmp_path / "artifacts" / "retry.json"
     exercise(["--attempts", "3"], evidence)
     assert len(forwarded) == 1
     assert json.loads(evidence.read_text()) == {
         "status": "ready", "injected_http_status": 503, "statement_attempts": 2,
         "verification_backend": "real_trino",
+        "competing_runner_exit_code": 2,
     }
