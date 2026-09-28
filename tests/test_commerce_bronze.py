@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -16,6 +17,18 @@ from lakehouse_ops.ingestion.commerce_fixture import (
     CommerceFixtureConfig,
     generate_commerce_fixture,
 )
+
+
+def test_bronze_manifest_is_bound_to_selected_s3_commit(batch_path: Path) -> None:
+    batch_id = batch_path.name.removeprefix("batch_id=")
+    checksum = hashlib.sha256((batch_path / "manifest.json").read_bytes()).hexdigest()
+    assert load_commerce_batch(
+        batch_path, expected_batch_id=batch_id, expected_manifest_sha256=checksum,
+    ).batch_id == batch_id
+    with pytest.raises(CommerceBronzeError, match="differs from the selected S3 commit"):
+        load_commerce_batch(
+            batch_path, expected_batch_id=batch_id, expected_manifest_sha256="0" * 64,
+        )
 
 
 def test_contract_module_does_not_load_optional_http_client() -> None:

@@ -30,13 +30,21 @@ class CommerceBatchDirectory:
     tables: tuple[CommerceTableFile, ...]
 
 
-def load_commerce_batch(path: Path, *, expected_batch_id: str) -> CommerceBatchDirectory:
+def load_commerce_batch(
+    path: Path, *, expected_batch_id: str, expected_manifest_sha256: str | None = None,
+) -> CommerceBatchDirectory:
     if not re.fullmatch(r"[0-9a-f]{16}", expected_batch_id):
         raise CommerceBronzeError("batch_id must contain 16 lowercase hexadecimal characters")
     if path.name != f"batch_id={expected_batch_id}":
         raise CommerceBronzeError("batch directory does not match batch_id")
     try:
-        manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
+        manifest_bytes = (path / "manifest.json").read_bytes()
+        if (
+            expected_manifest_sha256 is not None
+            and hashlib.sha256(manifest_bytes).hexdigest() != expected_manifest_sha256
+        ):
+            raise CommerceBronzeError("commerce manifest differs from the selected S3 commit")
+        manifest = json.loads(manifest_bytes)
     except (OSError, json.JSONDecodeError) as error:
         raise CommerceBronzeError(f"commerce manifest is unreadable: {error}") from error
     if manifest.get("schema_version") != 1 or manifest.get("batch_id") != expected_batch_id:

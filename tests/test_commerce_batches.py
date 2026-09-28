@@ -182,6 +182,18 @@ def test_plans_unprocessed_committed_batches_in_event_time_order(
     assert report["batches"][0]["path"].endswith("batch_id=aaaaaaaaaaaaaaaa/")
 
 
+def test_commit_rejects_a_manifest_changed_since_planning(
+    client: FakeS3Client, tmp_path: Path,
+) -> None:
+    state = tmp_path / "state.json"
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state)
+    batch = planner.plan(max_batches=1)["batches"][0]
+    client.add_manifest(batch["batch_id"], "2026-01-02T00:00:00Z")
+    with pytest.raises(CommerceBatchError, match="changed during processing"):
+        planner.commit(batch["batch_id"], expected_manifest_sha256=batch["manifest_sha256"])
+    assert not state.exists()
+
+
 def test_commit_is_atomic_idempotent_and_advances_incremental_plan(
     client: FakeS3Client, tmp_path: Path
 ) -> None:

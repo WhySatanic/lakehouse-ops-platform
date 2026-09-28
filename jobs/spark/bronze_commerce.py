@@ -237,7 +237,10 @@ def main() -> None:
     batch_id = required_environment("COMMERCE_BATCH_ID")
     input_root = Path(os.environ.get("COMMERCE_INPUT_ROOT", "/opt/lakehouse/input"))
     batch_path = input_root / "source=commerce" / f"batch_id={batch_id}"
-    batch = load_commerce_batch(batch_path, expected_batch_id=batch_id)
+    batch = load_commerce_batch(
+        batch_path, expected_batch_id=batch_id,
+        expected_manifest_sha256=os.getenv("COMMERCE_MANIFEST_SHA256") or None,
+    )
     spark = build_session("lakehouse-ops-bronze-commerce")
     spark.sparkContext.setLogLevel("WARN")
     try:

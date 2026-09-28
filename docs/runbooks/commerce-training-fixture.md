@@ -138,6 +138,45 @@ uv run --env-file .env lakeops plan-commerce-batches \
   --max-batches 1
 ```
 
+### One-shot batch runner
+
+From the repository root, with Compose images built, MinIO initialized, Hive Metastore
+healthy, and Trino coordinator/workers running, process one next pending batch:
+
+```bash
+uv run --env-file .env lakeops run-commerce-batch \
+  --s3-bucket lakehouse --s3-endpoint-url http://localhost:9000 \
+  --state data/state/commerce-batches.json \
+  --server http://localhost:8080 --user lakehouse-ops
+```
+
+The runner selects exactly one committed batch in planner order, syncs landing input,
+then executes bronze, payment/order/product/customer silver, customer SCD2, and daily
+gold jobs in sequence. These jobs perform their built-in validation, reconciliation,
+and post-condition checks. Only then does the selected-batch Trino gold gate allow the
+checkpoint to advance. The selected manifest checksum is passed to bronze and checked
+again before committing state, so changed source content cannot silently advance it.
+The JSON result lists completed stages and verified gold totals; Spark/Compose logs go
+to stderr. CI exercises a fresh fixture through this command, retains the report, and
+then runs the existing exact-count/replay acceptance checks separately.
+
+An empty queue returns `status: idle` without starting jobs or querying Trino. Stage,
+gold, manifest, and checkpoint failures leave processing state unchanged; existing
+Iceberg writes are not rolled back. Inspect the named failed stage before rerunning.
+Earlier idempotent jobs may be replayed after a partial attempt, but an older changed
+customer batch still fails SCD2 ordering checks. Keep a single state writer and immutable
+commit markers. Do not run two runners against the same checkpoint or input volume.
+
+This is an opt-in local Compose runner, not a scheduler or a generic remote-S3 runner.
+Its S3 endpoint must refer to the same MinIO as Compose; Trino must query that stack.
+Only the `landing` prefix is supported. The selected bucket overrides `LAKEHOUSE_BUCKET`
+for child jobs. Services use `--no-deps` so they never bootstrap unrelated fixtures or
+start missing infrastructure implicitly. No automatic Spark retry, per-job timeout,
+cancellation cleanup, freshness policy, or notifications are added here. Scheduling
+and measured recovery remain planned. Existing manual commands remain supported.
+
+### Manual processing
+
 Pass each returned `path` to the downstream Spark job. Advance the checkpoint only after
 that job and its quality checks succeed:
 
