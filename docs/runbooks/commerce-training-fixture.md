@@ -191,6 +191,7 @@ captured revenue:
 ```bash
 uv run --env-file .env lakeops check-commerce-gold \
   --batch-id <batch-id> \
+  --attempts 3 --retry-delay-seconds 2 \
   --server http://localhost:8080
 ```
 
@@ -210,6 +211,13 @@ checkpoint untouched. Its JSON includes both verification and checkpoint results
 It does not run Spark or replace the per-model quality checks above. The lower-level
 `commit-commerce-batch` remains available for callers that already verified downstream
 success. Keep one checkpoint writer per state file.
+
+Completion retries only read-only Trino queries after transport failures or HTTP
+429, 502, 503, or 504. SQL errors, malformed responses, and invalid gold results
+fail immediately. The default is one attempt; opt in with `--attempts` (1 to 5)
+and `--retry-delay-seconds` (0 to 60, default 2). Retry notices go to stderr;
+stdout remains the final JSON report. Exhausting attempts never advances the
+checkpoint. This is bounded query recovery, not pipeline scheduling or Spark retry.
 
 The checkpoint is written atomically. A repeated commit is a no-op. Planning fails if a
 processed manifest has changed, so the same batch ID cannot silently acquire different

@@ -11,7 +11,11 @@ import boto3
 from lakehouse_ops import __version__
 from lakehouse_ops.access_policy import AccessPolicyError, render_trino_policy
 from lakehouse_ops.break_glass import BreakGlassError
-from lakehouse_ops.commerce_gold_gate import CommerceGoldGateError, check_commerce_gold
+from lakehouse_ops.commerce_gold_gate import (
+    CommerceGoldGateError,
+    check_commerce_gold,
+    check_commerce_gold_with_retry,
+)
 from lakehouse_ops.control_plane_contract import (
     ControlPlaneContractError,
     refresh_control_plane_schema_digests,
@@ -171,6 +175,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_commerce_batch_arguments(commerce_complete)
     _add_commerce_gold_arguments(commerce_complete)
+    commerce_complete.add_argument("--attempts", type=int, default=1)
+    commerce_complete.add_argument("--retry-delay-seconds", type=float, default=2)
 
     commerce_gold = subparsers.add_parser(
         "check-commerce-gold", help="verify a selected commerce gold batch through Trino"
@@ -581,7 +587,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         try:
             with TrinoClient(args.server, user=args.user) as client:
-                verification = check_commerce_gold(client.query, args.batch_id)
+                verification = check_commerce_gold_with_retry(
+                    client.query, args.batch_id,
+                    attempts=args.attempts, delay_seconds=args.retry_delay_seconds,
+                )
             checkpoint = planner.commit(args.batch_id)
         except (OSError, CommerceBatchError, CommerceGoldGateError) as error:
             parser.error(str(error))

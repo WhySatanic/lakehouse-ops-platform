@@ -8,6 +8,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Self
 
+import httpx
 import pytest
 
 from lakehouse_ops import __version__, cli
@@ -287,7 +288,7 @@ def test_check_commerce_gold_command(
     assert json.loads(capsys.readouterr().out)["status"] == "ready"
 
 
-@pytest.mark.parametrize("result", ["ready", "empty", "transport"])
+@pytest.mark.parametrize("result", ["ready", "empty", "transport", "retry"])
 def test_complete_commerce_batch_only_checkpoints_verified_gold(
     result: str,
     monkeypatch: pytest.MonkeyPatch,
@@ -305,6 +306,7 @@ def test_complete_commerce_batch_only_checkpoints_verified_gold(
     cli.CommerceS3LandingZone(s3_client, bucket="lakehouse").write(fixture.path)
     monkeypatch.setattr(cli, "_create_s3_client", lambda args: s3_client)
     state = tmp_path / "checkpoint.json"
+    calls = 0
 
     class FakeTrinoClient:
         def __init__(self, server: str, *, user: str) -> None:
@@ -317,12 +319,17 @@ def test_complete_commerce_batch_only_checkpoints_verified_gold(
             return None
 
         def query(self, sql: str) -> list[dict[str, int]]:
+            nonlocal calls
+            calls += 1
             assert fixture.batch_id in sql
             if result == "transport":
-                raise RuntimeError("Trino unavailable")
+                raise httpx.ConnectError("Trino unavailable")
+            if result == "retry" and calls == 1:
+                assert not state.exists()
+                raise httpx.ConnectError("Trino unavailable")
             return [{
-                "days": 2 if result == "ready" else 0,
-                "orders": 6 if result == "ready" else 0,
+                "days": 2 if result in {"ready", "retry"} else 0,
+                "orders": 6 if result in {"ready", "retry"} else 0,
                 "captured_revenue_cents": 900, "invalid_days": 0,
             }]
 
@@ -331,7 +338,9 @@ def test_complete_commerce_batch_only_checkpoints_verified_gold(
         "complete-commerce-batch", "--batch-id", fixture.batch_id,
         "--s3-bucket", "lakehouse", "--state", str(state),
     ]
-    if result == "ready":
+    if result == "retry":
+        args.extend(["--attempts", "2", "--retry-delay-seconds", "0"])
+    if result in {"ready", "retry"}:
         assert cli.main(args) == 0
         report = json.loads(capsys.readouterr().out)
         assert report["verification"]["status"] == "ready"
@@ -345,7 +354,7 @@ def test_complete_commerce_batch_only_checkpoints_verified_gold(
             cli.main(args)
         assert not state.exists()
     else:
-        with pytest.raises(RuntimeError, match="Trino unavailable"):
+        with pytest.raises(httpx.ConnectError, match="Trino unavailable"):
             cli.main(args)
         assert not state.exists()
 
