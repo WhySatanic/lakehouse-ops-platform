@@ -38,15 +38,7 @@ def check_commerce_gold_with_retry(
     delay_seconds: float = 2,
     sleep: Callable[[float], None] = time.sleep,
 ) -> CommerceGoldReport:
-    if isinstance(attempts, bool) or not isinstance(attempts, int) or not 1 <= attempts <= 5:
-        raise CommerceGoldGateError("attempts must be an integer between 1 and 5")
-    if (
-        isinstance(delay_seconds, bool)
-        or not isinstance(delay_seconds, (int, float))
-        or not math.isfinite(delay_seconds)
-        or not 0 <= delay_seconds <= 60
-    ):
-        raise CommerceGoldGateError("delay_seconds must be finite and between 0 and 60")
+    validate_commerce_gold_retry(attempts, delay_seconds)
     for attempt in range(1, attempts + 1):
         try:
             return check_commerce_gold(query, batch_id)
@@ -62,6 +54,18 @@ def check_commerce_gold_with_retry(
             )
             sleep(delay_seconds)
     raise AssertionError("commerce gold retry loop exhausted unexpectedly")
+
+
+def validate_commerce_gold_retry(attempts: int, delay_seconds: float) -> None:
+    if isinstance(attempts, bool) or not isinstance(attempts, int) or not 1 <= attempts <= 5:
+        raise CommerceGoldGateError("attempts must be an integer between 1 and 5")
+    if (
+        isinstance(delay_seconds, bool)
+        or not isinstance(delay_seconds, (int, float))
+        or not math.isfinite(delay_seconds)
+        or not 0 <= delay_seconds <= 60
+    ):
+        raise CommerceGoldGateError("delay_seconds must be finite and between 0 and 60")
 
 
 def check_commerce_gold(

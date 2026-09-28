@@ -460,13 +460,15 @@ jobs:
         run: >-
           docker compose --profile query up -d --wait
           trino-coordinator trino-worker trino-worker-2
-      - name: Run one pending commerce batch and verify idle rerun
+      - name: Run one pending commerce batch with transient Trino recovery and idle rerun
         env:
           AWS_ACCESS_KEY_ID: lakeops-ingest
           AWS_SECRET_ACCESS_KEY: ingest-development-only
         run: |
-          uv run lakeops run-commerce-batch --s3-bucket lakehouse \
+          uv run python tests/integration/exercise_commerce_runner_retry.py \
+            --retry-evidence artifacts/commerce-runner-retry.json --s3-bucket lakehouse \
             --s3-endpoint-url http://localhost:9000 --user lakehouse-ci \
+            --attempts 3 --retry-delay-seconds 0 \
             --state data/state/commerce-runner-ci.json > artifacts/commerce-runner.json
           uv run lakeops run-commerce-batch --s3-bucket lakehouse \
             --s3-endpoint-url http://localhost:9000 --user lakehouse-ci \
@@ -1113,6 +1115,9 @@ jobs:
             artifacts/platform-slos.json
             artifacts/ingestion-freshness-recovery.json
             artifacts/trino-upgrade-rehearsal.json
+            artifacts/commerce-runner.json
+            artifacts/commerce-runner-idle.json
+            artifacts/commerce-runner-retry.json
           if-no-files-found: error
           overwrite: true
       - name: Show service logs

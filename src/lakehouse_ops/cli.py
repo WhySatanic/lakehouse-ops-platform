@@ -17,6 +17,7 @@ from lakehouse_ops.commerce_gold_gate import (
     CommerceGoldGateError,
     check_commerce_gold,
     check_commerce_gold_with_retry,
+    validate_commerce_gold_retry,
 )
 from lakehouse_ops.commerce_pipeline import (
     CommercePipelineError,
@@ -183,6 +184,8 @@ def build_parser() -> argparse.ArgumentParser:
     _add_commerce_batch_arguments(commerce_run)
     commerce_run.add_argument("--server", default="http://localhost:8080")
     commerce_run.add_argument("--user", default="lakehouse-ops")
+    commerce_run.add_argument("--attempts", type=int, default=1)
+    commerce_run.add_argument("--retry-delay-seconds", type=float, default=2)
 
     commerce_alerts = subparsers.add_parser(
         "notify-commerce-freshness",
@@ -607,6 +610,10 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--s3-bucket is required")
         if args.s3_prefix.strip("/") != "landing":
             parser.error("commerce Compose runner requires --s3-prefix landing")
+        try:
+            validate_commerce_gold_retry(args.attempts, args.retry_delay_seconds)
+        except CommerceGoldGateError as error:
+            parser.error(str(error))
         planner = CommerceBatchPlanner(
             _create_s3_client(args), bucket=args.s3_bucket, prefix=args.s3_prefix,
             state_path=args.state,
@@ -618,6 +625,7 @@ def main(argv: list[str] | None = None) -> int:
                     run_stage=lambda service, batch: run_compose_stage(
                         service, batch, bucket=args.s3_bucket,
                     ),
+                    attempts=args.attempts, delay_seconds=args.retry_delay_seconds,
                 )
         except (
             OSError, CommerceBatchError, CommerceGoldGateError, CommercePipelineError,
