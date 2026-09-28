@@ -7,10 +7,12 @@ from pathlib import Path
 from typing import Any
 
 import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 
 from lakehouse_ops import __version__
 from lakehouse_ops.access_policy import AccessPolicyError, render_trino_policy
 from lakehouse_ops.break_glass import BreakGlassError
+from lakehouse_ops.commerce_alerts import CommerceAlertError, notify_commerce_freshness
 from lakehouse_ops.commerce_gold_gate import (
     CommerceGoldGateError,
     check_commerce_gold,
@@ -168,6 +170,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_commerce_batch_arguments(commerce_backlog)
     commerce_backlog.add_argument("--max-age-seconds", type=int, default=900)
+
+    commerce_alerts = subparsers.add_parser(
+        "notify-commerce-freshness",
+        help="send source and processing freshness observations to Alertmanager",
+    )
+    _add_commerce_batch_arguments(commerce_alerts)
+    commerce_alerts.add_argument("--alertmanager-server", default="http://localhost:9093")
+    commerce_alerts.add_argument("--instance", required=True)
+    commerce_alerts.add_argument("--source-max-age-seconds", type=int, default=900)
+    commerce_alerts.add_argument("--backlog-max-age-seconds", type=int, default=900)
+    commerce_alerts.add_argument("--alert-valid-seconds", type=int, default=180)
 
     commerce_complete = subparsers.add_parser(
         "complete-commerce-batch",
@@ -573,6 +586,26 @@ def main(argv: list[str] | None = None) -> int:
         try:
             report = planner.check_backlog_freshness(max_age_seconds=args.max_age_seconds)
         except (OSError, CommerceBatchError) as error:
+            parser.error(str(error))
+        print(json.dumps(report, sort_keys=True))
+        return 0 if report["status"] == "ready" else 1
+    if args.command == "notify-commerce-freshness":
+        if not args.s3_bucket:
+            parser.error("--s3-bucket is required")
+        planner = CommerceBatchPlanner(
+            _create_s3_client(args), bucket=args.s3_bucket, prefix=args.s3_prefix,
+            state_path=args.state,
+        )
+        try:
+            report = notify_commerce_freshness(
+                planner, server=args.alertmanager_server, instance=args.instance,
+                source_max_age_seconds=args.source_max_age_seconds,
+                backlog_max_age_seconds=args.backlog_max_age_seconds,
+                valid_seconds=args.alert_valid_seconds,
+            )
+        except (
+            OSError, CommerceBatchError, CommerceAlertError, BotoCoreError, ClientError,
+        ) as error:
             parser.error(str(error))
         print(json.dumps(report, sort_keys=True))
         return 0 if report["status"] == "ready" else 1
