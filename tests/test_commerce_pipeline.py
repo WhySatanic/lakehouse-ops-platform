@@ -109,6 +109,73 @@ def test_planning_failure_prevents_compute(monkeypatch: pytest.MonkeyPatch) -> N
         pipeline.run_commerce_batch(planner, gold, run_stage=forbidden)
 
 
+def test_transient_gold_retry_does_not_repeat_compute() -> None:
+    planner = Planner()
+    stages = []
+    statements = []
+
+    def query(sql: str) -> list[dict[str, int]]:
+        assert planner.commits == []
+        statements.append(sql)
+        if len(statements) == 1:
+            raise httpx.ConnectError("coordinator restarting")
+        return gold(sql)
+
+    report = pipeline.run_commerce_batch(
+        planner, query, run_stage=lambda service, batch: stages.append(service),
+        attempts=3, delay_seconds=0,
+    )
+    assert report["status"] == "ready"
+    assert len(statements) == 2
+    assert statements[0] == statements[1]
+    assert stages == list(pipeline.COMMERCE_STAGES)
+    assert planner.commits == [BATCH["batch_id"]]
+
+
+@pytest.mark.parametrize("failure", ["transport", "protocol", "query", "quality"])
+def test_retry_failure_preserves_checkpoint_without_repeating_compute(failure: str) -> None:
+    planner = Planner()
+    stages = []
+    statements = []
+
+    def query(sql: str) -> list[dict[str, int]]:
+        statements.append(sql)
+        if failure == "transport":
+            raise httpx.ReadTimeout("unavailable")
+        if failure == "protocol":
+            raise pipeline.TrinoProtocolError("invalid JSON")
+        if failure == "query":
+            raise pipeline.TrinoQueryError("invalid SQL")
+        return [{"days": 0, "orders": 0, "captured_revenue_cents": 0, "invalid_days": 0}]
+
+    with pytest.raises(pipeline.CommercePipelineError, match="verify-commerce-gold"):
+        pipeline.run_commerce_batch(
+            planner, query, run_stage=lambda service, batch: stages.append(service),
+            attempts=3, delay_seconds=0,
+        )
+    assert len(statements) == (3 if failure == "transport" else 1)
+    assert stages == list(pipeline.COMMERCE_STAGES)
+    assert planner.commits == []
+
+
+@pytest.mark.parametrize("pending", [True, False])
+@pytest.mark.parametrize(
+    ("attempts", "delay"), [(0, 0), (6, 0), (True, 0), (1, -1), (1, 61), (1, float("nan"))]
+)
+def test_invalid_retry_bounds_fail_before_planning(
+    pending: bool, attempts: int, delay: float, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from lakehouse_ops.commerce_gold_gate import CommerceGoldGateError
+
+    planner = Planner(pending)
+    monkeypatch.setattr(planner, "plan", lambda **kwargs: pytest.fail("must not plan"))
+    with pytest.raises(CommerceGoldGateError):
+        pipeline.run_commerce_batch(
+            planner, gold, run_stage=lambda *_: pytest.fail("must not compute"),
+            attempts=attempts, delay_seconds=delay,
+        )
+
+
 @pytest.mark.parametrize("failure", [None, "process", "missing"])
 def test_compose_adapter_binds_scope_and_keeps_stdout_for_json(
     monkeypatch: pytest.MonkeyPatch, failure: str | None,

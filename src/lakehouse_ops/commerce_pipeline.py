@@ -8,7 +8,11 @@ from typing import Any
 
 import httpx
 
-from lakehouse_ops.commerce_gold_gate import CommerceGoldGateError, check_commerce_gold
+from lakehouse_ops.commerce_gold_gate import (
+    CommerceGoldGateError,
+    check_commerce_gold_with_retry,
+    validate_commerce_gold_retry,
+)
 from lakehouse_ops.ingestion.commerce_batches import CommerceBatchPlanner
 from lakehouse_ops.trino import TrinoProtocolError, TrinoQueryError
 
@@ -48,7 +52,10 @@ def run_commerce_batch(
     query: Callable[[str], list[dict[str, Any]]],
     *,
     run_stage: Callable[[str, dict[str, str]], None],
+    attempts: int = 1,
+    delay_seconds: float = 2,
 ) -> dict[str, Any]:
+    validate_commerce_gold_retry(attempts, delay_seconds)
     plan = planner.plan(max_batches=1)
     if not plan["batches"]:
         return {"status": "idle", "batch_id": None, "completed_stages": []}
@@ -59,7 +66,9 @@ def run_commerce_batch(
         run_stage(service, batch)
         completed.append(service)
     try:
-        verification = check_commerce_gold(query, batch_id)
+        verification = check_commerce_gold_with_retry(
+            query, batch_id, attempts=attempts, delay_seconds=delay_seconds,
+        )
     except (CommerceGoldGateError, httpx.HTTPError, TrinoProtocolError, TrinoQueryError) as error:
         raise CommercePipelineError("commerce stage failed: verify-commerce-gold") from error
     checkpoint = planner.commit(batch_id, expected_manifest_sha256=batch["manifest_sha256"])

@@ -338,7 +338,7 @@ def test_check_commerce_gold_command(
     assert json.loads(capsys.readouterr().out)["status"] == "ready"
 
 
-@pytest.mark.parametrize("result", ["ready", "stage_failure", "empty"])
+@pytest.mark.parametrize("result", ["ready", "stage_failure", "empty", "retry", "transport"])
 def test_run_commerce_batch_command_preserves_state_on_failure_and_skips_idle(
     result: str,
     monkeypatch: pytest.MonkeyPatch,
@@ -356,6 +356,7 @@ def test_run_commerce_batch_command_preserves_state_on_failure_and_skips_idle(
     monkeypatch.setattr(cli, "_create_s3_client", lambda args: s3_client)
     state = tmp_path / "checkpoint.json"
     stages = []
+    statements = []
 
     def execute(service: str, batch: dict[str, str], *, bucket: str) -> None:
         assert bucket == "lakehouse"
@@ -378,13 +379,17 @@ def test_run_commerce_batch_command_preserves_state_on_failure_and_skips_idle(
         def query(self, sql: str) -> list[dict[str, int]]:
             assert len(stages) == len(COMMERCE_STAGES)
             assert not state.exists()
-            return [{"days": 2 if result == "ready" else 0,
+            statements.append(sql)
+            if result == "transport" or (result == "retry" and len(statements) == 1):
+                raise httpx.ConnectError("coordinator offline")
+            return [{"days": 2 if result in {"ready", "retry"} else 0,
                      "orders": 6, "captured_revenue_cents": 1000, "invalid_days": 0}]
 
     monkeypatch.setattr(cli, "run_compose_stage", execute)
     monkeypatch.setattr(cli, "TrinoClient", FakeTrinoClient)
-    args = ["run-commerce-batch", "--s3-bucket", "lakehouse", "--state", str(state)]
-    if result == "ready":
+    args = ["run-commerce-batch", "--s3-bucket", "lakehouse", "--state", str(state),
+            "--attempts", "3", "--retry-delay-seconds", "0"]
+    if result in {"ready", "retry"}:
         assert cli.main(args) == 0
         assert json.loads(capsys.readouterr().out)["checkpoint"]["created"] is True
         before = state.read_bytes()
@@ -392,16 +397,36 @@ def test_run_commerce_batch_command_preserves_state_on_failure_and_skips_idle(
         assert json.loads(capsys.readouterr().out)["status"] == "idle"
         assert state.read_bytes() == before
         assert stages == list(COMMERCE_STAGES)
+        assert len(statements) == (2 if result == "retry" else 1)
     else:
         with pytest.raises(SystemExit) as error:
             cli.main(args)
         assert error.value.code == 2
         assert "stage failed" in capsys.readouterr().err
         assert not state.exists()
+        assert len(statements) == (3 if result == "transport" else int(result == "empty"))
     with pytest.raises(SystemExit) as error:
         cli.main([*args, "--s3-prefix", "other"])
     assert error.value.code == 2
     assert "requires --s3-prefix landing" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [("--attempts", "0"), ("--attempts", "6"), ("--retry-delay-seconds", "-1"),
+     ("--retry-delay-seconds", "61"), ("--retry-delay-seconds", "nan")],
+)
+def test_run_commerce_rejects_retry_bounds_before_s3(
+    option: str, value: str, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(cli, "_create_s3_client", lambda args: pytest.fail("must not access S3"))
+    with pytest.raises(SystemExit) as error:
+        cli.main(["run-commerce-batch", "--s3-bucket", "lakehouse", option, value])
+    assert error.value.code == 2
+    captured = capsys.readouterr()
+    assert "must be" in captured.err
+    assert captured.out == ""
 
 
 @pytest.mark.parametrize("result", ["ready", "empty", "transport", "retry"])
