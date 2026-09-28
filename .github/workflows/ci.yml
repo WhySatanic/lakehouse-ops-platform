@@ -454,20 +454,28 @@ jobs:
           uv run lakeops check-commerce-source-freshness
           --s3-bucket lakehouse --s3-endpoint-url http://localhost:9000
           --max-age-seconds 900
-      - name: Sync commerce bronze input
-        run: docker compose --profile compute run --rm bronze-input-sync
-      - name: Write commerce Iceberg bronze tables
+      - name: Start Trino before commerce pipeline completion
+        env:
+          TRINO_SERVER_IMAGE: trinodb/trino:482@sha256:90b35b7c603eaa1f889bf03981a62b75f998ee6c0f851d9f4e341b49a57022b6
         run: >-
-          docker compose --profile catalog --profile compute run --rm
-          spark-commerce-bronze
+          docker compose --profile query up -d --wait
+          trino-coordinator trino-worker trino-worker-2
+      - name: Run one pending commerce batch and verify idle rerun
+        env:
+          AWS_ACCESS_KEY_ID: lakeops-ingest
+          AWS_SECRET_ACCESS_KEY: ingest-development-only
+        run: |
+          uv run lakeops run-commerce-batch --s3-bucket lakehouse \
+            --s3-endpoint-url http://localhost:9000 --user lakehouse-ci \
+            --state data/state/commerce-runner-ci.json > artifacts/commerce-runner.json
+          uv run lakeops run-commerce-batch --s3-bucket lakehouse \
+            --s3-endpoint-url http://localhost:9000 --user lakehouse-ci \
+            --state data/state/commerce-runner-ci.json > artifacts/commerce-runner-idle.json
+          uv run python -c 'import json; r=json.load(open("artifacts/commerce-runner.json")); idle=json.load(open("artifacts/commerce-runner-idle.json")); assert r["status"]=="ready"; assert r["checkpoint"]["created"] is True; assert len(r["completed_stages"])==8; assert idle["status"]=="idle"; assert idle["completed_stages"]==[]'
       - name: Verify idempotent commerce replay
         run: >-
           docker compose --profile catalog --profile compute run --rm
           spark-commerce-bronze
-      - name: Build commerce payment silver tables
-        run: >-
-          docker compose --profile catalog --profile compute run --rm
-          spark-commerce-payment-silver
       - name: Verify idempotent commerce payment replay
         run: >-
           docker compose --profile catalog --profile compute run --rm
@@ -476,10 +484,6 @@ jobs:
         run: >-
           docker compose --profile catalog --profile compute run --rm
           commerce-payment-silver-check
-      - name: Build commerce order silver tables
-        run: >-
-          docker compose --profile catalog --profile compute run --rm
-          spark-commerce-order-silver
       - name: Verify idempotent commerce order replay
         run: >-
           docker compose --profile catalog --profile compute run --rm
@@ -488,10 +492,6 @@ jobs:
         run: >-
           docker compose --profile catalog --profile compute run --rm
           commerce-order-silver-check
-      - name: Build commerce product silver tables
-        run: >-
-          docker compose --profile catalog --profile compute run --rm
-          spark-commerce-product-silver
       - name: Verify idempotent commerce product replay
         run: >-
           docker compose --profile catalog --profile compute run --rm
@@ -500,10 +500,6 @@ jobs:
         run: >-
           docker compose --profile catalog --profile compute run --rm
           commerce-product-silver-check
-      - name: Build commerce customer silver tables
-        run: >-
-          docker compose --profile catalog --profile compute run --rm
-          spark-commerce-customer-silver
       - name: Verify idempotent commerce customer replay
         run: >-
           docker compose --profile catalog --profile compute run --rm
@@ -512,10 +508,6 @@ jobs:
         run: >-
           docker compose --profile catalog --profile compute run --rm
           commerce-customer-silver-check
-      - name: Build initial commerce customer history
-        run: >-
-          docker compose --profile catalog --profile compute run --rm
-          spark-commerce-customer-scd2
       - name: Seed one changed customer batch
         run: |
           export COMMERCE_HISTORY_BATCH_ID="${COMMERCE_BATCH_ID}-history"
@@ -547,10 +539,6 @@ jobs:
           COMMERCE_BATCH_ID="${COMMERCE_HISTORY_BATCH_ID}" \
             docker compose --profile catalog --profile compute run --rm \
             commerce-customer-scd2-check
-      - name: Build commerce daily gold mart
-        run: >-
-          docker compose --profile catalog --profile compute run --rm
-          spark-commerce-daily-gold
       - name: Verify idempotent commerce daily gold replay
         run: >-
           docker compose --profile catalog --profile compute run --rm

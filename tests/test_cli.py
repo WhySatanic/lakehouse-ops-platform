@@ -338,6 +338,72 @@ def test_check_commerce_gold_command(
     assert json.loads(capsys.readouterr().out)["status"] == "ready"
 
 
+@pytest.mark.parametrize("result", ["ready", "stage_failure", "empty"])
+def test_run_commerce_batch_command_preserves_state_on_failure_and_skips_idle(
+    result: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    from lakehouse_ops.commerce_pipeline import COMMERCE_STAGES, CommercePipelineError
+
+    fixture = cli.generate_commerce_fixture(tmp_path / "fixture", cli.CommerceFixtureConfig(
+        customers=4, products=2, orders=6, null_customer_emails=1,
+        duplicate_orders=1, late_orders=1, invalid_payments=1,
+    ))
+    s3_client = FakeS3Client()
+    cli.CommerceS3LandingZone(s3_client, bucket="lakehouse").write(fixture.path)
+    monkeypatch.setattr(cli, "_create_s3_client", lambda args: s3_client)
+    state = tmp_path / "checkpoint.json"
+    stages = []
+
+    def execute(service: str, batch: dict[str, str], *, bucket: str) -> None:
+        assert bucket == "lakehouse"
+        assert batch["batch_id"] == fixture.batch_id
+        assert not state.exists()
+        stages.append(service)
+        if result == "stage_failure":
+            raise CommercePipelineError(f"commerce stage failed: {service}")
+
+    class FakeTrinoClient:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        def __enter__(self) -> FakeTrinoClient:
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            pass
+
+        def query(self, sql: str) -> list[dict[str, int]]:
+            assert len(stages) == len(COMMERCE_STAGES)
+            assert not state.exists()
+            return [{"days": 2 if result == "ready" else 0,
+                     "orders": 6, "captured_revenue_cents": 1000, "invalid_days": 0}]
+
+    monkeypatch.setattr(cli, "run_compose_stage", execute)
+    monkeypatch.setattr(cli, "TrinoClient", FakeTrinoClient)
+    args = ["run-commerce-batch", "--s3-bucket", "lakehouse", "--state", str(state)]
+    if result == "ready":
+        assert cli.main(args) == 0
+        assert json.loads(capsys.readouterr().out)["checkpoint"]["created"] is True
+        before = state.read_bytes()
+        assert cli.main(args) == 0
+        assert json.loads(capsys.readouterr().out)["status"] == "idle"
+        assert state.read_bytes() == before
+        assert stages == list(COMMERCE_STAGES)
+    else:
+        with pytest.raises(SystemExit) as error:
+            cli.main(args)
+        assert error.value.code == 2
+        assert "stage failed" in capsys.readouterr().err
+        assert not state.exists()
+    with pytest.raises(SystemExit) as error:
+        cli.main([*args, "--s3-prefix", "other"])
+    assert error.value.code == 2
+    assert "requires --s3-prefix landing" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("result", ["ready", "empty", "transport", "retry"])
 def test_complete_commerce_batch_only_checkpoints_verified_gold(
     result: str,

@@ -18,6 +18,11 @@ from lakehouse_ops.commerce_gold_gate import (
     check_commerce_gold,
     check_commerce_gold_with_retry,
 )
+from lakehouse_ops.commerce_pipeline import (
+    CommercePipelineError,
+    run_commerce_batch,
+    run_compose_stage,
+)
 from lakehouse_ops.control_plane_contract import (
     ControlPlaneContractError,
     refresh_control_plane_schema_digests,
@@ -170,6 +175,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_commerce_batch_arguments(commerce_backlog)
     commerce_backlog.add_argument("--max-age-seconds", type=int, default=900)
+
+    commerce_run = subparsers.add_parser(
+        "run-commerce-batch",
+        help="process one next committed commerce batch through Spark and Trino",
+    )
+    _add_commerce_batch_arguments(commerce_run)
+    commerce_run.add_argument("--server", default="http://localhost:8080")
+    commerce_run.add_argument("--user", default="lakehouse-ops")
 
     commerce_alerts = subparsers.add_parser(
         "notify-commerce-freshness",
@@ -589,6 +602,30 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(str(error))
         print(json.dumps(report, sort_keys=True))
         return 0 if report["status"] == "ready" else 1
+    if args.command == "run-commerce-batch":
+        if not args.s3_bucket:
+            parser.error("--s3-bucket is required")
+        if args.s3_prefix.strip("/") != "landing":
+            parser.error("commerce Compose runner requires --s3-prefix landing")
+        planner = CommerceBatchPlanner(
+            _create_s3_client(args), bucket=args.s3_bucket, prefix=args.s3_prefix,
+            state_path=args.state,
+        )
+        try:
+            with TrinoClient(args.server, user=args.user) as client:
+                report = run_commerce_batch(
+                    planner, client.query,
+                    run_stage=lambda service, batch: run_compose_stage(
+                        service, batch, bucket=args.s3_bucket,
+                    ),
+                )
+        except (
+            OSError, CommerceBatchError, CommerceGoldGateError, CommercePipelineError,
+            BotoCoreError, ClientError,
+        ) as error:
+            parser.error(str(error))
+        print(json.dumps(report, sort_keys=True))
+        return 0
     if args.command == "notify-commerce-freshness":
         if not args.s3_bucket:
             parser.error("--s3-bucket is required")

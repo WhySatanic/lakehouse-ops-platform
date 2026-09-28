@@ -91,7 +91,9 @@ class CommerceBatchPlanner:
             "selected_batches": len(selected),
         }
 
-    def commit(self, batch_id: str) -> dict[str, Any]:
+    def commit(
+        self, batch_id: str, *, expected_manifest_sha256: str | None = None,
+    ) -> dict[str, Any]:
         ordered_batches = self.discover()
         batches = {batch.batch_id: batch for batch in ordered_batches}
         if batch_id not in batches:
@@ -99,6 +101,11 @@ class CommerceBatchPlanner:
         state = _load_state(self._state_path)
         _verify_processed_content(state, batches)
         batch = batches[batch_id]
+        if (
+            expected_manifest_sha256 is not None
+            and batch.manifest_sha256 != expected_manifest_sha256
+        ):
+            raise CommerceBatchError("committed manifest changed during processing")
         processed = state["processed_batches"]
         existing = processed.get(batch_id)
         if existing:
