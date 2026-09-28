@@ -57,6 +57,42 @@ processed manifest, unreadable checkpoint, or missing S3 timestamp is an error.
 The check reads but never advances the checkpoint; only downstream success should
 call `commit-commerce-batch`.
 
+Send both freshness observations to the existing opt-in Alertmanager profile:
+
+```bash
+docker compose --profile observability up -d alert-webhook alertmanager
+uv run --env-file .env lakeops notify-commerce-freshness \
+  --s3-bucket lakehouse --state data/state/commerce-batches.json \
+  --instance commerce-local --alertmanager-server http://localhost:9093 \
+  --source-max-age-seconds 900 --backlog-max-age-seconds 900 \
+  --alert-valid-seconds 180
+```
+
+`LakehouseCommerceSourceStale` identifies delayed landing; `LakehouseCommerceBacklogStale`
+identifies delayed processing. Descriptions include the observation, batch identity,
+next diagnostic action, and this runbook. Choose one stable, unique `--instance` for
+each endpoint/bucket/prefix/checkpoint scope and keep it unchanged during recovery.
+Batch IDs and ages are annotations, not identity labels. Alertmanager groups and
+deduplicates repeated submissions; the bundled receiver retains webhook events.
+The report's `notification: accepted` means HTTP acceptance, not confirmed receiver
+delivery. CI separately verifies real firing and resolved webhook events for both alerts.
+
+Exit code 1 means at least one freshness breach was submitted; 0 means both checks
+were healthy and explicit resolved observations were submitted. Invalid manifests,
+checkpoint failures, or notification transport/HTTP failures are errors (exit code 2),
+not healthy reports. The command never writes the processing checkpoint. To recover
+a real backlog, finish the Spark quality checks and verified gold completion first;
+raising a threshold is only for the controlled CI drill, not incident remediation.
+
+This is a one-shot direct [Alertmanager API client](https://prometheus.io/docs/alerting/0.34/alerts_api/),
+not a scheduler. An external runner must invoke it regularly (for example every 60
+seconds with the default 180-second validity), including after recovery. Validity is
+bounded to 30..86400 seconds. Stopping submissions causes alerts to expire; a resolved
+notification alone is therefore not proof of recovery. Retain the JSON observations
+and monitor the runner's own liveness separately. Delivery uses a 10-second HTTP timeout
+without automatic retries. Complete pipeline scheduling and runner-liveness monitoring
+remain planned; existing check-only commands and notification configuration are unchanged.
+
 The default batch contains 10,000 customers, 1,000 products, 100,000 canonical orders,
 100,000 payments, and 1,000 repeated order rows. It also includes exact, documented
 quality cases:

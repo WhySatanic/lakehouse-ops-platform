@@ -262,6 +262,56 @@ def test_check_commerce_source_freshness_command(
     assert json.loads(capsys.readouterr().out)["reason"] == "age_limit_exceeded"
 
 
+def test_notify_commerce_freshness_reads_landing_without_advancing_state(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    from lakehouse_ops import commerce_alerts
+
+    fixture = cli.generate_commerce_fixture(tmp_path / "fixture", cli.CommerceFixtureConfig(
+        customers=4, products=2, orders=6, null_customer_emails=1,
+        duplicate_orders=1, late_orders=1, invalid_payments=1,
+    ))
+    s3_client = FakeS3Client()
+    cli.CommerceS3LandingZone(s3_client, bucket="lakehouse").write(fixture.path)
+    manifest = next(key for key in s3_client.last_modified if key[1].endswith("manifest.json"))
+    s3_client.last_modified[manifest] = datetime.now(UTC) - timedelta(hours=1)
+    monkeypatch.setattr(cli, "_create_s3_client", lambda args: s3_client)
+    payloads = []
+
+    def accept(request: httpx.Request) -> httpx.Response:
+        payloads.append(json.loads(request.content))
+        return httpx.Response(200)
+
+    original = httpx.Client
+    monkeypatch.setattr(commerce_alerts.httpx, "Client", lambda **kwargs: original(
+        transport=httpx.MockTransport(accept), **kwargs,
+    ))
+    state = tmp_path / "checkpoint.json"
+    args = ["notify-commerce-freshness", "--s3-bucket", "lakehouse",
+            "--instance", "commerce-test", "--state", str(state)]
+    assert cli.main(args) == 1
+    assert json.loads(capsys.readouterr().out)["notification"] == "accepted"
+    assert not state.exists()
+
+    planner = cli.CommerceBatchPlanner(s3_client, bucket="lakehouse", state_path=state)
+    planner.commit(fixture.batch_id)
+    before = state.read_bytes()
+    s3_client.last_modified[manifest] = datetime.now(UTC)
+    assert cli.main(args) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "ready"
+    assert [a["labels"] for a in payloads[0]] == [a["labels"] for a in payloads[1]]
+    assert state.read_bytes() == before
+
+    state.write_text("invalid json", encoding="utf-8")
+    with pytest.raises(SystemExit) as error:
+        cli.main(args)
+    assert error.value.code == 2
+    assert "checkpoint" in capsys.readouterr().err
+    assert len(payloads) == 2
+
+
 def test_check_commerce_gold_command(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

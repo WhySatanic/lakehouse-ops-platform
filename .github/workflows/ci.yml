@@ -638,6 +638,43 @@ jobs:
         run: |
           mkdir -p artifacts
           docker compose --profile observability run --rm platform-slo-check
+      - name: Deliver commerce source and backlog freshness alerts
+        env:
+          AWS_ACCESS_KEY_ID: lakeops-ingest
+          AWS_SECRET_ACCESS_KEY: ingest-development-only
+        run: |
+          if uv run lakeops notify-commerce-freshness --instance commerce-ci \
+            --s3-bucket lakehouse --s3-endpoint-url http://localhost:9000 \
+            --state data/state/commerce-alert-ci.json \
+            --source-max-age-seconds 1 --backlog-max-age-seconds 1 \
+            --alert-valid-seconds 600 > artifacts/commerce-alert-firing.json; then
+            echo "expected commerce freshness breaches"
+            exit 1
+          else
+            test "$?" -eq 1
+          fi
+          uv run python -c 'import json; r=json.load(open("artifacts/commerce-alert-firing.json")); assert r["notification"]=="accepted"; assert r["source"]["status"]==r["backlog"]["status"]=="stale"'
+          for alert_name in LakehouseCommerceSourceStale LakehouseCommerceBacklogStale; do
+            EXPECTED_ALERT_NAME="$alert_name" EXPECTED_ALERT_TARGET=commerce-ci \
+              EXPECTED_ALERT_COMPONENT="" \
+              docker compose --profile observability run --rm alert-delivery-check
+          done
+      - name: Deliver verified commerce freshness recovery
+        env:
+          AWS_ACCESS_KEY_ID: lakeops-ingest
+          AWS_SECRET_ACCESS_KEY: ingest-development-only
+        run: |
+          uv run lakeops notify-commerce-freshness --instance commerce-ci \
+            --s3-bucket lakehouse --s3-endpoint-url http://localhost:9000 \
+            --state data/state/commerce-ci.json \
+            --source-max-age-seconds 86400 \
+            > artifacts/commerce-alert-resolved.json
+          uv run python -c 'import json; r=json.load(open("artifacts/commerce-alert-resolved.json")); assert r["status"]=="ready"; assert r["backlog"]["pending_batches"]==0'
+          for alert_name in LakehouseCommerceSourceStale LakehouseCommerceBacklogStale; do
+            EXPECTED_ALERT_NAME="$alert_name" EXPECTED_ALERT_TARGET=commerce-ci \
+              EXPECTED_ALERT_COMPONENT="" EXPECTED_ALERT_STATUS=resolved \
+              docker compose --profile observability run --rm alert-delivery-check
+          done
       - name: Verify ingestion freshness SLO alert delivery
         env:
           EXPECTED_ALERT_NAME: LakehouseIngestionFreshnessSLOBreach
