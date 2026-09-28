@@ -197,11 +197,19 @@ uv run --env-file .env lakeops check-commerce-gold \
 Only after both checks succeed, advance the planner checkpoint:
 
 ```bash
-uv run --env-file .env lakeops commit-commerce-batch \
+uv run --env-file .env lakeops complete-commerce-batch \
   --s3-bucket lakehouse \
   --state data/state/commerce-batches.json \
-  --batch-id <batch-id>
+  --batch-id <batch-id> \
+  --server http://localhost:8080
 ```
+
+This command repeats the batch-specific Trino gold gate and advances the checkpoint
+only after it succeeds. Failed or empty gold results and query failures leave the
+checkpoint untouched. Its JSON includes both verification and checkpoint results.
+It does not run Spark or replace the per-model quality checks above. The lower-level
+`commit-commerce-batch` remains available for callers that already verified downstream
+success. Keep one checkpoint writer per state file.
 
 The checkpoint is written atomically. A repeated commit is a no-op. Planning fails if a
 processed manifest has changed, so the same batch ID cannot silently acquire different

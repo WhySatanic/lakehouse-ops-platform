@@ -287,6 +287,69 @@ def test_check_commerce_gold_command(
     assert json.loads(capsys.readouterr().out)["status"] == "ready"
 
 
+@pytest.mark.parametrize("result", ["ready", "empty", "transport"])
+def test_complete_commerce_batch_only_checkpoints_verified_gold(
+    result: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    fixture = cli.generate_commerce_fixture(
+        tmp_path / "fixture",
+        cli.CommerceFixtureConfig(
+            customers=4, products=2, orders=6, null_customer_emails=1,
+            duplicate_orders=1, late_orders=1, invalid_payments=1,
+        ),
+    )
+    s3_client = FakeS3Client()
+    cli.CommerceS3LandingZone(s3_client, bucket="lakehouse").write(fixture.path)
+    monkeypatch.setattr(cli, "_create_s3_client", lambda args: s3_client)
+    state = tmp_path / "checkpoint.json"
+
+    class FakeTrinoClient:
+        def __init__(self, server: str, *, user: str) -> None:
+            pass
+
+        def __enter__(self) -> FakeTrinoClient:
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+        def query(self, sql: str) -> list[dict[str, int]]:
+            assert fixture.batch_id in sql
+            if result == "transport":
+                raise RuntimeError("Trino unavailable")
+            return [{
+                "days": 2 if result == "ready" else 0,
+                "orders": 6 if result == "ready" else 0,
+                "captured_revenue_cents": 900, "invalid_days": 0,
+            }]
+
+    monkeypatch.setattr(cli, "TrinoClient", FakeTrinoClient)
+    args = [
+        "complete-commerce-batch", "--batch-id", fixture.batch_id,
+        "--s3-bucket", "lakehouse", "--state", str(state),
+    ]
+    if result == "ready":
+        assert cli.main(args) == 0
+        report = json.loads(capsys.readouterr().out)
+        assert report["verification"]["status"] == "ready"
+        assert report["checkpoint"]["created"] is True
+        before = state.read_bytes()
+        assert cli.main(args) == 0
+        assert json.loads(capsys.readouterr().out)["checkpoint"]["created"] is False
+        assert state.read_bytes() == before
+    elif result == "empty":
+        with pytest.raises(SystemExit, match="2"):
+            cli.main(args)
+        assert not state.exists()
+    else:
+        with pytest.raises(RuntimeError, match="Trino unavailable"):
+            cli.main(args)
+        assert not state.exists()
+
+
 def test_ingest_weather_command_lands_payload(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

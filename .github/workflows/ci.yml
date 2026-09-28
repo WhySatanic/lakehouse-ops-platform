@@ -603,6 +603,20 @@ jobs:
         run: >-
           uv run lakeops check-commerce-gold --batch-id "$COMMERCE_BATCH_ID"
           --server http://localhost:8080 --user lakehouse-ci
+      - name: Checkpoint commerce only after Trino verification
+        env:
+          AWS_ACCESS_KEY_ID: lakeops-ingest
+          AWS_SECRET_ACCESS_KEY: ingest-development-only
+        run: |
+          uv run lakeops complete-commerce-batch --batch-id "$COMMERCE_BATCH_ID" \
+            --server http://localhost:8080 --user lakehouse-ci \
+            --s3-bucket lakehouse --s3-endpoint-url http://localhost:9000 \
+            --state data/state/commerce-ci.json > artifacts/commerce-completion.json
+          uv run lakeops complete-commerce-batch --batch-id "$COMMERCE_BATCH_ID" \
+            --server http://localhost:8080 --user lakehouse-ci \
+            --s3-bucket lakehouse --s3-endpoint-url http://localhost:9000 \
+            --state data/state/commerce-ci.json > artifacts/commerce-completion-replay.json
+          uv run python -c 'import json; first=json.load(open("artifacts/commerce-completion.json")); replay=json.load(open("artifacts/commerce-completion-replay.json")); assert first["checkpoint"]["created"] is True; assert replay["checkpoint"]["created"] is False; assert first["verification"] == replay["verification"]'
       - name: Start Prometheus readiness collection
         run: >-
           docker compose --profile observability up -d
