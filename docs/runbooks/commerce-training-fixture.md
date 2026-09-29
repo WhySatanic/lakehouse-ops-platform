@@ -178,7 +178,26 @@ gold, manifest, and checkpoint failures leave processing state unchanged; existi
 Iceberg writes are not rolled back. Inspect the named failed stage before rerunning.
 Earlier idempotent jobs may be replayed after a partial attempt, but an older changed
 customer batch still fails SCD2 ordering checks. Keep a single state writer and immutable
-commit markers. Do not run two runners against the same checkpoint or input volume.
+commit markers.
+
+The CLI acquires a nonblocking OS-backed lock at `data/state/commerce-runner.lock`
+before accessing S3. It holds the lock through all jobs, Trino verification and checkpoint
+completion, including idle checks. A competing runner in the same checkout exits 2,
+identifies the held lock on stderr, and produces no stdout or work. This workspace-wide
+lock also covers runners with different `--state` paths because they share input files.
+Keep the lock file; do not delete or replace it during execution. The operating system
+releases the lock when its owner exits, even abruptly, so no stale PID/lease cleanup is
+needed. CI starts a competing CLI while the real pipeline owns the lock, verifies its
+rejection, and retains that result in `commerce-runner-retry.json`.
+
+This is a cooperative local-checkout lock, not distributed fencing. Separate checkouts,
+manual jobs, low-level checkpoint commands and direct Python callers do not participate.
+Always run from the same repository-root working directory, using one checkout and
+local filesystem; another working directory selects another relative lock file.
+Network-filesystem lock behavior
+is not supported. Process exit does not stop already-running Docker/Spark children or
+undo Iceberg writes. After an interrupted owner, confirm those jobs have stopped and
+inspect partial work before rerunning. The lock alone is not crash-recovery proof.
 
 This is an opt-in local Compose runner, not a scheduler or a generic remote-S3 runner.
 Its S3 endpoint must refer to the same MinIO as Compose; Trino must query that stack.

@@ -24,6 +24,7 @@ from lakehouse_ops.commerce_pipeline import (
     run_commerce_batch,
     run_compose_stage,
 )
+from lakehouse_ops.commerce_runner_lock import CommerceRunnerBusyError, commerce_runner_lock
 from lakehouse_ops.control_plane_contract import (
     ControlPlaneContractError,
     refresh_control_plane_schema_digests,
@@ -614,22 +615,23 @@ def main(argv: list[str] | None = None) -> int:
             validate_commerce_gold_retry(args.attempts, args.retry_delay_seconds)
         except CommerceGoldGateError as error:
             parser.error(str(error))
-        planner = CommerceBatchPlanner(
-            _create_s3_client(args), bucket=args.s3_bucket, prefix=args.s3_prefix,
-            state_path=args.state,
-        )
         try:
-            with TrinoClient(args.server, user=args.user) as client:
-                report = run_commerce_batch(
-                    planner, client.query,
-                    run_stage=lambda service, batch: run_compose_stage(
-                        service, batch, bucket=args.s3_bucket,
-                    ),
-                    attempts=args.attempts, delay_seconds=args.retry_delay_seconds,
+            with commerce_runner_lock():
+                planner = CommerceBatchPlanner(
+                    _create_s3_client(args), bucket=args.s3_bucket, prefix=args.s3_prefix,
+                    state_path=args.state,
                 )
+                with TrinoClient(args.server, user=args.user) as client:
+                    report = run_commerce_batch(
+                        planner, client.query,
+                        run_stage=lambda service, batch: run_compose_stage(
+                            service, batch, bucket=args.s3_bucket,
+                        ),
+                        attempts=args.attempts, delay_seconds=args.retry_delay_seconds,
+                    )
         except (
             OSError, CommerceBatchError, CommerceGoldGateError, CommercePipelineError,
-            BotoCoreError, ClientError,
+            CommerceRunnerBusyError, BotoCoreError, ClientError,
         ) as error:
             parser.error(str(error))
         print(json.dumps(report, sort_keys=True))
