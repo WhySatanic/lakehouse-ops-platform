@@ -90,8 +90,9 @@ seconds with the default 180-second validity), including after recovery. Validit
 bounded to 30..86400 seconds. Stopping submissions causes alerts to expire; a resolved
 notification alone is therefore not proof of recovery. Retain the JSON observations
 and monitor the runner's own liveness separately. Delivery uses a 10-second HTTP timeout
-without automatic retries. Complete pipeline scheduling and runner-liveness monitoring
-remain planned; existing check-only commands and notification configuration are unchanged.
+without automatic retries. An opt-in cron cycle is documented below; runner-liveness
+monitoring remains planned. Existing check-only commands and notification configuration
+are unchanged.
 
 The default batch contains 10,000 customers, 1,000 products, 100,000 canonical orders,
 100,000 payments, and 1,000 repeated order rows. It also includes exact, documented
@@ -208,13 +209,50 @@ is not supported. Process exit does not stop already-running Docker/Spark childr
 undo Iceberg writes. After an interrupted owner, confirm those jobs have stopped and
 inspect partial work before rerunning. The lock alone is not crash-recovery proof.
 
-This is an opt-in local Compose runner, not a scheduler or a generic remote-S3 runner.
+This is an opt-in local Compose runner, not an in-process scheduler or a generic
+remote-S3 runner.
 Its S3 endpoint must refer to the same MinIO as Compose; Trino must query that stack.
 Only the `landing` prefix is supported. The selected bucket overrides `LAKEHOUSE_BUCKET`
 for child jobs. Services use `--no-deps` so they never bootstrap unrelated fixtures or
 start missing infrastructure implicitly. No automatic Spark retry, per-job timeout,
-cancellation cleanup, freshness policy, or notifications are added here. Scheduling
-and measured recovery remain planned. Existing manual commands remain supported.
+cancellation cleanup, freshness policy, or notifications are added here. The external
+cron path below is opt-in; measured recovery remains planned. Existing manual
+commands remain supported.
+
+### Opt-in scheduled cycle
+
+For a host with a working Compose stack, Alertmanager profile, and cron, the following
+one-shot wrapper runs at most one pending batch and then submits both freshness
+observations. It invokes the existing CLI twice, so a pipeline failure does not skip
+the notification attempt. From the repository root, first run it manually:
+
+```bash
+uv run --env-file .env python -m lakehouse_ops.commerce_cycle \
+  --s3-bucket lakehouse --s3-endpoint-url http://localhost:9000 \
+  --state data/state/commerce-batches.json \
+  --server http://localhost:8080 --user lakehouse-ops \
+  --instance commerce-local --alertmanager-server http://localhost:9093 \
+  --alert-valid-seconds 900
+```
+
+To opt in to a ten-minute schedule, install this crontab entry after replacing the
+checkout and log paths with absolute paths writable by the cron user:
+
+```cron
+*/10 * * * * cd /srv/lakehouse-ops-platform && uv run --env-file .env python -m lakehouse_ops.commerce_cycle --s3-bucket lakehouse --s3-endpoint-url http://localhost:9000 --state data/state/commerce-batches.json --server http://localhost:8080 --user lakehouse-ops --instance commerce-local --alertmanager-server http://localhost:9093 --alert-valid-seconds 900 >> /srv/lakehouse-ops-platform/commerce-cycle.log 2>&1
+```
+
+Run cron as the same account and checkout used for manual runs, with access to Docker,
+the state file, and `.env`. Set alert validity longer than the schedule interval;
+otherwise an alert can expire between submissions. A run may exceed ten minutes:
+the runner's nonblocking lock rejects overlapping compute, and that cycle still
+attempts freshness notification. Exit 0 means the pipeline succeeded or was idle and
+both observations were healthy; exit 1 means a freshness breach; exit 2 means the
+pipeline or notification failed. On dual failures the pipeline exit takes precedence;
+inspect both command outputs in the log. Freshness alerts do not cover every pipeline
+failure, so monitor cron execution, nonzero exits, and log retention separately.
+This wrapper does not retry Spark jobs, guarantee schedule delivery, or provide
+distributed fencing. Stop the crontab entry before maintenance or recovery drills.
 
 ### Manual processing
 
