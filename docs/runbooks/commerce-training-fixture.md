@@ -160,6 +160,15 @@ The JSON result lists completed stages and verified gold totals; Spark/Compose l
 to stderr. CI exercises a fresh fixture through this command, retains the report, and
 then runs the existing exact-count/replay acceptance checks separately.
 
+Successful runs also include `durations_seconds`: planner selection, each named Compose
+stage, Trino gold verification, checkpoint commit, and the total. These are elapsed
+monotonic-clock seconds, not CPU time. Verification includes retry waits and repeated
+read-only queries. The total starts before planning and ends after the checkpoint; it
+excludes CLI setup, S3 client creation, lock acquisition, and JSON printing. Idle and
+failed runs do not claim completed-phase timings. CI checks the shape and nonnegative
+values in the retained real-stack report. One run is diagnostic evidence, not a
+volume benchmark, SLA, or per-job Spark memory measurement.
+
 For transient coordinator or transport failures, opt into bounded read-only gold
 verification retries with `--attempts 3 --retry-delay-seconds 2`. Defaults remain one
 attempt and a two-second delay (unused without a retry). Attempts are bounded to 1..5

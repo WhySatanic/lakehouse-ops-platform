@@ -132,6 +132,48 @@ def test_transient_gold_retry_does_not_repeat_compute() -> None:
     assert planner.commits == [BATCH["batch_id"]]
 
 
+def test_runner_reports_monotonic_phase_durations_including_retry() -> None:
+    now = 0.0
+    statements = 0
+
+    class TimedPlanner(Planner):
+        def plan(self, *, max_batches: int) -> dict[str, Any]:
+            nonlocal now
+            now += 2
+            return super().plan(max_batches=max_batches)
+
+        def commit(self, batch_id: str, *, expected_manifest_sha256: str) -> dict[str, Any]:
+            nonlocal now
+            now += 3
+            return super().commit(
+                batch_id, expected_manifest_sha256=expected_manifest_sha256,
+            )
+
+    def execute(service: str, batch: dict[str, str]) -> None:
+        nonlocal now
+        assert service in pipeline.COMMERCE_STAGES
+        assert batch == BATCH
+        now += 1
+
+    def query(sql: str) -> list[dict[str, int]]:
+        nonlocal now, statements
+        statements += 1
+        now += 4 if statements == 1 else 6
+        if statements == 1:
+            raise httpx.ConnectError("coordinator restarting")
+        return gold(sql)
+
+    report = pipeline.run_commerce_batch(
+        TimedPlanner(), query, run_stage=execute, attempts=2, delay_seconds=0,
+        clock=lambda: now,
+    )
+    assert statements == 2
+    assert report["durations_seconds"] == {
+        "planning": 2, "stages": dict.fromkeys(pipeline.COMMERCE_STAGES, 1),
+        "verification": 10, "checkpoint": 3, "total": 23,
+    }
+
+
 @pytest.mark.parametrize("failure", ["transport", "protocol", "query", "quality"])
 def test_retry_failure_preserves_checkpoint_without_repeating_compute(failure: str) -> None:
     planner = Planner()

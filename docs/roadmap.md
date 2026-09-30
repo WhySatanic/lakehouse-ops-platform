@@ -244,6 +244,8 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
     customers, and payment-quality measures, including replay and Trino checks.
 - [ ] Schedule the pipeline with retries, freshness checks, and actionable notifications.
 - [ ] Measure runtime, memory, file growth, maintenance, and recovery as volume increases.
+  - [x] Retain per-stage and checkpoint elapsed time for a successful one-shot commerce
+    run, including verification retries, without claiming volume benchmarks.
 
 Exit criterion: one documented command and one scheduled path take a reproducible source
 batch through quality checks into a Trino-queryable gold mart, with safe reruns, bounded
