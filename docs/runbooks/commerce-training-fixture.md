@@ -235,6 +235,11 @@ uv run --env-file .env python -m lakehouse_ops.commerce_cycle \
   --alert-valid-seconds 900
 ```
 
+Before starting either child command, the wrapper validates the bounded Trino
+verification retries and the Alertmanager URL, instance, freshness ages, and alert
+validity. A typo in those options exits 2 without launching Spark or touching S3;
+correct the configuration and rerun. This preflight does not prove service reachability.
+
 To opt in to a ten-minute schedule, install this crontab entry after replacing the
 checkout and log paths with absolute paths writable by the cron user:
 

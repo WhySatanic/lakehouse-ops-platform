@@ -24,23 +24,12 @@ def notify_commerce_freshness(
     valid_seconds: int = 180,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    try:
-        urlsplit(server)
-        url = httpx.URL(server)
-    except (httpx.InvalidURL, ValueError) as error:
-        raise CommerceAlertError("invalid Alertmanager URL") from error
-    if (
-        url.scheme not in {"http", "https"}
-        or not url.host
-        or url.userinfo
-        or url.query
-        or url.fragment
-    ):
-        raise CommerceAlertError("Alertmanager URL must be HTTP(S) without credentials or query")
-    if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", instance):
-        raise CommerceAlertError("instance must be a stable identifier of 1 to 128 characters")
-    if type(valid_seconds) is not int or not 30 <= valid_seconds <= 86400:
-        raise CommerceAlertError("valid_seconds must be between 30 and 86400")
+    validate_commerce_alert_options(
+        server=server, instance=instance,
+        source_max_age_seconds=source_max_age_seconds,
+        backlog_max_age_seconds=backlog_max_age_seconds,
+        valid_seconds=valid_seconds,
+    )
     observed_at = now or datetime.now(UTC)
     if observed_at.tzinfo is None:
         raise CommerceAlertError("observation time must include a timezone")
@@ -88,6 +77,35 @@ def notify_commerce_freshness(
         "source": source,
         "backlog": backlog,
     }
+
+
+def validate_commerce_alert_options(
+    *, server: str, instance: str, source_max_age_seconds: int,
+    backlog_max_age_seconds: int, valid_seconds: int,
+) -> None:
+    try:
+        urlsplit(server)
+        url = httpx.URL(server)
+    except (httpx.InvalidURL, ValueError) as error:
+        raise CommerceAlertError("invalid Alertmanager URL") from error
+    if (
+        url.scheme not in {"http", "https"}
+        or not url.host
+        or url.userinfo
+        or url.query
+        or url.fragment
+    ):
+        raise CommerceAlertError("Alertmanager URL must be HTTP(S) without credentials or query")
+    if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", instance):
+        raise CommerceAlertError("instance must be a stable identifier of 1 to 128 characters")
+    if type(valid_seconds) is not int or not 30 <= valid_seconds <= 86400:
+        raise CommerceAlertError("valid_seconds must be between 30 and 86400")
+    for name, value in (
+        ("source_max_age_seconds", source_max_age_seconds),
+        ("backlog_max_age_seconds", backlog_max_age_seconds),
+    ):
+        if type(value) is not int or value < 1:
+            raise CommerceAlertError(f"{name} must be a positive integer")
 
 
 def _timestamp(value: datetime) -> str:
