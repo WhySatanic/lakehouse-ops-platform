@@ -289,7 +289,7 @@ def _load_state(path: Path) -> dict[str, Any]:
         state = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise CommerceBatchError(f"commerce checkpoint is unreadable: {error}") from error
-    if state.get("schema_version") != 1 or not isinstance(
+    if not isinstance(state, dict) or state.get("schema_version") != 1 or not isinstance(
         state.get("processed_batches"), dict
     ):
         raise CommerceBatchError("commerce checkpoint has an unsupported structure")

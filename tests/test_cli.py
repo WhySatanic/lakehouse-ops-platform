@@ -452,6 +452,30 @@ def test_run_commerce_workspace_lock_rejects_competitor_before_s3(
     assert not (tmp_path / checkpoint).exists()
 
 
+def test_run_commerce_batch_rejects_non_object_checkpoint_before_compute(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    state = tmp_path / "checkpoint.json"
+    state.write_text("[]", encoding="utf-8")
+    before = state.read_bytes()
+    monkeypatch.setattr(cli, "_create_s3_client", lambda args: FakeS3Client())
+    monkeypatch.setattr(cli, "run_compose_stage", lambda *args, **kwargs: pytest.fail(
+        "invalid checkpoint must not start Compose",
+    ))
+    monkeypatch.setattr(cli.TrinoClient, "query", lambda *args: pytest.fail(
+        "invalid checkpoint must not query Trino",
+    ))
+
+    with pytest.raises(SystemExit) as error:
+        cli.main(["run-commerce-batch", "--s3-bucket", "lakehouse", "--state", str(state)])
+    captured = capsys.readouterr()
+    assert error.value.code == 2
+    assert "commerce checkpoint has an unsupported structure" in captured.err
+    assert captured.out == ""
+    assert state.read_bytes() == before
+
+
 def test_run_commerce_releases_lock_after_s3_failure(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path,
 ) -> None:

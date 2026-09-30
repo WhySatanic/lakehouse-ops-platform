@@ -325,3 +325,21 @@ def test_rejects_corrupt_checkpoint(client: FakeS3Client, tmp_path: Path) -> Non
 
     with pytest.raises(CommerceBatchError, match="checkpoint is unreadable"):
         planner.plan(max_batches=1)
+
+
+@pytest.mark.parametrize("payload", ["[]", "null", "0", '"invalid"'])
+def test_rejects_non_object_checkpoint_without_changing_it(
+    client: FakeS3Client, tmp_path: Path, payload: str,
+) -> None:
+    state_path = tmp_path / "state.json"
+    state_path.write_text(payload, encoding="utf-8")
+    before = state_path.read_bytes()
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state_path)
+
+    with pytest.raises(CommerceBatchError, match="unsupported structure"):
+        planner.plan(max_batches=1)
+    with pytest.raises(CommerceBatchError, match="unsupported structure"):
+        planner.commit("aaaaaaaaaaaaaaaa")
+    with pytest.raises(CommerceBatchError, match="unsupported structure"):
+        planner.check_backlog_freshness(max_age_seconds=60)
+    assert state_path.read_bytes() == before
