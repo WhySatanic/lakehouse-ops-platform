@@ -342,6 +342,13 @@ skip an older committed batch fails without changing the checkpoint. Process bat
 the order returned by `plan-commerce-batches`, especially before updating SCD2 history.
 Table objects without a valid commit marker are ignored.
 
+If the checkpoint contains invalid JSON, the planner reports it as unreadable. If it
+contains valid JSON but the top level is not an object, planning, completion, backlog
+checks, and the one-shot runner reject its unsupported structure without changing the
+file or starting compute. Do not delete the checkpoint to bypass processed history.
+Preserve a copy, restore a known-good checkpoint, and reconcile its processed batch IDs
+and manifest checksums against committed MinIO markers before retrying.
+
 For a deliberate retry or backfill, name every batch and keep the same explicit bound:
 
 ```bash
