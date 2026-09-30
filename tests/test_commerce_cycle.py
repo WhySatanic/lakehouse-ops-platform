@@ -56,3 +56,32 @@ def test_cycle_requires_scope_before_starting_work(monkeypatch: pytest.MonkeyPat
     with pytest.raises(SystemExit) as error:
         commerce_cycle.main(["--s3-bucket", "lakehouse"])
     assert error.value.code == 2
+
+
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [
+        ("--alertmanager-server", "ftp://alertmanager"),
+        ("--instance", "invalid instance"),
+        ("--alert-valid-seconds", "29"),
+        ("--source-max-age-seconds", "0"),
+        ("--backlog-max-age-seconds", "0"),
+        ("--attempts", "0"),
+        ("--retry-delay-seconds", "-1"),
+    ],
+)
+def test_invalid_cycle_configuration_fails_before_starting_pipeline(
+    monkeypatch: pytest.MonkeyPatch, option: str, value: str,
+) -> None:
+    monkeypatch.setattr(
+        commerce_cycle.subprocess, "run", lambda *_args, **_kwargs: pytest.fail("must not run"),
+    )
+    with pytest.raises(SystemExit) as error:
+        commerce_cycle.main([
+            "--s3-bucket", "lakehouse", "--s3-endpoint-url", "http://localhost:9000",
+            "--state", "data/state/commerce-batches.json",
+            "--server", "http://localhost:8080", "--user", "lakehouse-ops",
+            "--instance", "commerce-local", "--alertmanager-server", "http://localhost:9093",
+            option, value,
+        ])
+    assert error.value.code == 2

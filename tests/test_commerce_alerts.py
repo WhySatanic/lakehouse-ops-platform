@@ -91,6 +91,7 @@ def test_delivery_failure_is_not_reported_as_accepted(
     {"server": "http://host:invalid"}, {"server": "http://[invalid"},
     {"instance": ""}, {"instance": "invalid instance"},
     {"valid_seconds": 29}, {"valid_seconds": 86401}, {"valid_seconds": True},
+    {"source_max_age_seconds": 0}, {"backlog_max_age_seconds": 0},
     {"now": datetime(2026, 9, 28)},
 ])
 def test_invalid_configuration_fails_before_observing_or_sending(options: dict[str, Any]) -> None:

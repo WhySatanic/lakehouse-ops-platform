@@ -7,6 +7,9 @@ import subprocess
 import sys
 from collections.abc import Sequence
 
+from lakehouse_ops.commerce_alerts import CommerceAlertError, validate_commerce_alert_options
+from lakehouse_ops.commerce_gold_gate import CommerceGoldGateError, validate_commerce_gold_retry
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -26,6 +29,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run_cycle(args: argparse.Namespace) -> int:
+    validate_commerce_gold_retry(args.attempts, args.retry_delay_seconds)
+    validate_commerce_alert_options(
+        server=args.alertmanager_server, instance=args.instance,
+        source_max_age_seconds=args.source_max_age_seconds,
+        backlog_max_age_seconds=args.backlog_max_age_seconds,
+        valid_seconds=args.alert_valid_seconds,
+    )
     shared = [
         "--s3-bucket", args.s3_bucket, "--s3-endpoint-url", args.s3_endpoint_url,
         "--state", args.state,
@@ -51,7 +61,12 @@ def run_cycle(args: argparse.Namespace) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    return run_cycle(build_parser().parse_args(argv))
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        return run_cycle(args)
+    except (CommerceAlertError, CommerceGoldGateError) as error:
+        parser.error(str(error))
 
 
 if __name__ == "__main__":
