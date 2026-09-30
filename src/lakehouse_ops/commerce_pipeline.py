@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -54,16 +55,24 @@ def run_commerce_batch(
     run_stage: Callable[[str, dict[str, str]], None],
     attempts: int = 1,
     delay_seconds: float = 2,
+    clock: Callable[[], float] = time.perf_counter,
 ) -> dict[str, Any]:
     validate_commerce_gold_retry(attempts, delay_seconds)
+    started = clock()
     plan = planner.plan(max_batches=1)
     if not plan["batches"]:
         return {"status": "idle", "batch_id": None, "completed_stages": []}
+    last = clock()
+    planning_seconds = last - started
     batch = plan["batches"][0]
     batch_id = batch["batch_id"]
     completed = []
+    stage_seconds: dict[str, float] = {}
     for service in COMMERCE_STAGES:
         run_stage(service, batch)
+        now = clock()
+        stage_seconds[service] = now - last
+        last = now
         completed.append(service)
     try:
         verification = check_commerce_gold_with_retry(
@@ -71,8 +80,17 @@ def run_commerce_batch(
         )
     except (CommerceGoldGateError, httpx.HTTPError, TrinoProtocolError, TrinoQueryError) as error:
         raise CommercePipelineError("commerce stage failed: verify-commerce-gold") from error
+    now = clock()
+    verification_seconds = now - last
+    last = now
     checkpoint = planner.commit(batch_id, expected_manifest_sha256=batch["manifest_sha256"])
+    finished = clock()
     return {
         "status": "ready", "batch_id": batch_id, "completed_stages": completed,
         "verification": verification.as_dict(), "checkpoint": checkpoint,
+        "durations_seconds": {
+            "planning": planning_seconds, "stages": stage_seconds,
+            "verification": verification_seconds, "checkpoint": finished - last,
+            "total": finished - started,
+        },
     }

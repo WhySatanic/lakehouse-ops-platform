@@ -474,6 +474,7 @@ jobs:
             --s3-endpoint-url http://localhost:9000 --user lakehouse-ci \
             --state data/state/commerce-runner-ci.json > artifacts/commerce-runner-idle.json
           uv run python -c 'import json; r=json.load(open("artifacts/commerce-runner.json")); idle=json.load(open("artifacts/commerce-runner-idle.json")); assert r["status"]=="ready"; assert r["checkpoint"]["created"] is True; assert len(r["completed_stages"])==8; assert idle["status"]=="idle"; assert idle["completed_stages"]==[]'
+          uv run python -c 'import json,math; r=json.load(open("artifacts/commerce-runner.json")); d=r["durations_seconds"]; phases=[d["planning"],*d["stages"].values(),d["verification"],d["checkpoint"]]; assert set(d["stages"])==set(r["completed_stages"]); assert all(math.isfinite(value) and value>=0 for value in phases); assert math.isclose(d["total"],sum(phases),abs_tol=1e-6)'
       - name: Verify idempotent commerce replay
         run: >-
           docker compose --profile catalog --profile compute run --rm

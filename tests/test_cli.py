@@ -412,7 +412,9 @@ def test_run_commerce_batch_command_preserves_state_on_failure_and_skips_idle(
             "--attempts", "3", "--retry-delay-seconds", "0"]
     if result in {"ready", "retry"}:
         assert cli.main(args) == 0
-        assert json.loads(capsys.readouterr().out)["checkpoint"]["created"] is True
+        report = json.loads(capsys.readouterr().out)
+        assert report["checkpoint"]["created"] is True
+        assert set(report["durations_seconds"]["stages"]) == set(COMMERCE_STAGES)
         before = state.read_bytes()
         assert cli.main(args) == 0
         assert json.loads(capsys.readouterr().out)["status"] == "idle"
