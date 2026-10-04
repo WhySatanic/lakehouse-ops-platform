@@ -460,6 +460,8 @@ jobs:
         run: >-
           docker compose --profile query up -d --wait
           trino-coordinator trino-worker trino-worker-2
+      - name: Start commerce notification endpoint
+        run: docker compose --profile observability up -d --wait alertmanager
       - name: Run one pending commerce batch with transient Trino recovery and idle rerun
         env:
           AWS_ACCESS_KEY_ID: lakeops-ingest
@@ -475,6 +477,28 @@ jobs:
             --state data/state/commerce-runner-ci.json > artifacts/commerce-runner-idle.json
           uv run python -c 'import json; r=json.load(open("artifacts/commerce-runner.json")); idle=json.load(open("artifacts/commerce-runner-idle.json")); assert r["status"]=="ready"; assert r["checkpoint"]["created"] is True; assert len(r["completed_stages"])==8; assert idle["status"]=="idle"; assert idle["completed_stages"]==[]'
           uv run python -c 'import json,math; r=json.load(open("artifacts/commerce-runner.json")); d=r["durations_seconds"]; phases=[d["planning"],*d["stages"].values(),d["verification"],d["checkpoint"]]; assert set(d["stages"])==set(r["completed_stages"]); assert all(math.isfinite(value) and value>=0 for value in phases); assert math.isclose(d["total"],sum(phases),abs_tol=1e-6)'
+      - name: Exercise scheduled commerce cycle against the live stack
+        env:
+          AWS_ACCESS_KEY_ID: lakeops-ingest
+          AWS_SECRET_ACCESS_KEY: ingest-development-only
+        run: |
+          uv run python -m lakehouse_ops.commerce_cycle \
+            --s3-bucket lakehouse --s3-endpoint-url http://localhost:9000 \
+            --state data/state/commerce-cycle-ci.json \
+            --server http://localhost:8080 --user lakehouse-ci \
+            --instance commerce-ci --alertmanager-server http://localhost:9093 \
+            --source-max-age-seconds 86400 --alert-valid-seconds 600 \
+            > artifacts/commerce-cycle.jsonl
+          uv run python -m lakehouse_ops.commerce_cycle \
+            --s3-bucket lakehouse --s3-endpoint-url http://localhost:9000 \
+            --state data/state/commerce-cycle-ci.json \
+            --server http://localhost:8080 --user lakehouse-ci \
+            --instance commerce-ci --alertmanager-server http://localhost:9093 \
+            --source-max-age-seconds 86400 --alert-valid-seconds 600 \
+            > artifacts/commerce-cycle-idle.jsonl
+          uv run python tests/integration/check_commerce_cycle.py \
+            artifacts/commerce-cycle.jsonl artifacts/commerce-cycle-idle.jsonl \
+            artifacts/commerce-runner.json > artifacts/commerce-cycle-validation.json
       - name: Verify idempotent commerce replay
         run: >-
           docker compose --profile catalog --profile compute run --rm
@@ -666,19 +690,6 @@ jobs:
               EXPECTED_ALERT_COMPONENT="" EXPECTED_ALERT_STATUS=resolved \
               docker compose --profile observability run --rm alert-delivery-check
           done
-      - name: Exercise scheduled commerce cycle against the live stack
-        env:
-          AWS_ACCESS_KEY_ID: lakeops-ingest
-          AWS_SECRET_ACCESS_KEY: ingest-development-only
-        run: |
-          uv run python -m lakehouse_ops.commerce_cycle \
-            --s3-bucket lakehouse --s3-endpoint-url http://localhost:9000 \
-            --state data/state/commerce-runner-ci.json \
-            --server http://localhost:8080 --user lakehouse-ci \
-            --instance commerce-ci --alertmanager-server http://localhost:9093 \
-            --source-max-age-seconds 86400 --alert-valid-seconds 600 \
-            > artifacts/commerce-cycle.jsonl
-          uv run python -c 'import json; reports=[json.loads(line) for line in open("artifacts/commerce-cycle.jsonl")]; assert [r["status"] for r in reports] == ["idle", "ready"]; assert reports[1]["notification"] == "accepted"; assert reports[1]["backlog"]["pending_batches"] == 0'
       - name: Verify ingestion freshness SLO alert delivery
         env:
           EXPECTED_ALERT_NAME: LakehouseIngestionFreshnessSLOBreach
@@ -1133,6 +1144,8 @@ jobs:
             artifacts/commerce-runner-idle.json
             artifacts/commerce-runner-retry.json
             artifacts/commerce-cycle.jsonl
+            artifacts/commerce-cycle-idle.jsonl
+            artifacts/commerce-cycle-validation.json
           if-no-files-found: error
           overwrite: true
       - name: Show service logs

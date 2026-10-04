@@ -45,3 +45,26 @@ def test_commerce_runner_ci_retains_transient_recovery_and_idle_evidence() -> No
     upload = upload.split("      - name:", maxsplit=1)[0]
     for name in ("commerce-runner", "commerce-runner-idle", "commerce-runner-retry"):
         assert f"artifacts/{name}.json" in upload
+
+
+def test_scheduled_cycle_ci_processes_pending_batch_then_idles() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert workflow.index("      - name: Start commerce notification endpoint\n") < workflow.index(
+        "      - name: Exercise scheduled commerce cycle against the live stack\n"
+    ) < workflow.index("      - name: Seed one changed customer batch\n")
+    section = workflow.split(
+        "      - name: Exercise scheduled commerce cycle against the live stack\n", maxsplit=1
+    )[1].split("      - name:", maxsplit=1)[0]
+    assert section.count("uv run python -m lakehouse_ops.commerce_cycle") == 2
+    assert section.count("--state data/state/commerce-cycle-ci.json") == 2
+    assert "--state data/state/commerce-runner-ci.json" not in section
+    assert "tests/integration/check_commerce_cycle.py" in section
+    assert "artifacts/commerce-cycle-validation.json" in section
+    upload = workflow.split("      - name: Upload core and recovery evidence\n", maxsplit=1)[1]
+    upload = upload.split("      - name:", maxsplit=1)[0]
+    for name in (
+        "commerce-cycle.jsonl",
+        "commerce-cycle-idle.jsonl",
+        "commerce-cycle-validation.json",
+    ):
+        assert f"artifacts/{name}" in upload
