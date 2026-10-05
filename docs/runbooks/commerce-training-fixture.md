@@ -259,6 +259,12 @@ failure, so monitor cron execution, nonzero exits, and log retention separately.
 This wrapper does not retry Spark jobs, guarantee schedule delivery, or provide
 distributed fencing. Stop the crontab entry before maintenance or recovery drills.
 
+Live-stack CI also starts this wrapper with a separate, empty checkpoint after the
+fixture has landed. It retains the pending-run and idle-rerun JSONL, validates all
+eight stages, the Trino gold result, checkpoint creation, and both accepted freshness
+submissions against the same batch. The jobs replay the existing Iceberg rows; this
+is scheduled-path acceptance evidence, not a volume benchmark or a cron timing test.
+
 ### Manual processing
 
 Pass each returned `path` to the downstream Spark job. Advance the checkpoint only after
