@@ -68,3 +68,14 @@ def test_scheduled_cycle_ci_processes_pending_batch_then_idles() -> None:
         "commerce-cycle-validation.json",
     ):
         assert f"artifacts/{name}" in upload
+
+
+def test_quality_ci_retains_commerce_fixture_scale_evidence() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    quality = workflow.split("  quality:\n", maxsplit=1)[1].split(
+        "  serving-integration:\n", maxsplit=1
+    )[0]
+    assert "python -m lakehouse_ops.commerce_fixture_profile" in quality
+    assert "--output-root artifacts/commerce-fixture-scale-data" in quality
+    assert "artifacts/commerce-fixture-scale.json" in quality
+    assert "name: commerce-fixture-scale" in quality

@@ -38,6 +38,19 @@ jobs:
         run: uv run lakeops verify-image-lock
       - name: Test
         run: uv run pytest
+      - name: Profile commerce fixture growth
+        run: |
+          mkdir -p artifacts
+          uv run python -m lakehouse_ops.commerce_fixture_profile \
+            --output-root artifacts/commerce-fixture-scale-data \
+            > artifacts/commerce-fixture-scale.json
+      - name: Upload commerce fixture scale evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          archive: true
+          name: commerce-fixture-scale
+          path: artifacts/commerce-fixture-scale.json
+          if-no-files-found: error
 
   serving-integration:
     runs-on: ubuntu-latest
