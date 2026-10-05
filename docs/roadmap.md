@@ -254,6 +254,8 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
 - [ ] Measure runtime, memory, file growth, maintenance, and recovery as volume increases.
   - [x] Retain per-stage and checkpoint elapsed time for a successful one-shot commerce
     run, including verification retries, without claiming volume benchmarks.
+  - [x] Retain two-size, checksum-verified source-fixture generation time, Python heap
+    peak, and JSONL byte-growth evidence in CI, separate from Spark capacity claims.
 
 Exit criterion: one documented command and one scheduled path take a reproducible source
 batch through quality checks into a Trino-queryable gold mart, with safe reruns, bounded

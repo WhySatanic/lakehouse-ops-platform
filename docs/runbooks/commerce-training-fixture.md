@@ -10,8 +10,28 @@ Generate the default dataset:
 uv run lakeops generate-commerce-fixture --output data/commerce
 ```
 
-The command prints the generated batch directory. Land that exact directory in MinIO
-after starting `minio` and running `minio-init`:
+The command prints the generated batch directory.
+
+To inspect how source-fixture generation scales without starting Docker, use an
+empty output directory:
+
+```bash
+uv run python -m lakehouse_ops.commerce_fixture_profile \
+  --output-root artifacts/commerce-fixture-scale-data \
+  > artifacts/commerce-fixture-scale.json
+```
+
+The probe generates 1,000- and 10,000-order fixtures with the same seed and
+proportional quality cases, verifies each fixture by checksum replay, and records
+rows, JSONL bytes, generation wall time, and peak traced Python allocations.
+It refuses a nonempty output directory so cached fixtures cannot masquerade as
+fresh timing. CI retains the JSON report as `commerce-fixture-scale` evidence.
+Timing and Python heap depend on the runner and exclude native memory, Spark,
+Iceberg, MinIO, and Trino. This is a source-generator growth probe, not an
+end-to-end throughput or memory benchmark.
+
+Land the default fixture's reported batch directory in MinIO after starting
+`minio` and running `minio-init`:
 
 ```bash
 uv run --env-file .env lakeops land-commerce-fixture \
