@@ -130,6 +130,14 @@ Each run writes JSON Lines files and a `manifest.json` under a content-addressed
 Running the same command again verifies every table checksum and reports
 `"created": false`; it does not silently replace data. A changed seed or row count creates
 a separate batch.
+The rerun also requires the cached manifest to name exactly the four local JSONL
+files with expected row counts, checksums, and quality-case metadata. A malformed
+manifest, an outside-directory table path, or a symlinked table exits 2 before
+hashing table files;
+the batch is left untouched. Preserve the bad directory for diagnosis, generate
+the same configuration under a separate empty output root, and reconcile its
+batch ID and checksums before any manual recovery. Do not overwrite a committed
+MinIO batch to hide local corruption.
 
 For a fast exercise, reduce all counts explicitly:
 

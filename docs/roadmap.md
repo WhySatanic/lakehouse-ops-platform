@@ -219,6 +219,8 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
 - [x] Generate a content-addressed, reproducible commerce source fixture with linked
   customers, products, orders, and payments plus exact NULL, duplicate, late-event, and
   invalid-payment counts.
+  - [x] Fail closed on malformed cached manifests before reading table paths or
+    reporting an idempotent rerun; retain the corrupt directory for recovery.
 - [x] Land checksum-verified commerce batches in MinIO with deterministic keys,
   conflict-safe retries, and a manifest commit marker.
 - [ ] Incrementally merge validated commerce data into Spark/Iceberg bronze and silver
