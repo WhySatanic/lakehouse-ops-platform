@@ -225,8 +225,13 @@ def _normalized_config(config: CommerceFixtureConfig) -> dict[str, Any]:
 def _verify_existing(
     destination: Path, expected_config: dict[str, Any], batch_id: str
 ) -> dict[str, Any]:
+    manifest_path = destination / "manifest.json"
+    if manifest_path.is_symlink():
+        raise CommerceFixtureError(
+            f"existing fixture manifest symlink is not allowed: {manifest_path}"
+        )
     try:
-        manifest = json.loads((destination / "manifest.json").read_text(encoding="utf-8"))
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise CommerceFixtureError(f"existing fixture manifest is unreadable: {error}") from error
     if not isinstance(manifest, dict):
