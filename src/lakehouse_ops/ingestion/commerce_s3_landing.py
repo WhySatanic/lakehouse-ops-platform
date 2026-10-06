@@ -45,7 +45,7 @@ class CommerceS3LandingZone:
         self._prefix = prefix.strip("/")
 
     def write(self, fixture: Path) -> CommerceLandingResult:
-        manifest, objects = _load_fixture(fixture)
+        manifest, objects, verified_manifest = _load_fixture(fixture)
         batch_id = manifest["batch_id"]
         base_key = "/".join(
             part
@@ -60,17 +60,23 @@ class CommerceS3LandingZone:
             key = f"{base_key}/{name}"
             created += self._put_once(
                 key,
-                path.read_bytes(),
+                _read_verified_bytes(path, checksum),
                 checksum,
                 metadata={"batch-id": batch_id, "source": "commerce"},
                 content_type="application/x-ndjson",
             )
 
         manifest_path = fixture / "manifest.json"
-        manifest_checksum = _file_sha256(manifest_path)
+        try:
+            manifest_body = manifest_path.read_bytes()
+        except OSError as error:
+            raise CommerceLandingError("fixture manifest changed during upload") from error
+        if manifest_body != verified_manifest:
+            raise CommerceLandingError("fixture manifest changed during upload")
+        manifest_checksum = hashlib.sha256(manifest_body).hexdigest()
         created += self._put_once(
             f"{base_key}/manifest.json",
-            manifest_path.read_bytes(),
+            manifest_body,
             manifest_checksum,
             metadata={"batch-id": batch_id, "source": "commerce", "commit-marker": "true"},
             content_type="application/json",
@@ -120,10 +126,13 @@ class CommerceS3LandingZone:
         return 0
 
 
-def _load_fixture(fixture: Path) -> tuple[dict[str, Any], list[tuple[str, Path, str]]]:
+def _load_fixture(
+    fixture: Path,
+) -> tuple[dict[str, Any], list[tuple[str, Path, str]], bytes]:
     try:
-        manifest = json.loads((fixture / "manifest.json").read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        manifest_body = (fixture / "manifest.json").read_bytes()
+        manifest = json.loads(manifest_body.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise CommerceLandingError(f"fixture manifest is unreadable: {error}") from error
 
     if not isinstance(manifest, dict):
@@ -154,7 +163,17 @@ def _load_fixture(fixture: Path) -> tuple[dict[str, Any], list[tuple[str, Path, 
         if not path.is_file() or _file_sha256(path) != checksum:
             raise CommerceLandingError(f"fixture checksum verification failed: {path}")
         objects.append((file_name, path, checksum))
-    return manifest, objects
+    return manifest, objects, manifest_body
+
+
+def _read_verified_bytes(path: Path, checksum: str) -> bytes:
+    try:
+        body = path.read_bytes()
+    except OSError as error:
+        raise CommerceLandingError(f"fixture changed during upload: {path}") from error
+    if hashlib.sha256(body).hexdigest() != checksum:
+        raise CommerceLandingError(f"fixture changed during upload: {path}")
+    return body
 
 
 def _file_sha256(path: Path) -> str:

@@ -78,10 +78,12 @@ batch ID that cannot be discovered under the 16-character lowercase-hex S3 key
 convention fails before any upload. The manifest must name exactly the customers,
 products, orders, and payments tables, each with its matching JSONL filename.
 Table files must be regular files, not symbolic links. Keep the fixture directory
-unchanged throughout upload; validation does not protect against concurrent file
-replacement. On rejection, keep the fixture for inspection, regenerate it from
-the original parameters, and do not edit committed S3 objects. No commit marker
-is published for a rejected fixture.
+unchanged throughout upload. The uploader rechecks the bytes it sends against
+the declared table checksums and rejects a manifest that changed after initial
+validation. Such a rejection leaves no commit marker, though table objects sent
+earlier in the attempt may remain uncommitted. This is not protection against
+hostile concurrent path replacement. On rejection, keep the fixture for inspection,
+regenerate it from the original parameters, and do not edit committed S3 objects.
 A checksum conflict is an error and no existing object is overwritten.
 
 Audit every retained JSON version before a recovery and inventory delete markers:
