@@ -192,6 +192,45 @@ def test_land_commerce_fixture_command(
     assert report["path"].startswith("s3://lakehouse/landing/source=commerce/")
 
 
+def test_land_commerce_fixture_rejects_invalid_manifest_without_upload(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    fixture_report = cli.generate_commerce_fixture(
+        tmp_path,
+        cli.CommerceFixtureConfig(
+            customers=4,
+            products=2,
+            orders=6,
+            null_customer_emails=1,
+            duplicate_orders=1,
+            late_orders=1,
+            invalid_payments=1,
+        ),
+    )
+    (fixture_report.path / "manifest.json").write_text("[]", encoding="utf-8")
+    s3_client = FakeS3Client()
+    monkeypatch.setattr(cli, "_create_s3_client", lambda args: s3_client)
+
+    with pytest.raises(SystemExit) as error:
+        cli.main(
+            [
+                "land-commerce-fixture",
+                "--fixture",
+                str(fixture_report.path),
+                "--s3-bucket",
+                "lakehouse",
+            ]
+        )
+
+    captured = capsys.readouterr()
+    assert error.value.code == 2
+    assert captured.out == ""
+    assert "fixture manifest is invalid" in captured.err
+    assert s3_client.objects == {}
+
+
 def test_plan_and_commit_commerce_batch_commands(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

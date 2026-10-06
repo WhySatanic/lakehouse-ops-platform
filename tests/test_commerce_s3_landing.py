@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -89,6 +90,35 @@ def test_rejects_modified_fixture_before_upload(commerce_fixture: Path) -> None:
         CommerceS3LandingZone(client, bucket="lakehouse").write(commerce_fixture)
 
     assert client.objects == {}
+
+
+@pytest.mark.parametrize("document", [None, [], "invalid"])
+def test_rejects_non_object_manifest_before_upload(
+    commerce_fixture: Path, document: object
+) -> None:
+    (commerce_fixture / "manifest.json").write_text(json.dumps(document), encoding="utf-8")
+    client = FakeS3Client()
+
+    with pytest.raises(CommerceLandingError, match="fixture manifest is invalid"):
+        CommerceS3LandingZone(client, bucket="lakehouse").write(commerce_fixture)
+
+    assert client.requests == []
+
+
+@pytest.mark.parametrize("batch_id", ["../escaped", "A" * 16])
+def test_rejects_unaddressable_batch_id_before_upload(
+    commerce_fixture: Path, batch_id: str
+) -> None:
+    manifest_path = commerce_fixture / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["batch_id"] = batch_id
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    client = FakeS3Client()
+
+    with pytest.raises(CommerceLandingError, match="fixture batch_id is invalid"):
+        CommerceS3LandingZone(client, bucket="lakehouse").write(commerce_fixture)
+
+    assert client.requests == []
 
 
 def test_rejects_conflicting_existing_object(commerce_fixture: Path) -> None:
