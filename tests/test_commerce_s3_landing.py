@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from botocore.exceptions import ClientError
 
+import lakehouse_ops.ingestion.commerce_s3_landing as landing_module
 from lakehouse_ops.ingestion.commerce_fixture import (
     CommerceFixtureConfig,
     generate_commerce_fixture,
@@ -90,6 +91,47 @@ def test_rejects_modified_fixture_before_upload(commerce_fixture: Path) -> None:
         CommerceS3LandingZone(client, bucket="lakehouse").write(commerce_fixture)
 
     assert client.objects == {}
+
+
+def test_rejects_table_changed_after_validation(
+    commerce_fixture: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original_load = landing_module._load_fixture
+
+    def load_then_mutate(fixture: Path) -> Any:
+        result = original_load(fixture)
+        (fixture / "customers.jsonl").write_text("tampered\n", encoding="utf-8")
+        return result
+
+    monkeypatch.setattr(landing_module, "_load_fixture", load_then_mutate)
+    client = FakeS3Client()
+
+    with pytest.raises(CommerceLandingError, match="changed during upload"):
+        CommerceS3LandingZone(client, bucket="lakehouse").write(commerce_fixture)
+
+    assert client.requests == []
+
+
+def test_rejects_manifest_changed_after_validation(
+    commerce_fixture: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original_load = landing_module._load_fixture
+
+    def load_then_mutate(fixture: Path) -> Any:
+        result = original_load(fixture)
+        manifest_path = fixture / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["batch_id"] = "f" * 16
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        return result
+
+    monkeypatch.setattr(landing_module, "_load_fixture", load_then_mutate)
+    client = FakeS3Client()
+
+    with pytest.raises(CommerceLandingError, match="manifest changed during upload"):
+        CommerceS3LandingZone(client, bucket="lakehouse").write(commerce_fixture)
+
+    assert not any(request["Key"].endswith("/manifest.json") for request in client.requests)
 
 
 @pytest.mark.parametrize("document", [None, [], "invalid"])
