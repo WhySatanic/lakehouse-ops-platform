@@ -198,6 +198,7 @@ def test_land_commerce_fixture_command(
         ("non-object", "fixture manifest is invalid"),
         ("missing-table", "fixture table inventory is invalid"),
         ("symlink", "fixture table symlink is not allowed"),
+        ("manifest-symlink", "fixture manifest symlink is not allowed"),
     ],
 )
 def test_land_commerce_fixture_rejects_invalid_local_fixture_without_upload(
@@ -227,12 +228,15 @@ def test_land_commerce_fixture_rejects_invalid_local_fixture_without_upload(
         del manifest["tables"]["payments"]
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     else:
-        table_path = fixture_report.path / "orders.jsonl"
+        link_path = (
+            manifest_path if corruption == "manifest-symlink"
+            else fixture_report.path / "orders.jsonl"
+        )
         original_is_symlink = Path.is_symlink
         monkeypatch.setattr(
             Path,
             "is_symlink",
-            lambda path: path == table_path or original_is_symlink(path),
+            lambda path: path == link_path or original_is_symlink(path),
         )
     s3_client = FakeS3Client()
     monkeypatch.setattr(cli, "_create_s3_client", lambda args: s3_client)

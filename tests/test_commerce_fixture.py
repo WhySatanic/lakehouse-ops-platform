@@ -127,6 +127,26 @@ def test_cached_fixture_rejects_symlinked_table(tmp_path: Path) -> None:
         generate_commerce_fixture(tmp_path, config)
 
 
+def test_cached_fixture_rejects_symlinked_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = CommerceFixtureConfig(
+        customers=2, products=2, orders=3, null_customer_emails=1,
+        duplicate_orders=1, late_orders=1, invalid_payments=1,
+    )
+    result = generate_commerce_fixture(tmp_path, config)
+    manifest_path = result.path / "manifest.json"
+    original_is_symlink = Path.is_symlink
+    monkeypatch.setattr(
+        Path,
+        "is_symlink",
+        lambda path: path == manifest_path or original_is_symlink(path),
+    )
+
+    with pytest.raises(CommerceFixtureError, match="manifest symlink"):
+        generate_commerce_fixture(tmp_path, config)
+
+
 def test_same_configuration_has_identical_content_in_different_roots(tmp_path: Path) -> None:
     config = CommerceFixtureConfig(
         customers=3,

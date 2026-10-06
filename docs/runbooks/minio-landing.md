@@ -77,7 +77,7 @@ Safe retries report zero newly created objects. A malformed local manifest or a
 batch ID that cannot be discovered under the 16-character lowercase-hex S3 key
 convention fails before any upload. The manifest must name exactly the customers,
 products, orders, and payments tables, each with its matching JSONL filename.
-Table files must be regular files, not symbolic links. Keep the fixture directory
+The local manifest and table files must not be symbolic links. Keep the fixture directory
 unchanged throughout upload. The uploader rechecks the bytes it sends against
 the declared table checksums and rejects a manifest that changed after initial
 validation. Such a rejection leaves no commit marker, though table objects sent

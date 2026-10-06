@@ -129,8 +129,11 @@ class CommerceS3LandingZone:
 def _load_fixture(
     fixture: Path,
 ) -> tuple[dict[str, Any], list[tuple[str, Path, str]], bytes]:
+    manifest_path = fixture / "manifest.json"
+    if manifest_path.is_symlink():
+        raise CommerceLandingError(f"fixture manifest symlink is not allowed: {manifest_path}")
     try:
-        manifest_body = (fixture / "manifest.json").read_bytes()
+        manifest_body = manifest_path.read_bytes()
         manifest = json.loads(manifest_body.decode("utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise CommerceLandingError(f"fixture manifest is unreadable: {error}") from error
