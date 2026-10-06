@@ -132,8 +132,10 @@ def _load_fixture(fixture: Path) -> tuple[dict[str, Any], list[tuple[str, Path, 
     tables = manifest.get("tables")
     if not isinstance(batch_id, str) or not re.fullmatch(r"[0-9a-f]{16}", batch_id):
         raise CommerceLandingError("fixture batch_id is invalid")
-    if not isinstance(tables, dict) or not tables:
-        raise CommerceLandingError("fixture manifest must contain tables")
+    if not isinstance(tables, dict) or set(tables) != {
+        "customers", "products", "orders", "payments"
+    }:
+        raise CommerceLandingError("fixture table inventory is invalid")
 
     objects: list[tuple[str, Path, str]] = []
     for table_name in sorted(tables):
@@ -142,8 +144,8 @@ def _load_fixture(fixture: Path) -> tuple[dict[str, Any], list[tuple[str, Path, 
             raise CommerceLandingError(f"invalid manifest entry for table: {table_name}")
         file_name = details.get("file")
         checksum = details.get("sha256")
-        if not isinstance(file_name, str) or Path(file_name).name != file_name:
-            raise CommerceLandingError(f"invalid fixture file name for table: {table_name}")
+        if file_name != f"{table_name}.jsonl":
+            raise CommerceLandingError("fixture table inventory is invalid")
         if not isinstance(checksum, str) or len(checksum) != 64:
             raise CommerceLandingError(f"invalid checksum for table: {table_name}")
         path = fixture / file_name

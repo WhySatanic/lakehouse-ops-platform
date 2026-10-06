@@ -121,6 +121,26 @@ def test_rejects_unaddressable_batch_id_before_upload(
     assert client.requests == []
 
 
+@pytest.mark.parametrize("corruption", ["missing-table", "reused-file"])
+def test_rejects_invalid_table_inventory_before_upload(
+    commerce_fixture: Path, corruption: str
+) -> None:
+    manifest_path = commerce_fixture / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if corruption == "missing-table":
+        del manifest["tables"]["payments"]
+    else:
+        manifest["tables"]["customers"]["file"] = "orders.jsonl"
+        manifest["tables"]["customers"]["sha256"] = manifest["tables"]["orders"]["sha256"]
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    client = FakeS3Client()
+
+    with pytest.raises(CommerceLandingError, match="fixture table inventory is invalid"):
+        CommerceS3LandingZone(client, bucket="lakehouse").write(commerce_fixture)
+
+    assert client.requests == []
+
+
 def test_rejects_conflicting_existing_object(commerce_fixture: Path) -> None:
     client = FakeS3Client()
     landing = CommerceS3LandingZone(client, bucket="lakehouse")
