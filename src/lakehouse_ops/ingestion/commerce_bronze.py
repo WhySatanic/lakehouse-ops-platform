@@ -47,7 +47,11 @@ def load_commerce_batch(
         manifest = json.loads(manifest_bytes)
     except (OSError, json.JSONDecodeError) as error:
         raise CommerceBronzeError(f"commerce manifest is unreadable: {error}") from error
-    if manifest.get("schema_version") != 1 or manifest.get("batch_id") != expected_batch_id:
+    if (
+        type(manifest.get("schema_version")) is not int
+        or manifest["schema_version"] != 1
+        or manifest.get("batch_id") != expected_batch_id
+    ):
         raise CommerceBronzeError("commerce manifest identity is invalid")
     tables = manifest.get("tables")
     if not isinstance(tables, dict) or tuple(sorted(tables)) != REQUIRED_TABLES:

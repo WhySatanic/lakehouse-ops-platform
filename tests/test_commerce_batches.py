@@ -14,6 +14,8 @@ from lakehouse_ops.ingestion.commerce_batches import (
     CommerceBatchPlanner,
 )
 
+MISSING_SCHEMA = object()
+
 
 class FakeS3Client:
     def __init__(self) -> None:
@@ -23,23 +25,21 @@ class FakeS3Client:
     def add_manifest(
         self, batch_id: str, batch_at: str, *, committed_at: datetime | None = None,
         tables: dict[str, Any] | None = None,
+        schema_version: object = 1,
     ) -> None:
         if tables is None:
             tables = {
                 name: {"file": f"{name}.jsonl", "rows": 1, "sha256": "0" * 64}
                 for name in ("customers", "products", "orders", "payments")
             }
-        body = (
-            json.dumps(
-                {
-                    "batch_id": batch_id,
-                    "config": {"batch_at": batch_at},
-                    "tables": tables,
-                },
-                sort_keys=True,
-            ).encode()
-            + b"\n"
-        )
+        manifest = {
+            "batch_id": batch_id,
+            "config": {"batch_at": batch_at},
+            "tables": tables,
+        }
+        if schema_version is not MISSING_SCHEMA:
+            manifest["schema_version"] = schema_version
+        body = json.dumps(manifest, sort_keys=True).encode() + b"\n"
         checksum = hashlib.sha256(body).hexdigest()
         key = f"landing/source=commerce/batch_id={batch_id}/manifest.json"
         self.objects[key] = (
@@ -272,6 +272,23 @@ def test_rejects_invalid_commit_marker(client: FakeS3Client, tmp_path: Path) -> 
 
     with pytest.raises(CommerceBatchError, match="invalid commerce commit marker"):
         planner.plan(max_batches=1)
+
+
+@pytest.mark.parametrize("schema_version", [2, "1", True, None, MISSING_SCHEMA])
+def test_rejects_unsupported_committed_schema_version(
+    tmp_path: Path, schema_version: object
+) -> None:
+    client = FakeS3Client()
+    client.add_manifest(
+        "aaaaaaaaaaaaaaaa", "2026-01-01T00:00:00Z", schema_version=schema_version
+    )
+    state = tmp_path / "state.json"
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state)
+
+    with pytest.raises(CommerceBatchError, match="invalid commerce manifest"):
+        planner.plan(max_batches=1)
+
+    assert not state.exists()
 
 
 @pytest.mark.parametrize(

@@ -163,6 +163,25 @@ def test_rejects_unaddressable_batch_id_before_upload(
     assert client.requests == []
 
 
+@pytest.mark.parametrize("schema_version", [2, "1", True, None, "missing"])
+def test_rejects_unsupported_fixture_schema_before_upload(
+    commerce_fixture: Path, schema_version: object
+) -> None:
+    manifest_path = commerce_fixture / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if schema_version == "missing":
+        del manifest["schema_version"]
+    else:
+        manifest["schema_version"] = schema_version
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    client = FakeS3Client()
+
+    with pytest.raises(CommerceLandingError, match="schema version"):
+        CommerceS3LandingZone(client, bucket="lakehouse").write(commerce_fixture)
+
+    assert client.requests == []
+
+
 @pytest.mark.parametrize("corruption", ["missing-table", "reused-file"])
 def test_rejects_invalid_table_inventory_before_upload(
     commerce_fixture: Path, corruption: str
