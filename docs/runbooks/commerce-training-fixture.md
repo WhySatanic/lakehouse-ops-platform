@@ -45,6 +45,11 @@ are written before `manifest.json`. The manifest is the commit marker, so downst
 jobs must process only batch prefixes that contain it. A retry returns `"created": 0`
 after downloading and verifying each existing object's checksum. A local checksum
 mismatch or conflicting S3 object fails the command instead of silently replacing data.
+Before any upload, landing verifies each local table has a positive row count matching
+its manifest entry and a matching SHA-256 checksum. Planning also rejects a committed
+manifest that declares zero rows for any required table, matching the bronze loader's
+nonempty-table contract. If this fails, retain the fixture for inspection and regenerate
+it from the intended configuration; do not edit the committed manifest in place.
 
 Check that a committed source batch landed recently before running scheduled work:
 

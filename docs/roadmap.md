@@ -229,6 +229,8 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
   - [x] Reject a symlinked local manifest in cached fixture validation and S3 landing.
   - [x] Reject table or manifest changes between fixture validation and S3 upload
     before publishing the commit marker.
+  - [x] Require positive, checksum-matched, exact table row counts before S3 upload;
+    reject zero-row committed inventories before Spark planning.
 - [ ] Incrementally merge validated commerce data into Spark/Iceberg bronze and silver
   tables with bounded replay and backfill state.
   - [x] Discover committed landing batches, plan bounded work, and atomically checkpoint
