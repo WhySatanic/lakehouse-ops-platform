@@ -21,14 +21,20 @@ class FakeS3Client:
         self.last_modified: dict[str, datetime] = {}
 
     def add_manifest(
-        self, batch_id: str, batch_at: str, *, committed_at: datetime | None = None
+        self, batch_id: str, batch_at: str, *, committed_at: datetime | None = None,
+        tables: dict[str, Any] | None = None,
     ) -> None:
+        if tables is None:
+            tables = {
+                name: {"file": f"{name}.jsonl", "rows": 1, "sha256": "0" * 64}
+                for name in ("customers", "products", "orders", "payments")
+            }
         body = (
             json.dumps(
                 {
                     "batch_id": batch_id,
                     "config": {"batch_at": batch_at},
-                    "tables": {"orders": {"file": "orders.jsonl"}},
+                    "tables": tables,
                 },
                 sort_keys=True,
             ).encode()
@@ -266,6 +272,37 @@ def test_rejects_invalid_commit_marker(client: FakeS3Client, tmp_path: Path) -> 
 
     with pytest.raises(CommerceBatchError, match="invalid commerce commit marker"):
         planner.plan(max_batches=1)
+
+
+@pytest.mark.parametrize(
+    "damage", ["missing-table", "reused-file", "bad-checksum", "negative-rows", "bool-rows"]
+)
+def test_rejects_invalid_committed_table_inventory(
+    tmp_path: Path, damage: str
+) -> None:
+    client = FakeS3Client()
+    tables = {
+        name: {"file": f"{name}.jsonl", "rows": 1, "sha256": "0" * 64}
+        for name in ("customers", "products", "orders", "payments")
+    }
+    if damage == "missing-table":
+        del tables["payments"]
+    elif damage == "reused-file":
+        tables["customers"]["file"] = "orders.jsonl"
+    elif damage == "bad-checksum":
+        tables["products"]["sha256"] = "not-a-checksum"
+    elif damage == "negative-rows":
+        tables["orders"]["rows"] = -1
+    else:
+        tables["orders"]["rows"] = True
+    client.add_manifest("aaaaaaaaaaaaaaaa", "2026-01-01T00:00:00Z", tables=tables)
+    state = tmp_path / "state.json"
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state)
+
+    with pytest.raises(CommerceBatchError, match="invalid commerce manifest"):
+        planner.plan(max_batches=1)
+
+    assert not state.exists()
 
 
 def test_rejects_changed_manifest_after_checkpoint(

@@ -167,6 +167,12 @@ uv run --env-file .env lakeops plan-commerce-batches \
   --max-batches 1
 ```
 
+The planner checks the commit marker's checksum and requires all four commerce
+tables with matching JSONL filenames, nonnegative row counts, and lowercase
+SHA-256 values. A malformed marker stops planning without changing the
+checkpoint. Inspect the retained MinIO object versions and regenerate the
+fixture before retrying; planning does not read each table object.
+
 ### One-shot batch runner
 
 From the repository root, with Compose images built, MinIO initialized, Hive Metastore

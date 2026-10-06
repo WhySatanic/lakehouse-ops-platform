@@ -266,7 +266,7 @@ class CommerceBatchPlanner:
         if (
             manifest.get("batch_id") != batch_id
             or parsed_batch_at.tzinfo is None
-            or not manifest.get("tables")
+            or not _valid_table_inventory(manifest.get("tables"))
         ):
             raise CommerceBatchError(f"invalid commerce manifest: {key}")
         return CommerceBatch(
@@ -280,6 +280,27 @@ class CommerceBatchPlanner:
                 else None
             ),
         )
+
+
+def _valid_table_inventory(tables: object) -> bool:
+    if not isinstance(tables, dict) or set(tables) != {
+        "customers", "products", "orders", "payments"
+    }:
+        return False
+    for name, details in tables.items():
+        if not isinstance(details, dict):
+            return False
+        checksum = details.get("sha256")
+        rows = details.get("rows")
+        if (
+            details.get("file") != f"{name}.jsonl"
+            or type(rows) is not int
+            or rows < 0
+            or not isinstance(checksum, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", checksum)
+        ):
+            return False
+    return True
 
 
 def _load_state(path: Path) -> dict[str, Any]:
