@@ -49,6 +49,35 @@ def test_scheduled_cycle_notifies_even_after_pipeline_failure(
     assert calls[1][calls[1].index("--backlog-max-age-seconds") + 1] == "300"
 
 
+@pytest.mark.parametrize("failed_command", ["run-commerce-batch", "notify-commerce-freshness"])
+def test_cycle_reports_spawn_failure_and_attempts_notification(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    failed_command: str,
+) -> None:
+    calls: list[str] = []
+
+    def run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        assert kwargs == {"check": False}
+        calls.append(command[3])
+        if command[3] == failed_command:
+            raise OSError("process limit reached")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(commerce_cycle.subprocess, "run", run)
+
+    result = commerce_cycle.main([
+        "--s3-bucket", "lakehouse", "--s3-endpoint-url", "http://localhost:9000",
+        "--state", "data/state/commerce-batches.json",
+        "--server", "http://localhost:8080", "--user", "lakehouse-ops",
+        "--instance", "commerce-local", "--alertmanager-server", "http://localhost:9093",
+    ])
+
+    assert result == 2
+    assert calls == ["run-commerce-batch", "notify-commerce-freshness"]
+    assert f"{failed_command} could not start: process limit reached" in capsys.readouterr().err
+
+
 def test_cycle_requires_scope_before_starting_work(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         commerce_cycle.subprocess, "run", lambda *_args, **_kwargs: pytest.fail("must not run"),

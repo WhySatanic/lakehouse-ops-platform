@@ -256,6 +256,8 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
     Cron liveness, Spark retries, and distributed scheduling remain out of scope.
   - [x] Reject invalid retry and freshness-notification settings before a scheduled
     cycle starts compute or reaches MinIO.
+  - [x] Report child-process launch failures and still attempt freshness notification
+    when the batch runner cannot start.
   - [x] Exercise a pending committed batch through the scheduled wrapper, all eight
     stages, Trino gold verification, checkpoint, accepted freshness observations,
     and an idle rerun in live-stack CI.
