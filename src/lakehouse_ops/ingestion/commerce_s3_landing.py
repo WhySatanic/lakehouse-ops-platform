@@ -149,6 +149,8 @@ def _load_fixture(fixture: Path) -> tuple[dict[str, Any], list[tuple[str, Path, 
         if not isinstance(checksum, str) or len(checksum) != 64:
             raise CommerceLandingError(f"invalid checksum for table: {table_name}")
         path = fixture / file_name
+        if path.is_symlink():
+            raise CommerceLandingError(f"fixture table symlink is not allowed: {path}")
         if not path.is_file() or _file_sha256(path) != checksum:
             raise CommerceLandingError(f"fixture checksum verification failed: {path}")
         objects.append((file_name, path, checksum))

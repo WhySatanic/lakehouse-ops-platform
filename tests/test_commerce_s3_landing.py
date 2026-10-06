@@ -141,6 +141,43 @@ def test_rejects_invalid_table_inventory_before_upload(
     assert client.requests == []
 
 
+def test_rejects_symlinked_table_before_upload(
+    commerce_fixture: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    table_path = commerce_fixture / "orders.jsonl"
+    original_is_symlink = Path.is_symlink
+    monkeypatch.setattr(
+        Path,
+        "is_symlink",
+        lambda path: path == table_path or original_is_symlink(path),
+    )
+    client = FakeS3Client()
+
+    with pytest.raises(CommerceLandingError, match="symlink"):
+        CommerceS3LandingZone(client, bucket="lakehouse").write(commerce_fixture)
+
+    assert client.requests == []
+
+
+def test_rejects_table_symlink_to_file_outside_fixture(
+    commerce_fixture: Path, tmp_path: Path
+) -> None:
+    table_path = commerce_fixture / "orders.jsonl"
+    outside = tmp_path / "outside-orders.jsonl"
+    outside.write_bytes(table_path.read_bytes())
+    table_path.unlink()
+    try:
+        table_path.symlink_to(outside)
+    except OSError as error:
+        pytest.skip(f"file symlinks unavailable: {error}")
+    client = FakeS3Client()
+
+    with pytest.raises(CommerceLandingError, match="symlink"):
+        CommerceS3LandingZone(client, bucket="lakehouse").write(commerce_fixture)
+
+    assert client.requests == []
+
+
 def test_rejects_conflicting_existing_object(commerce_fixture: Path) -> None:
     client = FakeS3Client()
     landing = CommerceS3LandingZone(client, bucket="lakehouse")

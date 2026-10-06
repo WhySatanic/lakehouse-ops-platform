@@ -225,6 +225,7 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
   conflict-safe retries, and a manifest commit marker.
   - [x] Reject non-object manifests and unaddressable batch IDs before any S3 write.
   - [x] Reject missing tables or reused filenames before publishing the commit marker.
+  - [x] Refuse symlinked local table files before any S3 write.
 - [ ] Incrementally merge validated commerce data into Spark/Iceberg bronze and silver
   tables with bounded replay and backfill state.
   - [x] Discover committed landing batches, plan bounded work, and atomically checkpoint
