@@ -264,7 +264,9 @@ class CommerceBatchPlanner:
         except (json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
             raise CommerceBatchError(f"invalid commerce manifest: {key}") from error
         if (
-            manifest.get("batch_id") != batch_id
+            type(manifest.get("schema_version")) is not int
+            or manifest["schema_version"] != 1
+            or manifest.get("batch_id") != batch_id
             or parsed_batch_at.tzinfo is None
             or not _valid_table_inventory(manifest.get("tables"))
         ):

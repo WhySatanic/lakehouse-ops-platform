@@ -50,6 +50,10 @@ its manifest entry and a matching SHA-256 checksum. Planning also rejects a comm
 manifest that declares zero rows for any required table, matching the bronze loader's
 nonempty-table contract. If this fails, retain the fixture for inspection and regenerate
 it from the intended configuration; do not edit the committed manifest in place.
+The fixture, S3 landing, batch planner, and bronze loader all require an integer
+`schema_version` of `1`. A missing, boolean, string, or newer version is rejected
+before publication or compute. Preserve the incompatible manifest for inspection;
+do not relabel it as version 1 to force a retry.
 
 Check that a committed source batch landed recently before running scheduled work:
 

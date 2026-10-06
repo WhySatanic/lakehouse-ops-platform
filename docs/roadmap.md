@@ -231,6 +231,8 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
     before publishing the commit marker.
   - [x] Require positive, checksum-matched, exact table row counts before S3 upload;
     reject zero-row committed inventories before Spark planning.
+  - [x] Require integer schema version 1 at landing, batch planning, and bronze loading;
+    reject unsupported manifests before S3 publication or compute.
 - [ ] Incrementally merge validated commerce data into Spark/Iceberg bronze and silver
   tables with bounded replay and backfill state.
   - [x] Discover committed landing batches, plan bounded work, and atomically checkpoint

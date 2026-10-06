@@ -132,3 +132,13 @@ def test_rejects_missing_required_table(batch_path: Path) -> None:
 
     with pytest.raises(CommerceBronzeError, match="exactly four required tables"):
         load_commerce_batch(batch_path, expected_batch_id=batch_id)
+
+
+def test_rejects_boolean_schema_version(batch_path: Path) -> None:
+    manifest_path = batch_path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["schema_version"] = True
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(CommerceBronzeError, match="manifest identity is invalid"):
+        load_commerce_batch(batch_path, expected_batch_id=batch_path.name.removeprefix("batch_id="))

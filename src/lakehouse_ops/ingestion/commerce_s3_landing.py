@@ -142,6 +142,8 @@ def _load_fixture(
         raise CommerceLandingError("fixture manifest is invalid: expected an object")
     batch_id = manifest.get("batch_id")
     tables = manifest.get("tables")
+    if type(manifest.get("schema_version")) is not int or manifest["schema_version"] != 1:
+        raise CommerceLandingError("fixture schema version is unsupported")
     if not isinstance(batch_id, str) or not re.fullmatch(r"[0-9a-f]{16}", batch_id):
         raise CommerceLandingError("fixture batch_id is invalid")
     if not isinstance(tables, dict) or set(tables) != {
