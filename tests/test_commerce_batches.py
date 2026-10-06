@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
+from threading import Event
 from typing import Any
 
 import pytest
 
+import lakehouse_ops.ingestion.commerce_batches as batches_module
 from lakehouse_ops.ingestion.commerce_batches import (
     CommerceBatchError,
     CommerceBatchPlanner,
@@ -214,6 +217,46 @@ def test_commit_is_atomic_idempotent_and_advances_incremental_plan(
     assert second["created"] is False
     assert json.loads(state_path.read_text())["schema_version"] == 1
     assert [batch["batch_id"] for batch in plan["batches"]] == ["bbbbbbbbbbbbbbbb"]
+
+
+def test_concurrent_checkpoint_writer_cannot_acknowledge_the_same_batch_twice(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    client = FakeS3Client()
+    client.add_manifest("aaaaaaaaaaaaaaaa", "2026-01-01T00:00:00Z")
+    state_path = tmp_path / "state.json"
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state_path)
+    entered, release = Event(), Event()
+    original_write = batches_module._write_state
+    writes = 0
+
+    def pause_first_write(path: Path, state: dict[str, Any]) -> None:
+        nonlocal writes
+        writes += 1
+        if writes == 1:
+            entered.set()
+            assert release.wait(timeout=5)
+        original_write(path, state)
+
+    monkeypatch.setattr(batches_module, "_write_state", pause_first_write)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        first = pool.submit(planner.commit, "aaaaaaaaaaaaaaaa")
+        assert entered.wait(timeout=5)
+        try:
+            with pytest.raises(CommerceBatchError, match="checkpoint is busy"):
+                planner.commit("aaaaaaaaaaaaaaaa")
+        finally:
+            release.set()
+        assert first.result(timeout=5)["created"] is True
+    assert json.loads(state_path.read_text(encoding="utf-8"))["processed_batches"] == {
+        "aaaaaaaaaaaaaaaa": {
+            "batch_at": "2026-01-01T00:00:00Z",
+            "manifest_sha256": client.objects[
+                "landing/source=commerce/batch_id=aaaaaaaaaaaaaaaa/manifest.json"
+            ][1]["sha256"],
+        },
+    }
+    assert planner.commit("aaaaaaaaaaaaaaaa")["created"] is False
 
 
 def test_commit_cannot_skip_an_earlier_unprocessed_batch(

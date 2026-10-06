@@ -421,7 +421,11 @@ only after it succeeds. Failed or empty gold results and query failures leave th
 checkpoint untouched. Its JSON includes both verification and checkpoint results.
 It does not run Spark or replace the per-model quality checks above. The lower-level
 `commit-commerce-batch` remains available for callers that already verified downstream
-success. Keep one checkpoint writer per state file.
+success. Commits use a nonblocking OS lock at `<state>.lock`; a concurrent writer
+gets a `checkpoint is busy` error without changing state. Wait for the active writer
+and retry; the existing lock file is normal and must not be deleted as a recovery
+step. This protects checkpoint writes, not the whole Spark pipeline. Keep one
+pipeline runner per workspace and verify gold before any manual commit.
 
 Completion retries only read-only Trino queries after transport failures or HTTP
 429, 502, 503, or 504. SQL errors, malformed responses, and invalid gold results
