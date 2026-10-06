@@ -275,7 +275,8 @@ def test_rejects_invalid_commit_marker(client: FakeS3Client, tmp_path: Path) -> 
 
 
 @pytest.mark.parametrize(
-    "damage", ["missing-table", "reused-file", "bad-checksum", "negative-rows", "bool-rows"]
+    "damage",
+    ["missing-table", "reused-file", "bad-checksum", "negative-rows", "zero-rows", "bool-rows"],
 )
 def test_rejects_invalid_committed_table_inventory(
     tmp_path: Path, damage: str
@@ -293,6 +294,8 @@ def test_rejects_invalid_committed_table_inventory(
         tables["products"]["sha256"] = "not-a-checksum"
     elif damage == "negative-rows":
         tables["orders"]["rows"] = -1
+    elif damage == "zero-rows":
+        tables["orders"]["rows"] = 0
     else:
         tables["orders"]["rows"] = True
     client.add_manifest("aaaaaaaaaaaaaaaa", "2026-01-01T00:00:00Z", tables=tables)

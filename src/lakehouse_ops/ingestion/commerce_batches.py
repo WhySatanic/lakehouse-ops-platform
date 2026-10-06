@@ -295,7 +295,7 @@ def _valid_table_inventory(tables: object) -> bool:
         if (
             details.get("file") != f"{name}.jsonl"
             or type(rows) is not int
-            or rows < 0
+            or rows < 1
             or not isinstance(checksum, str)
             or not re.fullmatch(r"[0-9a-f]{64}", checksum)
         ):

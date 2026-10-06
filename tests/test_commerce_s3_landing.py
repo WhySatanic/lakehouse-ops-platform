@@ -183,6 +183,42 @@ def test_rejects_invalid_table_inventory_before_upload(
     assert client.requests == []
 
 
+@pytest.mark.parametrize("declared_rows", [0, 1])
+def test_rejects_empty_table_before_commit(
+    commerce_fixture: Path, declared_rows: int
+) -> None:
+    table_path = commerce_fixture / "products.jsonl"
+    table_path.write_bytes(b"")
+    manifest_path = commerce_fixture / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["tables"]["products"]["rows"] = declared_rows
+    manifest["tables"]["products"]["sha256"] = (
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    )
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    client = FakeS3Client()
+
+    with pytest.raises(CommerceLandingError, match="row count"):
+        CommerceS3LandingZone(client, bucket="lakehouse").write(commerce_fixture)
+
+    assert client.requests == []
+
+
+def test_rejects_incorrect_table_row_count_before_commit(
+    commerce_fixture: Path,
+) -> None:
+    manifest_path = commerce_fixture / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["tables"]["products"]["rows"] += 1
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    client = FakeS3Client()
+
+    with pytest.raises(CommerceLandingError, match="row count mismatch"):
+        CommerceS3LandingZone(client, bucket="lakehouse").write(commerce_fixture)
+
+    assert client.requests == []
+
+
 def test_rejects_symlinked_table_before_upload(
     commerce_fixture: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -156,15 +156,23 @@ def _load_fixture(
             raise CommerceLandingError(f"invalid manifest entry for table: {table_name}")
         file_name = details.get("file")
         checksum = details.get("sha256")
+        rows = details.get("rows")
         if file_name != f"{table_name}.jsonl":
             raise CommerceLandingError("fixture table inventory is invalid")
+        if type(rows) is not int or rows < 1:
+            raise CommerceLandingError(f"invalid row count for table: {table_name}")
         if not isinstance(checksum, str) or len(checksum) != 64:
             raise CommerceLandingError(f"invalid checksum for table: {table_name}")
         path = fixture / file_name
         if path.is_symlink():
             raise CommerceLandingError(f"fixture table symlink is not allowed: {path}")
-        if not path.is_file() or _file_sha256(path) != checksum:
+        if not path.is_file():
             raise CommerceLandingError(f"fixture checksum verification failed: {path}")
+        observed_checksum, observed_rows = _file_digest_and_rows(path)
+        if observed_checksum != checksum:
+            raise CommerceLandingError(f"fixture checksum verification failed: {path}")
+        if observed_rows != rows:
+            raise CommerceLandingError(f"fixture row count mismatch: {path}")
         objects.append((file_name, path, checksum))
     return manifest, objects, manifest_body
 
@@ -179,9 +187,11 @@ def _read_verified_bytes(path: Path, checksum: str) -> bytes:
     return body
 
 
-def _file_sha256(path: Path) -> str:
+def _file_digest_and_rows(path: Path) -> tuple[str, int]:
     digest = hashlib.sha256()
+    rows = 0
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
-    return digest.hexdigest()
+            rows += chunk.count(b"\n")
+    return digest.hexdigest(), rows
