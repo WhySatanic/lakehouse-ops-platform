@@ -74,6 +74,59 @@ def test_fixture_rerun_is_idempotent_and_detects_tampering(tmp_path: Path) -> No
         generate_commerce_fixture(tmp_path, config)
 
 
+@pytest.mark.parametrize(
+    "damage",
+    ["non_object", "missing_table", "wrong_rows", "wrong_file", "missing_quality_cases"],
+)
+def test_cached_fixture_rejects_malformed_manifest_without_replacing_it(
+    tmp_path: Path, damage: str,
+) -> None:
+    config = CommerceFixtureConfig(
+        customers=2, products=2, orders=3, null_customer_emails=1,
+        duplicate_orders=1, late_orders=1, invalid_payments=1,
+    )
+    result = generate_commerce_fixture(tmp_path, config)
+    manifest_path = result.path / "manifest.json"
+    manifest: object = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if damage == "non_object":
+        manifest = []
+    elif damage == "missing_table":
+        manifest["tables"].pop("payments")
+    elif damage == "wrong_rows":
+        manifest["tables"]["orders"]["rows"] = 1
+    elif damage == "wrong_file":
+        outside = tmp_path / "outside.jsonl"
+        outside.write_bytes((result.path / "customers.jsonl").read_bytes())
+        manifest["tables"]["customers"]["file"] = "../outside.jsonl"
+    else:
+        manifest.pop("quality_cases")
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    before = manifest_path.read_bytes()
+
+    with pytest.raises(CommerceFixtureError, match="manifest structure"):
+        generate_commerce_fixture(tmp_path, config)
+    assert manifest_path.read_bytes() == before
+
+
+def test_cached_fixture_rejects_symlinked_table(tmp_path: Path) -> None:
+    config = CommerceFixtureConfig(
+        customers=2, products=2, orders=3, null_customer_emails=1,
+        duplicate_orders=1, late_orders=1, invalid_payments=1,
+    )
+    result = generate_commerce_fixture(tmp_path, config)
+    table = result.path / "customers.jsonl"
+    outside = tmp_path / "outside.jsonl"
+    outside.write_bytes(table.read_bytes())
+    table.unlink()
+    try:
+        table.symlink_to(outside)
+    except (OSError, NotImplementedError):
+        pytest.skip("table symlinks are unavailable on this host")
+
+    with pytest.raises(CommerceFixtureError, match="checksum verification"):
+        generate_commerce_fixture(tmp_path, config)
+
+
 def test_same_configuration_has_identical_content_in_different_roots(tmp_path: Path) -> None:
     config = CommerceFixtureConfig(
         customers=3,

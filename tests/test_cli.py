@@ -132,6 +132,29 @@ def test_generate_commerce_fixture_command(
     assert Path(report["path"], "manifest.json").is_file()
 
 
+def test_generate_commerce_fixture_rejects_corrupt_cached_manifest_at_cli(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path,
+) -> None:
+    args = [
+        "generate-commerce-fixture", "--output", str(tmp_path),
+        "--customers", "2", "--products", "2", "--orders", "3",
+        "--null-customer-emails", "1", "--duplicate-orders", "1",
+        "--late-orders", "1", "--invalid-payments", "1",
+    ]
+    assert cli.main(args) == 0
+    report = json.loads(capsys.readouterr().out)
+    manifest_path = Path(report["path"]) / "manifest.json"
+    manifest_path.write_text("[]", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as error:
+        cli.main(args)
+    captured = capsys.readouterr()
+    assert error.value.code == 2
+    assert captured.out == ""
+    assert "manifest structure is invalid" in captured.err
+    assert manifest_path.read_text(encoding="utf-8") == "[]"
+
+
 def test_land_commerce_fixture_command(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

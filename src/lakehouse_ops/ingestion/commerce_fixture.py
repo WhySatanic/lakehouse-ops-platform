@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import random
+import re
 import shutil
 import tempfile
 from collections.abc import Iterable
@@ -228,11 +229,46 @@ def _verify_existing(
         manifest = json.loads((destination / "manifest.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise CommerceFixtureError(f"existing fixture manifest is unreadable: {error}") from error
+    if not isinstance(manifest, dict):
+        raise CommerceFixtureError("existing fixture manifest structure is invalid")
     if manifest.get("batch_id") != batch_id or manifest.get("config") != expected_config:
         raise CommerceFixtureError("existing fixture does not match the requested configuration")
-    for table in manifest.get("tables", {}).values():
-        path = destination / table["file"]
-        if not path.is_file() or _file_sha256(path) != table["sha256"]:
+    expected_rows = {
+        "customers": expected_config["customers"],
+        "products": expected_config["products"],
+        "orders": expected_config["orders"] + expected_config["duplicate_orders"],
+        "payments": expected_config["orders"],
+    }
+    expected_quality = {
+        "null_customer_emails": expected_config["null_customer_emails"],
+        "duplicate_order_rows": expected_config["duplicate_orders"],
+        "late_orders": expected_config["late_orders"],
+        "invalid_payment_amounts": expected_config["invalid_payments"],
+    }
+    tables = manifest.get("tables")
+    if (
+        type(manifest.get("schema_version")) is not int
+        or manifest["schema_version"] != 1
+        or not isinstance(tables, dict)
+        or set(tables) != set(expected_rows)
+        or manifest.get("quality_cases") != expected_quality
+    ):
+        raise CommerceFixtureError("existing fixture manifest structure is invalid")
+    for name, expected_count in expected_rows.items():
+        details = tables[name]
+        if (
+            not isinstance(details, dict)
+            or set(details) != {"file", "rows", "sha256"}
+            or details.get("file") != f"{name}.jsonl"
+            or type(details.get("rows")) is not int
+            or details["rows"] != expected_count
+            or not isinstance(details.get("sha256"), str)
+            or not re.fullmatch(r"[0-9a-f]{64}", details["sha256"])
+        ):
+            raise CommerceFixtureError("existing fixture manifest structure is invalid")
+    for name, details in tables.items():
+        path = destination / f"{name}.jsonl"
+        if path.is_symlink() or not path.is_file() or _file_sha256(path) != details["sha256"]:
             raise CommerceFixtureError(f"existing fixture failed checksum verification: {path}")
     return manifest
 
