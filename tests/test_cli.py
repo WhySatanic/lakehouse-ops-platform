@@ -192,10 +192,19 @@ def test_land_commerce_fixture_command(
     assert report["path"].startswith("s3://lakehouse/landing/source=commerce/")
 
 
+@pytest.mark.parametrize(
+    "corruption, expected_message",
+    [
+        ("non-object", "fixture manifest is invalid"),
+        ("missing-table", "fixture table inventory is invalid"),
+    ],
+)
 def test_land_commerce_fixture_rejects_invalid_manifest_without_upload(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
+    corruption: str,
+    expected_message: str,
 ) -> None:
     fixture_report = cli.generate_commerce_fixture(
         tmp_path,
@@ -209,7 +218,13 @@ def test_land_commerce_fixture_rejects_invalid_manifest_without_upload(
             invalid_payments=1,
         ),
     )
-    (fixture_report.path / "manifest.json").write_text("[]", encoding="utf-8")
+    manifest_path = fixture_report.path / "manifest.json"
+    if corruption == "non-object":
+        manifest_path.write_text("[]", encoding="utf-8")
+    else:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        del manifest["tables"]["payments"]
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     s3_client = FakeS3Client()
     monkeypatch.setattr(cli, "_create_s3_client", lambda args: s3_client)
 
@@ -227,7 +242,7 @@ def test_land_commerce_fixture_rejects_invalid_manifest_without_upload(
     captured = capsys.readouterr()
     assert error.value.code == 2
     assert captured.out == ""
-    assert "fixture manifest is invalid" in captured.err
+    assert expected_message in captured.err
     assert s3_client.objects == {}
 
 
