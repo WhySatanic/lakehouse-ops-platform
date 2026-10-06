@@ -252,7 +252,10 @@ commands remain supported.
 For a host with a working Compose stack, Alertmanager profile, and cron, the following
 one-shot wrapper runs at most one pending batch and then submits both freshness
 observations. It invokes the existing CLI twice, so a pipeline failure does not skip
-the notification attempt. From the repository root, first run it manually:
+the notification attempt. A child-process launch failure is written to stderr with
+the command name; the wrapper still attempts freshness notification after a runner
+launch failure. A launch failure exits 2 unless an earlier nonzero pipeline exit
+takes precedence. From the repository root, first run it manually:
 
 ```bash
 uv run --env-file .env python -m lakehouse_ops.commerce_cycle \

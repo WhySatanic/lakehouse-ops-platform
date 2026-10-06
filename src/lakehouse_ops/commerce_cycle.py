@@ -40,24 +40,32 @@ def run_cycle(args: argparse.Namespace) -> int:
         "--s3-bucket", args.s3_bucket, "--s3-endpoint-url", args.s3_endpoint_url,
         "--state", args.state,
     ]
-    runner = subprocess.run(
+    runner_code = _run_command(
         [sys.executable, "-m", "lakehouse_ops.cli", "run-commerce-batch", *shared,
          "--server", args.server, "--user", args.user,
          "--attempts", str(args.attempts),
          "--retry-delay-seconds", str(args.retry_delay_seconds)],
-        check=False,
+        "run-commerce-batch",
     )
-    notification = subprocess.run(
+    notification_code = _run_command(
         [sys.executable, "-m", "lakehouse_ops.cli", "notify-commerce-freshness", *shared,
          "--instance", args.instance, "--alertmanager-server", args.alertmanager_server,
          "--source-max-age-seconds", str(args.source_max_age_seconds),
          "--backlog-max-age-seconds", str(args.backlog_max_age_seconds),
          "--alert-valid-seconds", str(args.alert_valid_seconds)],
-        check=False,
+        "notify-commerce-freshness",
     )
     # A failed pipeline must not be hidden by a successful notification. A freshness
     # breach remains visible as exit 1 when the pipeline itself succeeded or was idle.
-    return runner.returncode or notification.returncode
+    return runner_code or notification_code
+
+
+def _run_command(command: list[str], name: str) -> int:
+    try:
+        return subprocess.run(command, check=False).returncode
+    except OSError as error:
+        print(f"{name} could not start: {error}", file=sys.stderr)
+        return 2
 
 
 def main(argv: Sequence[str] | None = None) -> int:
