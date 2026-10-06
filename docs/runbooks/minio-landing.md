@@ -73,8 +73,11 @@ uv run --env-file .env lakeops land-commerce-fixture \
   --s3-bucket lakehouse
 ```
 
-Safe retries report zero newly created objects. A checksum conflict is an error and no
-existing object is overwritten.
+Safe retries report zero newly created objects. A malformed local manifest or a
+batch ID that cannot be discovered under the 16-character lowercase-hex S3 key
+convention fails before any upload. Keep the fixture for inspection, regenerate it
+from the original parameters, and do not edit the committed S3 objects in place.
+A checksum conflict is an error and no existing object is overwritten.
 
 Audit every retained JSON version before a recovery and inventory delete markers:
 

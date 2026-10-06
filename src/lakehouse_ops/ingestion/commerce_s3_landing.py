@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -125,10 +126,14 @@ def _load_fixture(fixture: Path) -> tuple[dict[str, Any], list[tuple[str, Path, 
     except (OSError, json.JSONDecodeError) as error:
         raise CommerceLandingError(f"fixture manifest is unreadable: {error}") from error
 
+    if not isinstance(manifest, dict):
+        raise CommerceLandingError("fixture manifest is invalid: expected an object")
     batch_id = manifest.get("batch_id")
     tables = manifest.get("tables")
-    if not isinstance(batch_id, str) or not batch_id or not isinstance(tables, dict) or not tables:
-        raise CommerceLandingError("fixture manifest must contain batch_id and tables")
+    if not isinstance(batch_id, str) or not re.fullmatch(r"[0-9a-f]{16}", batch_id):
+        raise CommerceLandingError("fixture batch_id is invalid")
+    if not isinstance(tables, dict) or not tables:
+        raise CommerceLandingError("fixture manifest must contain tables")
 
     objects: list[tuple[str, Path, str]] = []
     for table_name in sorted(tables):
