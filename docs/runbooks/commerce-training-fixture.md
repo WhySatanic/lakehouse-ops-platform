@@ -177,10 +177,13 @@ uv run --env-file .env lakeops plan-commerce-batches \
 ```
 
 The planner checks the commit marker's checksum and requires all four commerce
-tables with matching JSONL filenames, nonnegative row counts, and lowercase
+tables with matching JSONL filenames, positive row counts, and lowercase
 SHA-256 values. A malformed marker stops planning without changing the
 checkpoint. Inspect the retained MinIO object versions and regenerate the
-fixture before retrying; planning does not read each table object.
+fixture before retrying; planning does not read each table object. Planning
+also stops if a paginated S3 listing repeats a continuation token instead of
+selecting work from an incomplete inventory. Check MinIO listing health and
+retry after it recovers; do not advance the checkpoint manually.
 
 ### One-shot batch runner
 

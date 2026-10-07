@@ -230,6 +230,7 @@ class CommerceBatchPlanner:
         )
         keys: list[tuple[str, str, object]] = []
         continuation: str | None = None
+        seen_tokens: set[str] = set()
         while True:
             request: dict[str, Any] = {"Bucket": self._bucket, "Prefix": f"{root}/"}
             if continuation:
@@ -245,6 +246,9 @@ class CommerceBatchPlanner:
             continuation = response.get("NextContinuationToken")
             if not continuation:
                 raise CommerceBatchError("S3 listing is truncated without a continuation token")
+            if continuation in seen_tokens:
+                raise CommerceBatchError("S3 listing returned a repeated continuation token")
+            seen_tokens.add(continuation)
 
         batches = [
             self._read_manifest(batch_id, key, committed_at)
