@@ -237,6 +237,8 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
   tables with bounded replay and backfill state.
   - [x] Discover committed landing batches, plan bounded work, and atomically checkpoint
     successful batches without advancing state during replay.
+  - [x] Fail fast on concurrent checkpoint writers for the same state file so one batch
+    cannot be acknowledged as newly committed twice.
   - [x] Reject malformed committed table inventory before selecting Spark work.
   - [x] Merge one explicitly selected commerce batch into four raw Iceberg bronze tables,
     preserving repeated source rows and inserting zero rows on identical replay.

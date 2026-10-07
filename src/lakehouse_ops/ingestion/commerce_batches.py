@@ -11,6 +11,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
+from lakehouse_ops.commerce_runner_lock import CommerceRunnerBusyError, commerce_runner_lock
+
 
 class CommerceBatchError(ValueError):
     pass
@@ -93,6 +95,15 @@ class CommerceBatchPlanner:
 
     def commit(
         self, batch_id: str, *, expected_manifest_sha256: str | None = None,
+    ) -> dict[str, Any]:
+        try:
+            with commerce_runner_lock(Path(f"{self._state_path}.lock")):
+                return self._commit_locked(batch_id, expected_manifest_sha256)
+        except CommerceRunnerBusyError as error:
+            raise CommerceBatchError(f"commerce checkpoint is busy: {self._state_path}") from error
+
+    def _commit_locked(
+        self, batch_id: str, expected_manifest_sha256: str | None,
     ) -> dict[str, Any]:
         ordered_batches = self.discover()
         batches = {batch.batch_id: batch for batch in ordered_batches}
