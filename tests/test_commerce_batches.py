@@ -80,6 +80,51 @@ def client() -> FakeS3Client:
     return result
 
 
+def test_discovery_reads_all_s3_listing_pages(tmp_path: Path) -> None:
+    class PaginatedClient(FakeS3Client):
+        def list_objects_v2(self, **kwargs: Any) -> dict[str, Any]:
+            if "ContinuationToken" not in kwargs:
+                return {"Contents": [], "IsTruncated": True, "NextContinuationToken": "page-2"}
+            assert kwargs["ContinuationToken"] == "page-2"
+            return super().list_objects_v2(**kwargs)
+
+    client = PaginatedClient()
+    client.add_manifest("aaaaaaaaaaaaaaaa", "2026-01-01T00:00:00Z")
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=tmp_path / "state.json")
+
+    assert [batch["batch_id"] for batch in planner.plan(max_batches=1)["batches"]] == [
+        "aaaaaaaaaaaaaaaa"
+    ]
+
+
+@pytest.mark.parametrize("tokens", [("stuck", "stuck"), ("first", "second", "first")])
+def test_discovery_rejects_repeated_s3_listing_token(
+    tmp_path: Path, tokens: tuple[str, ...],
+) -> None:
+    class RepeatingPageClient(FakeS3Client):
+        def __init__(self) -> None:
+            super().__init__()
+            self.calls = 0
+
+        def list_objects_v2(self, **kwargs: Any) -> dict[str, Any]:
+            self.calls += 1
+            assert self.calls <= len(tokens), "planner requested another copy of the same page"
+            return {
+                "Contents": [],
+                "IsTruncated": True,
+                "NextContinuationToken": tokens[self.calls - 1],
+            }
+
+    client = RepeatingPageClient()
+    state = tmp_path / "state.json"
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state)
+
+    with pytest.raises(CommerceBatchError, match="repeated continuation token"):
+        planner.plan(max_batches=1)
+    assert client.calls == len(tokens)
+    assert not state.exists()
+
+
 def test_source_freshness_uses_commit_time_not_event_time(tmp_path: Path) -> None:
     now = datetime(2026, 9, 27, 20, 0, tzinfo=UTC)
     client = FakeS3Client()
