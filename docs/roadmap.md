@@ -241,6 +241,8 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
     successful batches without advancing state during replay.
   - [x] Fail fast on concurrent checkpoint writers for the same state file so one batch
     cannot be acknowledged as newly committed twice.
+  - [x] Reject malformed processed-batch checkpoint metadata and timestamps that no
+    longer match committed S3 manifests before planning or advancing state.
   - [x] Reject malformed committed table inventory before selecting Spark work.
   - [x] Merge one explicitly selected commerce batch into four raw Iceberg bronze tables,
     preserving repeated source rows and inserting zero rows on identical replay.
