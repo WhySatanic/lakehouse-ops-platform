@@ -472,6 +472,43 @@ def test_rejects_corrupt_checkpoint(client: FakeS3Client, tmp_path: Path) -> Non
         planner.plan(max_batches=1)
 
 
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ("boolean_version", "unsupported structure"),
+        ("missing_batch_at", "unsupported structure"),
+        ("null_batch_at", "unsupported structure"),
+        ("changed_batch_at", "checkpoint batch timestamp differs"),
+    ],
+)
+def test_rejects_corrupt_processed_checkpoint_metadata_without_changing_it(
+    client: FakeS3Client, tmp_path: Path, change: str, message: str,
+) -> None:
+    state_path = tmp_path / "state.json"
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state_path)
+    planner.commit("aaaaaaaaaaaaaaaa")
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    processed = state["processed_batches"]["aaaaaaaaaaaaaaaa"]
+    if change == "boolean_version":
+        state["schema_version"] = True
+    elif change == "missing_batch_at":
+        del processed["batch_at"]
+    elif change == "null_batch_at":
+        processed["batch_at"] = None
+    else:
+        processed["batch_at"] = "2026-02-01T00:00:00Z"
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    before = state_path.read_bytes()
+
+    with pytest.raises(CommerceBatchError, match=message):
+        planner.plan(max_batches=1)
+    with pytest.raises(CommerceBatchError, match=message):
+        planner.commit("bbbbbbbbbbbbbbbb")
+    with pytest.raises(CommerceBatchError, match=message):
+        planner.check_backlog_freshness(max_age_seconds=60)
+    assert state_path.read_bytes() == before
+
+
 @pytest.mark.parametrize("payload", ["[]", "null", "0", '"invalid"'])
 def test_rejects_non_object_checkpoint_without_changing_it(
     client: FakeS3Client, tmp_path: Path, payload: str,

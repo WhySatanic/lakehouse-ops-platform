@@ -327,8 +327,11 @@ def _load_state(path: Path) -> dict[str, Any]:
         state = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise CommerceBatchError(f"commerce checkpoint is unreadable: {error}") from error
-    if not isinstance(state, dict) or state.get("schema_version") != 1 or not isinstance(
-        state.get("processed_batches"), dict
+    if (
+        not isinstance(state, dict)
+        or type(state.get("schema_version")) is not int
+        or state["schema_version"] != 1
+        or not isinstance(state.get("processed_batches"), dict)
     ):
         raise CommerceBatchError("commerce checkpoint has an unsupported structure")
     for batch_id, details in state["processed_batches"].items():
@@ -336,6 +339,7 @@ def _load_state(path: Path) -> dict[str, Any]:
             not re.fullmatch(r"[0-9a-f]{16}", batch_id)
             or not isinstance(details, dict)
             or not isinstance(details.get("manifest_sha256"), str)
+            or not isinstance(details.get("batch_at"), str)
         ):
             raise CommerceBatchError("commerce checkpoint has an unsupported structure")
     return state
@@ -353,6 +357,10 @@ def _verify_processed_content(
         if details["manifest_sha256"] != batch.manifest_sha256:
             raise CommerceBatchError(
                 f"committed manifest changed after processing: {batch_id}"
+            )
+        if details["batch_at"] != batch.batch_at:
+            raise CommerceBatchError(
+                f"checkpoint batch timestamp differs from committed manifest: {batch_id}"
             )
 
 
