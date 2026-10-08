@@ -8,6 +8,7 @@ from uuid import uuid4
 import boto3
 import pytest
 
+from lakehouse_ops.commerce_change_scenario import generate_change_scenario
 from lakehouse_ops.ingestion.commerce_batches import CommerceBatchError, CommerceBatchPlanner
 from lakehouse_ops.ingestion.commerce_fixture import (
     CommerceFixtureConfig,
@@ -68,3 +69,36 @@ def test_real_minio_checkpoint_cannot_skip_older_batch(tmp_path: Path) -> None:
     assert planner.commit(later.batch_id)["created"] is True
     assert planner.plan(max_batches=1)["selected_batches"] == 0
     assert planner.check_backlog_freshness(max_age_seconds=900)["pending_batches"] == 0
+
+
+@pytest.mark.skipif(
+    os.getenv("LAKEOPS_RUN_S3_SMOKE") != "1", reason="requires an initialized local MinIO"
+)
+def test_real_minio_related_snapshots_land_replay_and_plan_in_order(tmp_path: Path) -> None:
+    client = boto3.client(
+        "s3", endpoint_url=os.getenv("LAKEOPS_S3_ENDPOINT_URL", "http://localhost:9000"),
+        aws_access_key_id=os.getenv("MINIO_ROOT_USER", "lakeops"),
+        aws_secret_access_key=os.getenv("MINIO_ROOT_PASSWORD", "lakeops-development-only"),
+        region_name="us-east-1",
+    )
+    bucket = os.getenv("LAKEHOUSE_BUCKET", "lakehouse")
+    prefix = f"smoke/commerce-changes-{uuid4().hex}"
+    scenario = generate_change_scenario(tmp_path / "scenario")
+    landing = CommerceS3LandingZone(client, bucket=bucket, prefix=prefix)
+    # Publication order differs from event-processing order.
+    for batch in reversed(scenario["batches"]):
+        assert landing.write(Path(batch["path"])).created == 5
+        assert landing.write(Path(batch["path"])).created == 0
+    planner = CommerceBatchPlanner(
+        client, bucket=bucket, prefix=prefix, state_path=tmp_path / "checkpoint.json"
+    )
+    for batch in scenario["batches"]:
+        plan = planner.plan(max_batches=1)
+        selected = plan["batches"][0]
+        assert selected["batch_id"] == batch["batch_id"]
+        assert selected["batch_at"] == batch["batch_at"]
+        planner.commit(batch["batch_id"], expected_manifest_sha256=selected["manifest_sha256"])
+    assert planner.plan(max_batches=1)["selected_batches"] == 0
+    replay = planner.plan(max_batches=1, replay_batches=(scenario["batches"][1]["batch_id"],))
+    assert replay["mode"] == "replay"
+    assert replay["batches"][0]["batch_id"] == scenario["batches"][1]["batch_id"]

@@ -288,6 +288,12 @@ late-data correction, freshness monitoring, and retained operational evidence.
 
 ## Sustainable contribution rhythm
 
+Next correction acceptance foundation: a deterministic three-snapshot commerce scenario
+with a literal latest-order/daily-revenue/customer-history oracle, compatible S3 landing,
+conditional replay, chronological planning and hash-bound checkpoint smoke checks.
+This establishes test inputs for bounded late-data correction; the existing batch-scoped
+gold mart and forward-only customer history are not relabelled as completed backfill.
+
 A strong week contains one or two complete changes, not a fixed number of cosmetic
 commits. A useful pull request includes an issue, acceptance criteria, implementation,
 tests, documentation, and evidence. Suggested rhythm:
