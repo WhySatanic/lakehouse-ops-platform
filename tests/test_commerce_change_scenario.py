@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
 
 from lakehouse_ops.commerce_change_scenario import generate_change_scenario, main
 from lakehouse_ops.ingestion.commerce_bronze import load_commerce_batch
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX directory permissions")
+def test_published_scenario_is_traversable_by_the_spark_user(tmp_path: Path) -> None:
+    root = tmp_path / "scenario"
+    generate_change_scenario(root)
+    assert root.stat().st_mode & 0o777 == 0o755
 
 
 def test_related_snapshots_have_independent_business_expectations(tmp_path: Path) -> None:

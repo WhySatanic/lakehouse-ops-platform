@@ -33,6 +33,8 @@ history versions. Summing all three snapshots gives 4,700 cents and double-count
 the corrected order. An unchanged customer in batch 3 must not create a third version.
 
 Rerunning verifies byte-identical content; conflicting output fails without replacement.
+The published synthetic-data directory has POSIX mode 755 so the non-owner Spark
+container user can traverse it after the generator's private staging directory is renamed.
 Use the existing `land-commerce-fixture` command for each reported batch path.
 The real-MinIO smoke test publishes them in reverse order, verifies conditional replay,
 and checks chronological planning, hash-bound commits and explicit batch replay.

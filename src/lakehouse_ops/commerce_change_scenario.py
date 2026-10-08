@@ -174,6 +174,8 @@ def generate_change_scenario(output: Path) -> dict[str, Any]:
                 target = temporary / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(body)
+            # mkdtemp uses 0700; the published synthetic fixture is read by Spark's UID.
+            temporary.chmod(0o755)
             os.rename(temporary, output)
         finally:
             if temporary.exists():
