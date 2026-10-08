@@ -54,6 +54,10 @@ The fixture, S3 landing, batch planner, and bronze loader all require an integer
 `schema_version` of `1`. A missing, boolean, string, or newer version is rejected
 before publication or compute. Preserve the incompatible manifest for inspection;
 do not relabel it as version 1 to force a retry.
+Landing rejects a fixture manifest larger than 1 MiB before uploading any table,
+matching the planner's commit-marker read limit. It checks the size again before
+publishing the marker. If rejected, retain the fixture for diagnosis and generate
+a fresh bounded batch rather than editing an existing committed object.
 
 Check that a committed source batch landed recently before running scheduled work:
 

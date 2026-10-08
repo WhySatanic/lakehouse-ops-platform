@@ -9,6 +9,8 @@ from typing import Any, Protocol
 
 from botocore.exceptions import ClientError
 
+from lakehouse_ops.ingestion.commerce_batches import MAX_COMMERCE_MANIFEST_BYTES
+
 
 class CommerceLandingError(ValueError):
     pass
@@ -68,7 +70,7 @@ class CommerceS3LandingZone:
 
         manifest_path = fixture / "manifest.json"
         try:
-            manifest_body = manifest_path.read_bytes()
+            manifest_body = _read_manifest_bytes(manifest_path)
         except OSError as error:
             raise CommerceLandingError("fixture manifest changed during upload") from error
         if manifest_body != verified_manifest:
@@ -133,7 +135,7 @@ def _load_fixture(
     if manifest_path.is_symlink():
         raise CommerceLandingError(f"fixture manifest symlink is not allowed: {manifest_path}")
     try:
-        manifest_body = manifest_path.read_bytes()
+        manifest_body = _read_manifest_bytes(manifest_path)
         manifest = json.loads(manifest_body.decode("utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise CommerceLandingError(f"fixture manifest is unreadable: {error}") from error
@@ -177,6 +179,14 @@ def _load_fixture(
             raise CommerceLandingError(f"fixture row count mismatch: {path}")
         objects.append((file_name, path, checksum))
     return manifest, objects, manifest_body
+
+
+def _read_manifest_bytes(path: Path) -> bytes:
+    with path.open("rb") as stream:
+        body = stream.read(MAX_COMMERCE_MANIFEST_BYTES + 1)
+    if len(body) > MAX_COMMERCE_MANIFEST_BYTES:
+        raise CommerceLandingError("fixture manifest exceeds 1 MiB")
+    return body
 
 
 def _read_verified_bytes(path: Path, checksum: str) -> bytes:

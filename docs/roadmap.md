@@ -235,6 +235,8 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
     reject unsupported manifests before S3 publication or compute.
   - [x] Stop planning if a paginated S3 listing repeats its continuation token;
     do not compute from a partial committed-batch inventory.
+  - [x] Reject a fixture manifest exceeding the planner's 1 MiB read limit before
+    S3 upload, and recheck before publishing its commit marker.
 - [ ] Incrementally merge validated commerce data into Spark/Iceberg bronze and silver
   tables with bounded replay and backfill state.
   - [x] Discover committed landing batches, plan bounded work, and atomically checkpoint
