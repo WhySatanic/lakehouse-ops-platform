@@ -244,6 +244,8 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
   - [x] Reject malformed processed-batch checkpoint metadata and timestamps that no
     longer match committed S3 manifests before planning or advancing state.
   - [x] Reject malformed committed table inventory before selecting Spark work.
+  - [x] Bound each S3 commit-manifest read to 1 MiB plus a detection byte;
+    reject oversized manifests without changing the checkpoint.
   - [x] Merge one explicitly selected commerce batch into four raw Iceberg bronze tables,
     preserving repeated source rows and inserting zero rows on identical replay.
   - [x] Split selected commerce payments into valid and rejected Iceberg silver tables,

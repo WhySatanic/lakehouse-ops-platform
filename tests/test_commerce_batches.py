@@ -13,6 +13,7 @@ import pytest
 
 import lakehouse_ops.ingestion.commerce_batches as batches_module
 from lakehouse_ops.ingestion.commerce_batches import (
+    MAX_COMMERCE_MANIFEST_BYTES,
     CommerceBatchError,
     CommerceBatchPlanner,
 )
@@ -360,6 +361,50 @@ def test_rejects_invalid_commit_marker(client: FakeS3Client, tmp_path: Path) -> 
 
     with pytest.raises(CommerceBatchError, match="invalid commerce commit marker"):
         planner.plan(max_batches=1)
+
+
+@pytest.mark.parametrize("extra_bytes", [0, 1, MAX_COMMERCE_MANIFEST_BYTES])
+def test_manifest_read_limit_preserves_checkpoint(
+    tmp_path: Path, extra_bytes: int
+) -> None:
+    class ShortReadBody(BytesIO):
+        def __init__(self, payload: bytes) -> None:
+            super().__init__(payload)
+            self.bytes_read = 0
+
+        def read(self, size: int = -1) -> bytes:
+            assert 0 < size <= MAX_COMMERCE_MANIFEST_BYTES + 1
+            chunk = super().read(min(size, 8192))
+            self.bytes_read += len(chunk)
+            assert self.bytes_read <= MAX_COMMERCE_MANIFEST_BYTES + 1
+            return chunk
+
+    class ShortReadClient(FakeS3Client):
+        def get_object(self, **kwargs: Any) -> dict[str, Any]:
+            body, metadata = self.objects[kwargs["Key"]]
+            self.stream = ShortReadBody(body)
+            return {"Body": self.stream, "Metadata": metadata}
+
+    client = ShortReadClient()
+    batch_id = "aaaaaaaaaaaaaaaa"
+    client.add_manifest(batch_id, "2026-01-01T00:00:00Z")
+    key = f"landing/source=commerce/batch_id={batch_id}/manifest.json"
+    body, metadata = client.objects[key]
+    body += b" " * (MAX_COMMERCE_MANIFEST_BYTES + extra_bytes - len(body))
+    client.objects[key] = (body, {**metadata, "sha256": hashlib.sha256(body).hexdigest()})
+    state = tmp_path / "state.json"
+    state.write_text('{"schema_version":1,"processed_batches":{}}\n', encoding="utf-8")
+    before = state.read_bytes()
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state)
+
+    if extra_bytes:
+        with pytest.raises(CommerceBatchError, match="manifest exceeds"):
+            planner.plan(max_batches=1)
+    else:
+        assert planner.plan(max_batches=1)["batches"][0]["batch_id"] == batch_id
+    assert state.read_bytes() == before
+    assert client.stream.bytes_read == min(len(body), MAX_COMMERCE_MANIFEST_BYTES + 1)
+    assert client.stream.closed
 
 
 @pytest.mark.parametrize("schema_version", [2, "1", True, None, MISSING_SCHEMA])

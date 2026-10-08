@@ -18,6 +18,9 @@ class CommerceBatchError(ValueError):
     pass
 
 
+MAX_COMMERCE_MANIFEST_BYTES = 1024 * 1024
+
+
 class S3Client(Protocol):
     def list_objects_v2(self, **kwargs: Any) -> dict[str, Any]: ...
 
@@ -261,9 +264,19 @@ class CommerceBatchPlanner:
         metadata = response.get("Metadata", {})
         body_stream = response["Body"]
         try:
-            body = body_stream.read()
+            chunks: list[bytes] = []
+            remaining = MAX_COMMERCE_MANIFEST_BYTES + 1
+            while remaining:
+                chunk = body_stream.read(remaining)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                remaining -= len(chunk)
         finally:
             body_stream.close()
+        body = b"".join(chunks)
+        if len(body) > MAX_COMMERCE_MANIFEST_BYTES:
+            raise CommerceBatchError(f"commerce manifest exceeds 1 MiB: {key}")
         checksum = hashlib.sha256(body).hexdigest()
         if (
             metadata.get("commit-marker") != "true"
