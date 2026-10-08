@@ -9,6 +9,7 @@ import pytest
 from botocore.exceptions import ClientError
 
 import lakehouse_ops.ingestion.commerce_s3_landing as landing_module
+from lakehouse_ops.ingestion.commerce_batches import MAX_COMMERCE_MANIFEST_BYTES
 from lakehouse_ops.ingestion.commerce_fixture import (
     CommerceFixtureConfig,
     generate_commerce_fixture,
@@ -93,6 +94,26 @@ def test_rejects_modified_fixture_before_upload(commerce_fixture: Path) -> None:
     assert client.objects == {}
 
 
+@pytest.mark.parametrize("extra_bytes", [0, 1])
+def test_landing_enforces_planner_manifest_limit_before_upload(
+    commerce_fixture: Path, extra_bytes: int
+) -> None:
+    manifest_path = commerce_fixture / "manifest.json"
+    body = manifest_path.read_bytes()
+    manifest_path.write_bytes(
+        body + b" " * (MAX_COMMERCE_MANIFEST_BYTES + extra_bytes - len(body))
+    )
+    client = FakeS3Client()
+    landing = CommerceS3LandingZone(client, bucket="lakehouse")
+
+    if extra_bytes:
+        with pytest.raises(CommerceLandingError, match="manifest exceeds 1 MiB"):
+            landing.write(commerce_fixture)
+        assert client.requests == []
+    else:
+        assert landing.write(commerce_fixture).created == 5
+
+
 def test_rejects_table_changed_after_validation(
     commerce_fixture: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -129,6 +150,29 @@ def test_rejects_manifest_changed_after_validation(
     client = FakeS3Client()
 
     with pytest.raises(CommerceLandingError, match="manifest changed during upload"):
+        CommerceS3LandingZone(client, bucket="lakehouse").write(commerce_fixture)
+
+    assert not any(request["Key"].endswith("/manifest.json") for request in client.requests)
+
+
+def test_rejects_manifest_growth_after_validation(
+    commerce_fixture: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original_load = landing_module._load_fixture
+
+    def load_then_grow(fixture: Path) -> Any:
+        result = original_load(fixture)
+        manifest_path = fixture / "manifest.json"
+        body = manifest_path.read_bytes()
+        manifest_path.write_bytes(
+            body + b" " * (MAX_COMMERCE_MANIFEST_BYTES + 1 - len(body))
+        )
+        return result
+
+    monkeypatch.setattr(landing_module, "_load_fixture", load_then_grow)
+    client = FakeS3Client()
+
+    with pytest.raises(CommerceLandingError, match="manifest exceeds 1 MiB"):
         CommerceS3LandingZone(client, bucket="lakehouse").write(commerce_fixture)
 
     assert not any(request["Key"].endswith("/manifest.json") for request in client.requests)
