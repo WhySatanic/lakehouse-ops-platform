@@ -184,6 +184,10 @@ fixture before retrying; planning does not read each table object. Planning
 also stops if a paginated S3 listing repeats a continuation token instead of
 selecting work from an incomplete inventory. Check MinIO listing health and
 retry after it recovers; do not advance the checkpoint manually.
+The planner reads at most 1 MiB plus one byte from each commit manifest and
+rejects oversized objects before parsing or checkpoint changes. If this limit
+is hit, retain the object for inspection and regenerate the bounded fixture;
+do not trim an already committed manifest in place.
 
 ### One-shot batch runner
 
