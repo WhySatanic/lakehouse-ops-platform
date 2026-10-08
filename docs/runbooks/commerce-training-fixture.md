@@ -12,6 +12,49 @@ uv run lakeops generate-commerce-fixture --output data/commerce
 
 The command prints the generated batch directory.
 
+## Related snapshot correction scenario
+
+Generate a separate, small acceptance dataset:
+
+```bash
+uv run python -m lakehouse_ops.commerce_change_scenario --output data/commerce-changes
+```
+
+The JSON result lists three compatible version-1 batch directories and `expected.json`.
+The source semantics are **full snapshots**, not additive change events. Batch 1 has
+one order for 1,000 cents; batch 2 corrects the same business key to 1,500 cents and
+changes the customer's name; batch 3 retains those values and adds a 700-cent order
+whose event date is more than 30 days before arrival. Payments reference the same
+order keys and reflect each snapshot's amounts.
+
+The literal oracle records snapshot revenues of 1,000 / 1,500 / 2,200 cents, latest
+daily revenue of 700 cents on January 1 and 1,500 cents on January 31, and two customer
+history versions. Summing all three snapshots gives 4,700 cents and double-counts
+the corrected order. An unchanged customer in batch 3 must not create a third version.
+
+Rerunning verifies byte-identical content; conflicting output fails without replacement.
+The published synthetic-data directory has POSIX mode 755 so the non-owner Spark
+container user can traverse it after the generator's private staging directory is renamed.
+Use the existing `land-commerce-fixture` command for each reported batch path.
+The real-MinIO smoke test publishes them in reverse order, verifies conditional replay,
+and checks chronological planning, hash-bound commits and explicit batch replay.
+
+CI also runs `tests/integration/check_commerce_change_scenario.py` with the existing
+Spark `gold_commerce_daily.summarize` function in a bounded standalone container.
+It checks all three batch revenues, the final daily values and one late order. To
+repeat locally, generate the scenario under `artifacts/commerce-change-scenario`,
+mount the repository read-only at `/repo` in the repository's Spark image, set
+`PYTHONPATH=/repo/jobs/spark`, and submit that check with
+`--root /repo/artifacts/commerce-change-scenario`. See the serving-integration CI
+step for the full container command, including loopback host resolution for its
+network-isolated Spark driver. This check uses Spark DataFrames without changing
+the shared Iceberg catalog or Trino services.
+
+This increment implements the acceptance fixture and S3 path. The current gold mart
+remains batch-scoped. `expected.json` describes the intended latest-snapshot/history
+semantics for subsequent Spark/Trino correction tests; it is not evidence that general
+cross-batch correction or historical SCD2 backfill has already been implemented.
+
 To inspect how source-fixture generation scales without starting Docker, use an
 empty output directory:
 
