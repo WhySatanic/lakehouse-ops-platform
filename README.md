@@ -122,9 +122,11 @@ uv run lakeops ingest-weather-batch \
 Run the quality gate:
 
 ```bash
-uv run ruff check .
-uv run pytest
+uv run --frozen python -m lakehouse_ops.local_quality
 ```
+
+The [local quality runbook](docs/runbooks/local-quality.md) describes its seven gates,
+JSON result and time limits. It does not start containers or replace integration CI.
 
 For the first infrastructure-backed path, copy `.env.example` to `.env` and follow the
 [MinIO landing-zone runbook](docs/runbooks/minio-landing.md). The S3 adapter uses a
