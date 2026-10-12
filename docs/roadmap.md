@@ -320,6 +320,13 @@ conditional replay, chronological planning and hash-bound checkpoint smoke check
 This establishes test inputs for bounded late-data correction; the existing batch-scoped
 gold mart and forward-only customer history are not relabelled as completed backfill.
 
+The opt-in [linked reference-stack acceptance](runbooks/commerce-linked-acceptance.md)
+drives the same three full snapshots through MinIO landing, all production commerce
+stages, current gold and independent Trino revenue/history oracles before checkpoint.
+It retains a journal and per-batch evidence, verifies snapshot-stable current-mart
+replay and a compute-free idle run. This is a bounded single-writer scenario, not
+general CDC or retroactive customer-history correction.
+
 A strong week contains one or two complete changes, not a fixed number of cosmetic
 commits. A useful pull request includes an issue, acceptance criteria, implementation,
 tests, documentation, and evidence. Suggested rhythm:
