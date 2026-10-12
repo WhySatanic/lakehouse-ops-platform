@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
+from time import monotonic
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
@@ -13,6 +15,16 @@ class TrinoQueryError(RuntimeError):
 
 class TrinoProtocolError(RuntimeError):
     pass
+
+
+class TrinoQueryTimeoutError(TrinoProtocolError):
+    def __init__(self, query_id: str | None, cancellation: str) -> None:
+        self.query_id = query_id
+        self.cancellation = cancellation
+        super().__init__(
+            f"Trino query time budget exhausted: query_id={query_id}, "
+            f"cancellation={cancellation}"
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,8 +54,15 @@ class TrinoClient:
         *,
         user: str = "lakehouse-ops",
         timeout: float = 30.0,
+        query_timeout: float | None = None,
         client: httpx.Client | None = None,
     ) -> None:
+        if query_timeout is not None and (
+            isinstance(query_timeout, bool)
+            or not isfinite(query_timeout)
+            or query_timeout <= 0
+        ):
+            raise ValueError("Trino query_timeout must be finite and positive")
         parsed = urlsplit(server.rstrip("/"))
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise ValueError("Trino server must be an absolute HTTP(S) URL")
@@ -51,6 +70,7 @@ class TrinoClient:
         self._origin = (parsed.scheme, parsed.netloc)
         self._owns_client = client is None
         self._client = client or httpx.Client(timeout=timeout)
+        self._query_timeout = query_timeout
         self._headers = {
             "Accept": "application/json",
             "X-Trino-User": user,
@@ -72,14 +92,40 @@ class TrinoClient:
         return list(self.query_with_stats(sql).rows)
 
     def query_with_stats(self, sql: str) -> TrinoQueryResult:
-        response = self._client.post(
+        deadline = (
+            None if self._query_timeout is None else monotonic() + self._query_timeout
+        )
+        query_id: str | None = None
+        cancellation_uri: str | None = None
+
+        def request(method: str, url: str, **kwargs: Any) -> httpx.Response:
+            if deadline is not None:
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    self._query_timeout_error(query_id, cancellation_uri)
+                # Preserve shorter caller-configured phase limits, including None.
+                configured = self._client.timeout
+                kwargs["timeout"] = httpx.Timeout(
+                    **{
+                        phase: remaining if value is None else min(value, remaining)
+                        for phase, value in configured.as_dict().items()
+                    }
+                )
+            try:
+                return self._client.request(method, url, **kwargs)
+            except httpx.TimeoutException:
+                if deadline is not None:
+                    self._query_timeout_error(query_id, cancellation_uri)
+                raise
+
+        response = request(
+            "POST",
             f"{self._server}/v1/statement",
             content=sql,
             headers={**self._headers, "Content-Type": "text/plain; charset=utf-8"},
         )
         columns: list[str] | None = None
         rows: list[dict[str, Any]] = []
-        query_id: str | None = None
 
         for _ in range(1000):
             payload = self._payload(response)
@@ -89,6 +135,10 @@ class TrinoClient:
             if query_id is not None and current_id != query_id:
                 raise TrinoProtocolError("Trino query ID changed between result pages")
             query_id = current_id
+            next_uri = payload.get("nextUri")
+            cancellation_uri = self._coordinator_uri(next_uri) if next_uri else None
+            if deadline is not None and monotonic() >= deadline:
+                self._query_timeout_error(query_id, cancellation_uri)
             if error := payload.get("error"):
                 name = error.get("errorName", "TRINO_QUERY_ERROR")
                 message = error.get("message", "query failed without a message")
@@ -104,18 +154,27 @@ class TrinoClient:
                         raise TrinoProtocolError("Trino row width does not match columns")
                     rows.append(dict(zip(columns, values, strict=True)))
 
-            next_uri = payload.get("nextUri")
             if not next_uri:
                 return TrinoQueryResult(
                     query_id=query_id,
                     rows=tuple(rows),
                     stats=_query_stats(payload.get("stats")),
                 )
-            response = self._client.get(
-                self._coordinator_uri(next_uri), headers=self._headers
-            )
+            response = request("GET", cancellation_uri, headers=self._headers)
 
         raise TrinoProtocolError("Trino query exceeded the 1000-page safety limit")
+
+    def _query_timeout_error(self, query_id: str | None, uri: str | None) -> None:
+        cancellation = "not_available"
+        if uri is not None:
+            try:
+                response = self._client.delete(uri, headers=self._headers, timeout=5.0)
+                cancellation = (
+                    "accepted" if response.is_success else f"http_{response.status_code}"
+                )
+            except httpx.HTTPError:
+                cancellation = "transport_failed"
+        raise TrinoQueryTimeoutError(query_id, cancellation)
 
     @staticmethod
     def _payload(response: httpx.Response) -> dict[str, Any]:
