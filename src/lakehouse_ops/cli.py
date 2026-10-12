@@ -623,13 +623,14 @@ def main(argv: list[str] | None = None) -> int:
                     state_path=args.state,
                 )
                 with TrinoClient(args.server, user=args.user) as client:
+                    journal = CommerceRunJournal(Path(str(args.state) + ".runs.sqlite3"))
                     report = run_commerce_batch(
                         planner, client.query,
                         run_stage=lambda service, batch: run_compose_stage(
-                            service, batch, bucket=args.s3_bucket,
+                            service, batch, bucket=args.s3_bucket, journal=journal,
                         ),
                         attempts=args.attempts, delay_seconds=args.retry_delay_seconds,
-                        journal=CommerceRunJournal(Path(str(args.state) + ".runs.sqlite3")),
+                        journal=journal,
                     )
         except (
             OSError, CommerceBatchError, CommerceGoldGateError, CommercePipelineError,
