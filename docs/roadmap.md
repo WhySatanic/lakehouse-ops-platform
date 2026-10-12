@@ -265,6 +265,11 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
     current row, contiguous effective periods, and rejection of out-of-order changes.
   - [x] Publish the tested batch-scoped daily gold mart with order-day revenue, buying
     customers, and payment-quality measures, including replay and Trino checks.
+  - [x] Provide an opt-in current daily mart for explicitly declared complete snapshots,
+    with atomic data/provenance publication, correction and late-arrival acceptance,
+    replay without another Iceberg snapshot, stale-input protection and removed-day checks.
+    This first version uses full-result replacement and one writer; bounded partition
+    recomputation and historical SCD2 correction remain planned.
 - [ ] Schedule the pipeline with retries, freshness checks, and actionable notifications.
   - [x] Provide an opt-in cron cycle that runs one bounded batch attempt and then
     submits source and backlog freshness observations, including after run failure.

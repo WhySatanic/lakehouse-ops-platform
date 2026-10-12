@@ -55,6 +55,44 @@ remains batch-scoped. `expected.json` describes the intended latest-snapshot/his
 semantics for subsequent Spark/Trino correction tests; it is not evidence that general
 cross-batch correction or historical SCD2 backfill has already been implemented.
 
+## Opt-in current snapshot daily mart
+
+`lakehouse.gold.commerce_current_daily` stores the latest explicitly declared complete
+snapshot separately from the existing historical batch mart. First run the selected
+batch through the documented bronze/silver pipeline. Retain its selected batch ID and
+manifest SHA-256 from `plan-commerce-batches`, then run this optional publication:
+
+```powershell
+$env:COMMERCE_BATCH_ID = "<selected-batch-id>"
+$env:COMMERCE_MANIFEST_SHA256 = "<selected-manifest-sha256>"
+docker compose --profile catalog --profile commerce-current run --rm spark-commerce-current-gold
+```
+
+The job checks the synced input under `source=commerce/batch_id=<id>`, verifies its
+manifest identity and table checksums, requires `config.source_semantics=full_snapshot`,
+and uses the existing reconciled silver/gold source validation. Ordinary fixtures that
+do not declare complete-snapshot semantics cannot replace this mart. For Trino, query
+`gold.commerce_current_daily` through the existing lakehouse catalog and sum
+`captured_revenue_cents`; do not sum snapshots in `gold.commerce_daily` as change events.
+
+A newer complete snapshot atomically replaces the current Iceberg table. Its provenance
+(batch ID, timestamp and manifest digest) is stored in every daily row in the same
+commit, so data and the ordering marker cannot advance separately. Identical replay
+checks row equality and creates no additional Iceberg snapshot. Older input is ignored;
+a conflicting identity at the same timestamp fails. Days absent from the new snapshot
+are removed. The related-snapshot Spark/Iceberg check in serving CI exercises correction,
+late arrival, replay, stale input, conflicting replay and removal of a previously present day.
+
+This version requires one writer and nonempty complete snapshots. It replaces the full
+daily result and does not yet optimize writes to changed dates, implement distributed
+writer ownership, or correct historical SCD2. It is opt-in and does not change the
+existing runner checkpoint or its eight-stage acceptance gate. The local acceptance
+test uses an isolated filesystem Iceberg catalog; main-service HMS/Trino deployment
+uses the optional Compose job above and is a distinct integration boundary.
+
+Iceberg documents atomic overwrite semantics in its
+[Spark write guide](https://iceberg.apache.org/docs/latest/spark-writes/).
+
 To inspect how source-fixture generation scales without starting Docker, use an
 empty output directory:
 

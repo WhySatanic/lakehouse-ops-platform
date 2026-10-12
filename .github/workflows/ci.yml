@@ -92,7 +92,7 @@ jobs:
             --output artifacts/commerce-change-scenario
           docker run --rm --memory 2g --cpus 2 --network none \
             --hostname lakeops-change --add-host lakeops-change:127.0.0.1 \
-            -e SPARK_LOCAL_IP=127.0.0.1 -e PYTHONPATH=/repo/jobs/spark \
+            -e SPARK_LOCAL_IP=127.0.0.1 -e PYTHONPATH=/repo/src:/repo/jobs/spark \
             --mount "type=bind,source=$PWD,target=/repo,readonly" \
             lakehouse-ops/spark-iceberg:3.5.9-1.11.0 \
             /opt/spark/bin/spark-submit --master 'local[2]' \
