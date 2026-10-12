@@ -1,0 +1,20 @@
+# Merge with compose.yaml explicitly; defaults remain unchanged.
+x-memory: &memory
+  LAKEOPS_SPARK_MEMORY_REPORT: "1"
+services:
+  spark-commerce-bronze:
+    environment: *memory
+  spark-commerce-payment-silver:
+    environment: *memory
+  spark-commerce-order-silver:
+    environment: *memory
+  spark-commerce-product-silver:
+    environment: *memory
+  spark-commerce-customer-silver:
+    environment: *memory
+  spark-commerce-customer-scd2:
+    environment: *memory
+  spark-commerce-daily-gold:
+    environment: *memory
+  spark-commerce-current-gold:
+    environment: *memory

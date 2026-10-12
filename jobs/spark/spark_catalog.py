@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 
+from container_memory import register_memory_report
 from pyspark.sql import SparkSession
 
 
@@ -18,6 +19,7 @@ def build_session(app_name: str) -> SparkSession:
     access_key = required_environment("AWS_ACCESS_KEY_ID")
     secret_key = required_environment("AWS_SECRET_ACCESS_KEY")
     metastore_uri = required_environment("HIVE_METASTORE_URI")
+    register_memory_report(app_name)
     return (
         SparkSession.builder.appName(app_name)
         .master(os.environ.get("SPARK_MASTER", "local[2]"))
