@@ -22,7 +22,7 @@ def test_retained_interrupted_owner_and_retry_are_read_only() -> None:
     journal = directory / "journal.sqlite3"
     checkpoint = directory / "checkpoint.json"
     before = [hashlib.sha256(path.read_bytes()).hexdigest() for path in (journal, checkpoint)]
-    report = inspect_journal(journal, limit=2)
+    report = inspect_journal(journal, limit=2, checkpoint=checkpoint)
     assert [r["outcome"] for r in report["runs"]] == ["ready", "unfinished"]
     successful, interrupted = report["runs"]
     assert interrupted["phase"] == "spark-commerce-daily-gold"
@@ -32,6 +32,8 @@ def test_retained_interrupted_owner_and_retry_are_read_only() -> None:
     assert successful["run_id"] != interrupted["run_id"]
     assert successful["batch_id"] == interrupted["batch_id"]
     assert successful["manifest_sha256"] == interrupted["manifest_sha256"]
+    assert successful["checkpoint_observation"] == "matching_manifest"
+    assert interrupted["checkpoint_observation"] == "matching_manifest"
     after = [hashlib.sha256(path.read_bytes()).hexdigest() for path in (journal, checkpoint)]
     assert after == before
 
