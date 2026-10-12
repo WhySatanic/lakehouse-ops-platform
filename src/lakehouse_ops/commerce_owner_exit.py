@@ -78,9 +78,10 @@ def owner(connection: Any, output: Path, endpoint: str, server: str) -> None:
         planner = CommerceBatchPlanner(
             s3, bucket="lakehouse", state_path=output / "checkpoint.json",
         )
+        journal = CommerceRunJournal(output / "journal.sqlite3")
 
         def stage(service: str, batch: dict[str, str]) -> None:
-            run_compose_stage(service, batch, bucket="lakehouse")
+            run_compose_stage(service, batch, bucket="lakehouse", journal=journal)
             if service == COMMERCE_STAGES[-1]:
                 connection.send({"boundary": "gold_published", "pid": os.getpid()})
                 # The parent kills this owner. No finally/exception path advances state.
@@ -88,7 +89,7 @@ def owner(connection: Any, output: Path, endpoint: str, server: str) -> None:
                 raise RuntimeError("parent did not terminate paused owner")
 
         run_commerce_batch(planner, trino.query, run_stage=stage,
-                           journal=CommerceRunJournal(output / "journal.sqlite3"))
+                           journal=journal)
 
 
 def main() -> int:
@@ -151,7 +152,7 @@ def main() -> int:
                 retry = measured_phase(timings, "retry", lambda: run_commerce_batch(
                     planner, trino.query, attempts=3, journal=journal,
                     run_stage=lambda service, batch: run_compose_stage(
-                        service, batch, bucket="lakehouse",
+                        service, batch, bucket="lakehouse", journal=journal,
                     ),
                 ))
             after = measured_phase(timings, "audit_after_retry", lambda: audit_tables(trino.query))
