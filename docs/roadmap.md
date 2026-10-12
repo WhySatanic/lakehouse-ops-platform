@@ -294,6 +294,10 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
     costs and verified idle replay. Retain explicit warm-stack/query-order limits;
     see [two-volume measurement](runbooks/commerce-pipeline-scale.md). Crash recovery
     at scale, maintenance and production capacity remain unmeasured.
+  - [x] Measure caught-exception recovery after gold at 100/1000 orders on separate
+    fresh catalogs, with interrupted/retry/audit/idle timing, Spark container memory
+    and unchanged row/file evidence. See [recovery observations](runbooks/commerce-recovery-acceptance.md).
+    This does not measure SIGKILL or failure inside a transaction, maintenance or capacity.
 
 Exit criterion: one documented command and one scheduled path take a reproducible source
 batch through quality checks into a Trino-queryable gold mart, with safe reruns, bounded

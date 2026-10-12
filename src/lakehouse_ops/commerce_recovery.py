@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 from collections.abc import Callable
 from contextlib import redirect_stderr
 from pathlib import Path
@@ -67,8 +68,19 @@ def exercise_recovery(
     state: Path,
     *,
     evidence: dict[str, Any] | None = None,
+    clock: Callable[[], float] = time.perf_counter,
 ) -> dict[str, Any]:
     evidence = {} if evidence is None else evidence
+    timings: dict[str, float] = {}
+    evidence["phase_elapsed_seconds"] = timings
+
+    def measured(phase: str, operation: Callable[[], Any]) -> Any:
+        started = clock()
+        try:
+            return operation()
+        finally:
+            timings[phase] = round(clock() - started, 6)
+
     selected = planner.plan(max_batches=2)["batches"]
     if len(selected) != 1 or state.exists():
         raise ValueError("requires one pending batch and a fresh checkpoint")
@@ -81,7 +93,9 @@ def exercise_recovery(
             raise InjectedCommerceInterruption("after gold publication, before verification")
 
     try:
-        run_commerce_batch(planner, query, run_stage=interrupt, attempts=3)
+        measured("interrupted_attempt", lambda: run_commerce_batch(
+            planner, query, run_stage=interrupt, attempts=3,
+        ))
     except InjectedCommerceInterruption:
         pass
     else:
@@ -90,14 +104,16 @@ def exercise_recovery(
         raise ValueError("premature checkpoint or incomplete injection boundary")
     if planner.plan(max_batches=1)["batches"] != selected:
         raise ValueError("interrupted batch is no longer pending")
-    before = audit()
+    before = measured("audit_before_retry", audit)
     evidence.update(checkpoint_before_retry="absent", published_before_retry=before)
     if not before:
         raise ValueError("gold publication produced no audit evidence")
-    retry = run_commerce_batch(planner, query, run_stage=run_stage, attempts=3)
+    retry = measured("retry", lambda: run_commerce_batch(
+        planner, query, run_stage=run_stage, attempts=3,
+    ))
     if retry["status"] != "ready" or retry["batch_id"] != selected[0]["batch_id"]:
         raise ValueError("retry did not complete the interrupted batch")
-    after = audit()
+    after = measured("audit_after_retry", audit)
     evidence.update(published_after_retry=after, retry=retry)
     # Iceberg may commit an empty MERGE snapshot. Data and physical files must
     # remain identical, but snapshot count is observational, not an invariant.
@@ -112,7 +128,9 @@ def exercise_recovery(
     def idle_stage(*_: Any) -> None:
         raise ValueError("idle replay started compute")
 
-    idle = run_commerce_batch(planner, query, run_stage=idle_stage)
+    idle = measured("idle_replay", lambda: run_commerce_batch(
+        planner, query, run_stage=idle_stage,
+    ))
     if idle["status"] != "idle":
         raise ValueError("checkpoint replay was not idle")
     return {
@@ -120,6 +138,7 @@ def exercise_recovery(
         "batch_id": selected[0]["batch_id"], "interrupted_stages": first_stages,
         "checkpoint_before_retry": "absent", "published_before_retry": before,
         "published_after_retry": after, "retry": retry, "idle": idle,
+        "phase_elapsed_seconds": timings,
         "limitations": ["not SIGKILL/OOM", "not failure inside an Iceberg commit",
                         "not distributed exactly-once recovery",
                         "empty MERGE snapshots may be added on retry"],
@@ -131,7 +150,10 @@ def main() -> int:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--s3-endpoint-url", required=True)
     parser.add_argument("--server", required=True)
+    parser.add_argument("--orders", type=int, default=100)
     args = parser.parse_args()
+    if not 100 <= args.orders <= 10_000:
+        parser.error("--orders must be between 100 and 10000")
     project = os.environ.get("COMPOSE_PROJECT_NAME", "")
     if not project.startswith("lakehouse-ops-recovery"):
         parser.error("requires a dedicated lakehouse-ops-recovery Compose project")
@@ -148,7 +170,7 @@ def main() -> int:
                 raise ValueError("requires fresh commerce catalog")
             s3 = boto3.client("s3", endpoint_url=args.s3_endpoint_url, region_name="us-east-1")
             fixture = generate_commerce_fixture(args.output / "fixture", CommerceFixtureConfig(
-                customers=10, products=5, orders=100, null_customer_emails=1,
+                customers=10, products=5, orders=args.orders, null_customer_emails=1,
                 duplicate_orders=1, late_orders=1, invalid_payments=1,
                 batch_at="2026-02-03T00:00:00+00:00",
             ))
@@ -169,6 +191,7 @@ def main() -> int:
         print(f"commerce recovery acceptance failed: {error}", file=sys.stderr)
         return 2
     finally:
+        report["fixture_orders"] = args.orders
         (args.output / "recovery.json").write_text(json.dumps(report, indent=2))
     print(json.dumps(report, sort_keys=True))
     return 0
