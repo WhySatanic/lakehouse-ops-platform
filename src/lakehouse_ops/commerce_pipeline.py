@@ -50,6 +50,8 @@ def run_compose_stage(
         **os.environ, "COMMERCE_BATCH_ID": batch["batch_id"],
         "COMMERCE_MANIFEST_SHA256": batch["manifest_sha256"], "LAKEHOUSE_BUCKET": bucket,
     }
+    if service == "bronze-input-sync":
+        environment["COMMERCE_SYNC_SCOPE"] = "selected"
     command = ["docker", "compose", "--profile", "catalog", "--profile", "compute",
                "run", "--rm", "--no-deps"]
 

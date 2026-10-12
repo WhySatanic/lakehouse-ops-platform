@@ -349,6 +349,12 @@ quality gates with isolated real Docker timeout-cleanup and Spark-memory smoke t
 It retains step logs, JUnit and failure evidence without starting an existing stack.
 It is not full commerce acceptance and does not disable or replace mandatory CI.
 
+The [selected commerce source sync](runbooks/commerce-selected-source-sync.md)
+mirrors only the runner's chosen batch while preserving manual full-landing sync.
+Real MinIO verification compares exact bytes on fresh volumes and repeated runs;
+full linked acceptance covers the unchanged Spark path. This bounds source transfer
+without claiming a measured whole-CI speedup or removing mandatory scenarios.
+
 Next correction acceptance foundation: a deterministic three-snapshot commerce scenario
 with a literal latest-order/daily-revenue/customer-history oracle, compatible S3 landing,
 conditional replay, chronological planning and hash-bound checkpoint smoke checks.
