@@ -307,7 +307,11 @@ not automatic restart instructions or transactional coordination with Iceberg.
 Compose commerce stages now have a configurable wall-clock limit, unique container
 ownership and scoped timeout cleanup. Real Docker acceptance verifies removal on two
 attempts; unit checks cover failed cleanup, unchanged checkpoint and a verified retry.
-Abrupt-owner-exit recovery remains separate work.
+The opt-in [forced owner-exit acceptance](runbooks/commerce-owner-exit.md) kills a
+spawned runner only after its gold stage has returned, retains the incomplete journal,
+reacquires the OS lock without removing its file, and checks rows/files across retry.
+Termination inside an active Spark stage or Iceberg commit and orphan-stage cleanup
+remain separate work; this bounded drill is not automatic production crash recovery.
 
 Do not idle solely because a PR's CI is pending. Continue one independent increment
 on a separate branch from current main, keeping dependencies and merge order explicit.
