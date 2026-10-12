@@ -258,6 +258,41 @@ The JSON result lists completed stages and verified gold totals; Spark/Compose l
 to stderr. CI exercises a fresh fixture through this command, retains the report, and
 then runs the existing exact-count/replay acceptance checks separately.
 
+The CLI now appends durable local execution evidence to `<state>.runs.sqlite3`, for
+example `data/state/commerce.json.runs.sqlite3` when that is the selected state path.
+Each attempt has a unique run ID; events bind the selected batch ID and manifest hash,
+record stage start/completion, verification, checkpoint intent/completion and ready,
+idle or failed outcome. SQLite commits each event with `synchronous=FULL`, closing
+the connection before proceeding. Only the exception type is retained, not potentially
+sensitive exception messages. The stable CLI arguments and stdout JSON are unchanged.
+Keep the database with the state file on a local writable filesystem; creation is an
+additive upgrade and does not migrate or overwrite existing checkpoints.
+
+Inspect it read-only with SQLite:
+
+```sql
+SELECT sequence, run_id, recorded_at, batch_id, manifest_sha256, phase, event, error_type
+FROM commerce_run_events ORDER BY sequence;
+```
+
+An abruptly killed process can leave a last `started` event without a terminal event.
+This is evidence of an incomplete attempt, not proof that its Docker work stopped.
+Confirm child processes/containers stopped, then inspect the authoritative checkpoint
+and Iceberg state before rerunning the existing idempotent pipeline. Never skip a stage
+or advance a checkpoint based on journal rows. Journal and checkpoint are not a single
+transaction: a crash or journal write failure after checkpoint commit may leave only
+checkpoint intent or a failed journal outcome even though the checkpoint advanced.
+Successful verification remains required before that commit. An unwritable journal
+before checkpoint intent stops processing without committing; failures after an already
+committed checkpoint cannot roll it back. No automatic recovery, distributed fencing,
+retention/compaction or exactly-once guarantee is added. Archive completed evidence
+under an operator-managed policy; do not delete it during a run.
+
+`uv run pytest tests/test_commerce_run_journal.py -q -o addopts=''` checks event order,
+failures in every phase, interrupted execution, journal I/O errors and a real child
+process exiting abruptly followed by a new attempt that preserves the previous rows.
+The child-process test proves journal persistence, not recovery of Spark writes.
+
 Successful runs also include `durations_seconds`: planner selection, each named Compose
 stage, Trino gold verification, checkpoint commit, and the total. These are elapsed
 monotonic-clock seconds, not CPU time. Verification includes retry waits and repeated

@@ -502,6 +502,8 @@ jobs:
             --state data/state/commerce-runner-ci.json > artifacts/commerce-runner-idle.json
           uv run python -c 'import json; r=json.load(open("artifacts/commerce-runner.json")); idle=json.load(open("artifacts/commerce-runner-idle.json")); assert r["status"]=="ready"; assert r["checkpoint"]["created"] is True; assert len(r["completed_stages"])==8; assert idle["status"]=="idle"; assert idle["completed_stages"]==[]'
           uv run python -c 'import json,math; r=json.load(open("artifacts/commerce-runner.json")); d=r["durations_seconds"]; phases=[d["planning"],*d["stages"].values(),d["verification"],d["checkpoint"]]; assert set(d["stages"])==set(r["completed_stages"]); assert all(math.isfinite(value) and value>=0 for value in phases); assert math.isclose(d["total"],sum(phases),abs_tol=1e-6)'
+          uv run python -c 'import sqlite3; c=sqlite3.connect("data/state/commerce-runner-ci.json.runs.sqlite3"); assert c.execute("SELECT event FROM commerce_run_events WHERE phase = ? ORDER BY sequence", ("run",)).fetchall()==[("ready",),("idle",)]; assert c.execute("SELECT count(*) FROM commerce_run_events WHERE phase = ? AND event = ?", ("checkpoint","completed")).fetchone()[0]==1; c.close()'
+          cp data/state/commerce-runner-ci.json.runs.sqlite3 artifacts/commerce-runner-journal.sqlite3
       - name: Exercise scheduled commerce cycle against the live stack
         env:
           AWS_ACCESS_KEY_ID: lakeops-ingest
@@ -1168,6 +1170,7 @@ jobs:
             artifacts/commerce-runner.json
             artifacts/commerce-runner-idle.json
             artifacts/commerce-runner-retry.json
+            artifacts/commerce-runner-journal.sqlite3
             artifacts/commerce-cycle.jsonl
             artifacts/commerce-cycle-idle.jsonl
             artifacts/commerce-cycle-validation.json

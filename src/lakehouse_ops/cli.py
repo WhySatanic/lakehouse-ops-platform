@@ -24,6 +24,7 @@ from lakehouse_ops.commerce_pipeline import (
     run_commerce_batch,
     run_compose_stage,
 )
+from lakehouse_ops.commerce_run_journal import CommerceRunJournal
 from lakehouse_ops.commerce_runner_lock import CommerceRunnerBusyError, commerce_runner_lock
 from lakehouse_ops.control_plane_contract import (
     ControlPlaneContractError,
@@ -628,6 +629,7 @@ def main(argv: list[str] | None = None) -> int:
                             service, batch, bucket=args.s3_bucket,
                         ),
                         attempts=args.attempts, delay_seconds=args.retry_delay_seconds,
+                        journal=CommerceRunJournal(Path(str(args.state) + ".runs.sqlite3")),
                     )
         except (
             OSError, CommerceBatchError, CommerceGoldGateError, CommercePipelineError,

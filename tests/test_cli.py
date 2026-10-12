@@ -518,6 +518,14 @@ def test_run_commerce_batch_command_preserves_state_on_failure_and_skips_idle(
         assert "stage failed" in capsys.readouterr().err
         assert not state.exists()
         assert len(statements) == (3 if result == "transport" else int(result == "empty"))
+    import sqlite3
+    from contextlib import closing
+
+    with closing(sqlite3.connect(str(state) + ".runs.sqlite3")) as connection:
+        terminal = connection.execute(
+            "SELECT event FROM commerce_run_events ORDER BY sequence DESC LIMIT 1"
+        ).fetchone()[0]
+        assert terminal == ("idle" if result in {"ready", "retry"} else "failed")
     with pytest.raises(SystemExit) as error:
         cli.main([*args, "--s3-prefix", "other"])
     assert error.value.code == 2
