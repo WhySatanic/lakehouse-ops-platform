@@ -328,6 +328,11 @@ acceptance and retains diagnostics before stopping only its own services. It reu
 the linked demo lifecycle without changing the default linked scenario or claiming
 recovery inside an active Spark transaction.
 
+The opt-in [recorded-container inspection](runbooks/commerce-container-inspection.md)
+observes Docker state for journal-recorded stage names in one explicit project,
+checks run/batch/manifest/project/service ownership and distinguishes daemon failure
+from absence. It performs no cleanup and does not infer runner liveness or orphanhood.
+
 Do not idle solely because a PR's CI is pending. Continue one independent increment
 on a separate branch from current main, keeping dependencies and merge order explicit.
 Prioritize failures/review feedback, and merge only after all mandatory checks pass
