@@ -356,6 +356,11 @@ container and retains final mart replay as a separate attempt without a checkpoi
 Container launch intent, hash-bound labels and completion/timeout evidence now share
 the corresponding run ID; automatic orphan-stage recovery remains planned.
 
+The opt-in [one-command linked demo](runbooks/commerce-linked-demo.md) wraps that
+acceptance in a fresh uniquely named local Docker stack, automatically selects
+ports, retains logs and evidence, and stops only its own services without deleting
+volumes. It does not replace separate crash-recovery or release-candidate evidence.
+
 A strong week contains one or two complete changes, not a fixed number of cosmetic
 commits. A useful pull request includes an issue, acceptance criteria, implementation,
 tests, documentation, and evidence. Suggested rhythm:

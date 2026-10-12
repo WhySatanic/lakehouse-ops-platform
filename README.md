@@ -103,6 +103,19 @@ An opt-in [history rebuild](docs/runbooks/commerce-customer-history-rebuild.md) 
 late effective-time observations from complete retained silver history with one atomic
 Iceberg replacement and snapshot-stable replay; default forward mode is unchanged.
 
+The opt-in [one-command commerce demo](docs/runbooks/commerce-linked-demo.md) starts
+a fresh scoped MinIO/Hive Metastore/Trino stack, runs three linked snapshots through
+Spark and literal revenue/history oracles, verifies replay and idle behavior, then
+stops only its own services while retaining all data, journals and logs:
+
+```bash
+uv run --frozen python -m lakehouse_ops.commerce_linked_demo \
+  --output artifacts/commerce-linked-demo
+```
+
+Docker and the reference images must already be available. This bounded demonstration
+does not replace separate crash-recovery, capacity or release-candidate evidence.
+
 ```bash
 uv sync --dev
 uv run lakeops ingest-weather \
