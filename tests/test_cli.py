@@ -465,10 +465,12 @@ def test_run_commerce_batch_command_preserves_state_on_failure_and_skips_idle(
     monkeypatch.setattr(cli, "_create_s3_client", create_s3)
     monkeypatch.setattr(cli.CommerceBatchPlanner, "commit", commit)
 
-    def execute(service: str, batch: dict[str, str], *, bucket: str) -> None:
+    def execute(service: str, batch: dict[str, str], *, bucket: str, journal) -> None:
         with pytest.raises(CommerceRunnerBusyError), commerce_runner_lock():
             pytest.fail("runner lock must cover Compose execution")
         assert bucket == "lakehouse"
+        assert journal.path == Path(str(state) + ".runs.sqlite3")
+        assert journal.batch["batch_id"] == fixture.batch_id
         assert batch["batch_id"] == fixture.batch_id
         assert not state.exists()
         stages.append(service)

@@ -35,7 +35,10 @@ class CommercePipelineError(RuntimeError):
     pass
 
 
-def run_compose_stage(service: str, batch: dict[str, str], *, bucket: str) -> None:
+def run_compose_stage(
+    service: str, batch: dict[str, str], *, bucket: str,
+    journal: CommerceRunJournal | None = None,
+) -> None:
     try:
         timeout = int(os.environ.get("COMMERCE_STAGE_TIMEOUT_SECONDS", "1800"))
     except ValueError as error:
@@ -47,10 +50,25 @@ def run_compose_stage(service: str, batch: dict[str, str], *, bucket: str) -> No
         **os.environ, "COMMERCE_BATCH_ID": batch["batch_id"],
         "COMMERCE_MANIFEST_SHA256": batch["manifest_sha256"], "LAKEHOUSE_BUCKET": bucket,
     }
+    command = ["docker", "compose", "--profile", "catalog", "--profile", "compute",
+               "run", "--rm", "--no-deps"]
+
+    def ownership(event: str) -> None:
+        if journal:
+            journal.record_container(service, container, event, batch=batch,
+                                     project_hint=environment.get("COMPOSE_PROJECT_NAME", ""))
+
+    if journal:
+        command.extend([
+            "--label", f"lakehouse.ops.run_id={journal.run_id}",
+            "--label", f"lakehouse.ops.batch_id={batch['batch_id']}",
+            "--label", f"lakehouse.ops.manifest_sha256={batch['manifest_sha256']}",
+        ])
+    command.extend(["--name", container, service])
+    ownership("launch_intent")
     try:
         subprocess.run(
-            ["docker", "compose", "--profile", "catalog", "--profile", "compute",
-             "run", "--rm", "--no-deps", "--name", container, service],
+            command,
             env=environment, check=True, stdout=sys.stderr, timeout=timeout,
         )
     except subprocess.TimeoutExpired as error:
@@ -60,14 +78,18 @@ def run_compose_stage(service: str, batch: dict[str, str], *, bucket: str) -> No
                 stdout=sys.stderr, stderr=sys.stderr, timeout=30,
             )
         except (OSError, subprocess.SubprocessError) as cleanup_error:
+            ownership("cleanup_unconfirmed")
             raise CommercePipelineError(
                 f"commerce stage timed out: {service}; container cleanup unconfirmed: {container}"
             ) from cleanup_error
+        ownership("timeout_removed")
         raise CommercePipelineError(
             f"commerce stage timed out after {timeout}s: {service}; container removed: {container}"
         ) from error
     except (OSError, subprocess.CalledProcessError) as error:
+        ownership("failed")
         raise CommercePipelineError(f"commerce stage failed: {service}") from error
+    ownership("completed")
 
 
 def run_commerce_batch(
