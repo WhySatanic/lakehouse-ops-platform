@@ -340,6 +340,11 @@ It retains a journal and per-batch evidence, verifies snapshot-stable current-ma
 replay and a compute-free idle run. This is a bounded single-writer scenario, not
 general CDC or retroactive customer-history correction.
 
+The opt-in [one-command linked demo](runbooks/commerce-linked-demo.md) wraps that
+acceptance in a fresh uniquely named local Docker stack, automatically selects
+ports, retains logs and evidence, and stops only its own services without deleting
+volumes. It does not replace separate crash-recovery or release-candidate evidence.
+
 A strong week contains one or two complete changes, not a fixed number of cosmetic
 commits. A useful pull request includes an issue, acceptance criteria, implementation,
 tests, documentation, and evidence. Suggested rhythm:
