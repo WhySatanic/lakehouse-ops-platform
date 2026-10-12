@@ -293,6 +293,16 @@ late-data correction, freshness monitoring, and retained operational evidence.
 
 ## Sustainable contribution rhythm
 
+Compose commerce stages now have a configurable wall-clock limit, unique container
+ownership and scoped timeout cleanup. Real Docker acceptance verifies removal on two
+attempts; unit checks cover failed cleanup, unchanged checkpoint and a verified retry.
+Durable execution journaling and abrupt-owner-exit recovery remain separate work.
+
+Do not idle solely because a PR's CI is pending. Continue one independent increment
+on a separate branch from current main, keeping dependencies and merge order explicit.
+Prioritize failures/review feedback, and merge only after all mandatory checks pass
+on the exact current PR head with no conflicts or unresolved review comments.
+
 Next correction acceptance foundation: a deterministic three-snapshot commerce scenario
 with a literal latest-order/daily-revenue/customer-history oracle, compatible S3 landing,
 conditional replay, chronological planning and hash-bound checkpoint smoke checks.
