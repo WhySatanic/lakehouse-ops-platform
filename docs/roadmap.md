@@ -324,6 +324,10 @@ Combined timeout/retry acceptance retains the failed attempt, records a new run 
 and advances the checkpoint only after successful gold verification.
 The processing checkpoint remains authoritative; journal events are diagnostic,
 not automatic restart instructions or transactional coordination with Iceberg.
+The [checkpoint-exit acceptance](runbooks/commerce-checkpoint-exit.md) exercises a real
+owner exit after local persistence but before journal completion, with read-only
+identity correlation and compute-free planning afterward. It does not inject a
+failure inside Spark or an Iceberg transaction.
 
 Compose commerce stages now have a configurable wall-clock limit, unique container
 ownership and scoped timeout cleanup. Real Docker acceptance verifies removal on two

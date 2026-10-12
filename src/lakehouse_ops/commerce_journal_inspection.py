@@ -11,9 +11,12 @@ from pathlib import Path
 from typing import Any
 
 from lakehouse_ops.commerce_run_journal import CommerceJournalError
+from lakehouse_ops.ingestion.commerce_batches import _load_state
 
 
-def inspect_journal(path: Path, *, limit: int = 10) -> dict[str, Any]:
+def inspect_journal(
+    path: Path, *, limit: int = 10, checkpoint: Path | None = None,
+) -> dict[str, Any]:
     if type(limit) is not int or not 1 <= limit <= 100:
         raise ValueError("limit must be an integer between 1 and 100")
     try:
@@ -46,19 +49,33 @@ def inspect_journal(path: Path, *, limit: int = 10) -> dict[str, Any]:
             else "failed" if row["event"] == "failed" else "unfinished"
         )
         runs.append(run)
-    return {
+    report = {
         "status": "observed", "scope": "diagnostic_journal_not_checkpoint_or_liveness",
         "journal": str(path.resolve()), "limit": limit, "runs": runs,
     }
+    if checkpoint is not None:
+        processed = _load_state(checkpoint)["processed_batches"]
+        for run in runs:
+            entry = processed.get(run["batch_id"])
+            run["checkpoint_observation"] = (
+                "not_batch_bound" if run["batch_id"] is None or run["manifest_sha256"] is None
+                else "not_recorded" if entry is None
+                else "matching_manifest" if entry["manifest_sha256"] == run["manifest_sha256"]
+                else "different_manifest"
+            )
+        report.update(scope="diagnostic_journal_and_checkpoint_not_atomic_or_liveness",
+                      checkpoint=str(checkpoint.resolve()))
+    return report
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--journal", type=Path, required=True)
     parser.add_argument("--limit", type=int, default=10)
+    parser.add_argument("--checkpoint", type=Path)
     args = parser.parse_args(argv)
     try:
-        report = inspect_journal(args.journal, limit=args.limit)
+        report = inspect_journal(args.journal, limit=args.limit, checkpoint=args.checkpoint)
     except (OSError, ValueError) as error:
         print(f"commerce journal inspection failed: {error}", file=sys.stderr)
         return 2
