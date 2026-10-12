@@ -152,6 +152,8 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--s3-endpoint-url", required=True)
     parser.add_argument("--server", required=True)
+    parser.add_argument("--late-customer-history", action="store_true",
+                        help="After the three batches, run a manual late history correction drill")
     args = parser.parse_args()
     if not os.environ.get("COMPOSE_PROJECT_NAME", "").startswith("lakehouse-ops-linked"):
         parser.error("requires a dedicated lakehouse-ops-linked Compose project")
@@ -194,6 +196,38 @@ def main() -> int:
                     ),
                     expected, args.output, report,
                 )
+                if args.late_customer_history:
+                    from lakehouse_ops.commerce_history_correction import (
+                        exercise_history_correction,
+                        generate_late_observation,
+                    )
+
+                    batch = generate_late_observation(
+                        args.output / "scenario" / f"batch_id={expected['batches'][0]['batch_id']}",
+                        args.output / "late-observation",
+                    )
+                    report["late_customer_landing"] = landing.write(
+                        args.output / "late-observation",
+                    ).as_dict()
+                    if landing.write(args.output / "late-observation").created:
+                        raise ValueError("late customer source replay created new objects")
+
+                    def history_stage(service, selected, *, journal, history_mode):
+                        previous = os.environ.get("COMMERCE_CUSTOMER_HISTORY_MODE")
+                        os.environ["COMMERCE_CUSTOMER_HISTORY_MODE"] = history_mode
+                        try:
+                            run_compose_stage(
+                                service, selected, bucket="lakehouse", journal=journal,
+                            )
+                        finally:
+                            if previous is None:
+                                os.environ.pop("COMMERCE_CUSTOMER_HISTORY_MODE", None)
+                            else:
+                                os.environ["COMMERCE_CUSTOMER_HISTORY_MODE"] = previous
+
+                    exercise_history_correction(
+                        trino.query, history_stage, batch, expected, args.output, report,
+                    )
     except Exception as error:
         report.update(status="failed", error_type=type(error).__name__)
         print(f"linked commerce acceptance failed: {error}", file=sys.stderr)
