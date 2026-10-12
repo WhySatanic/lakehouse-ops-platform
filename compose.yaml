@@ -608,6 +608,7 @@ services:
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       HIVE_METASTORE_URI: thrift://hive-metastore:9083
       COMMERCE_BATCH_ID: ${COMMERCE_BATCH_ID:-}
+      COMMERCE_CUSTOMER_HISTORY_MODE: ${COMMERCE_CUSTOMER_HISTORY_MODE:-forward}
       SPARK_MASTER: local[2]
       PYTHONPATH: /opt/lakehouse/jobs
     volumes:

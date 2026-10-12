@@ -7,7 +7,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from commerce_customer_scd2 import apply_customer_history
+from commerce_customer_scd2 import apply_customer_history, rebuild_customer_history
 from gold_commerce_current import TABLE, publish_snapshot
 from gold_commerce_daily import summarize
 from pyspark.sql import SparkSession
@@ -48,6 +48,7 @@ def main() -> None:
         ).writeTo(history_table).using("iceberg").tableProperty("format-version", "2").create()
         revenue = []
         history_insertions = []
+        history_sources = []
         for batch in expected["batches"]:
             root = args.root / f"batch_id={batch['batch_id']}"
             orders = (
@@ -74,6 +75,7 @@ def main() -> None:
                 .withColumn("email_is_missing", F.col("email").isNull())
             )
             history_report = apply_customer_history(spark, customers, batch_id=batch["batch_id"])
+            history_sources.append(customers)
             history_insertions.append(history_report["rows_inserted"])
             publication = publish_snapshot(spark, daily_frame, identity)
             assert publication["action"] == ("create" if not revenue else "replace")
@@ -117,6 +119,55 @@ def main() -> None:
             raise AssertionError("old changed customer history was accepted")
         assert spark.table(history_table).orderBy("customer_version_id").collect() == before
         assert spark.table(f"{history_table}.snapshots").count() == history_snapshots
+        complete_source = history_sources[0]
+        for customer_source in history_sources[1:]:
+            complete_source = complete_source.unionByName(customer_source)
+        assert rebuild_customer_history(spark, complete_source)["action"] == "replay"
+        assert spark.table(f"{history_table}.snapshots").count() == history_snapshots
+        late_customer = (
+            initial_customers.withColumn("source_batch_id", F.lit("e" * 16))
+            .withColumn("source_batch_at", F.to_timestamp(F.lit("2026-02-01T12:00:00Z")))
+            .withColumn("full_name", F.lit("Alice Corrected"))
+        )
+        corrected_source = complete_source.unionByName(late_customer)
+        assert rebuild_customer_history(spark, corrected_source)["action"] == "replace"
+        assert spark.table(f"{history_table}.snapshots").count() == history_snapshots + 1
+        corrected = spark.table(history_table).orderBy("valid_from").collect()
+        assert [(row.full_name, row.valid_from.isoformat(),
+                 row.valid_to.isoformat() if row.valid_to else None, row.is_current)
+                for row in corrected] == [
+            ("Alice", "2026-02-01T00:00:00", "2026-02-01T12:00:00", False),
+            ("Alice Corrected", "2026-02-01T12:00:00", "2026-02-02T00:00:00", False),
+            ("Alice Updated", "2026-02-02T00:00:00", None, True),
+        ]
+        assert rebuild_customer_history(spark, corrected_source)["action"] == "replay"
+        for invalid_source, message in (
+            (corrected_source.unionByName(late_customer), "ambiguous"),
+            (complete_source.unionByName(late_customer.withColumn(
+                "source_batch_id", F.lit(initial_identity.batch_id),
+            )), "duplicate customer batch"),
+            (customers, "does not cover"),
+            (corrected_source.limit(0), "nonempty"),
+            (corrected_source.withColumn("source_batch_at", F.lit(None).cast("timestamp")),
+             "missing required"),
+        ):
+            try:
+                rebuild_customer_history(spark, invalid_source)
+            except ValueError as error:
+                assert message in str(error)
+            else:
+                raise AssertionError("invalid rebuild source was accepted")
+        assert spark.table(history_table).orderBy("valid_from").collect() == corrected
+        assert spark.table(f"{history_table}.snapshots").count() == history_snapshots + 1
+        # A -> B -> A is three changes, not two globally distinct attribute hashes.
+        reversion = (
+            initial_customers.withColumn("source_batch_id", F.lit("f" * 16))
+            .withColumn("source_batch_at", F.to_timestamp(F.lit("2026-02-04T00:00:00Z")))
+        )
+        assert rebuild_customer_history(
+            spark, corrected_source.unionByName(reversion),
+        )["history_rows"] == 4
+        assert spark.table(history_table).filter("is_current").first().full_name == "Alice"
         snapshot_count = spark.table(f"{TABLE}.snapshots").count()
         assert publish_snapshot(spark, daily_frame, identity)["action"] == "replay"
         assert publish_snapshot(spark, initial_frame, initial_identity)["status"] == "ignored_stale"
@@ -156,6 +207,9 @@ def main() -> None:
                     "customer_versions_inserted": history_insertions,
                     "customer_replay": "verified",
                     "old_changed_customer": "rejected_without_writes",
+                    "opt_in_history_rebuild": "late_insert_literal_oracle_verified",
+                    "history_rebuild_replay": "no_new_snapshot",
+                    "history_rebuild_invalid_source": "rejected_without_writes",
                     "snapshot_revenue_cents": revenue,
                     "summed_snapshot_revenue_cents": sum(revenue),
                     "latest_snapshot_revenue_cents": revenue[-1],

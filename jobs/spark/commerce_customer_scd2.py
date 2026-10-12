@@ -1,10 +1,73 @@
 from __future__ import annotations
 
 import json
+import os
 
 from pyspark.sql import DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
 from spark_catalog import build_session, required_environment
+
+TABLE = "lakehouse.gold.dim_customers_scd2"
+
+
+def rebuild_customer_history(spark: SparkSession, source: DataFrame) -> dict[str, int | str]:
+    """Atomically rebuild observed-state history from complete validated silver input.
+
+    Opt-in, single-writer operation. Effective time remains source_batch_at, not
+    arrival order; absence from a full snapshot is not a customer deletion event.
+    """
+    source = with_history_columns(source).cache()
+    history = None
+    try:
+        source_rows = source.count()
+        if not source_rows:
+            raise ValueError("history rebuild requires nonempty complete silver history")
+        required = ["customer_id", "full_name", "registered_at", "source_batch_id",
+                    "source_batch_at", "email_is_missing"]
+        invalid = F.lit(False)
+        for column in required:
+            invalid = invalid | F.col(column).isNull()
+        if source.filter(invalid).count():
+            raise ValueError("history rebuild source has missing required values")
+        if source.groupBy("customer_id", "source_batch_at").count().filter("count > 1").count():
+            raise ValueError("history rebuild has ambiguous customer effective timestamps")
+        if source.groupBy("customer_id", "source_batch_id").count().filter("count > 1").count():
+            raise ValueError("history rebuild has duplicate customer batch identities")
+        ordered = Window.partitionBy("customer_id").orderBy("valid_from")
+        changes = (
+            source.withColumn("previous_hash", F.lag("attribute_hash").over(ordered))
+            .filter(F.col("previous_hash").isNull()
+                    | (F.col("previous_hash") != F.col("attribute_hash")))
+        )
+        history = changes.select(
+            F.sha2(F.concat_ws(":", "customer_id", "attribute_hash", "source_batch_id"),
+                   256).alias("customer_version_id"),
+            "customer_id", "full_name", "email", "email_is_missing", "registered_at",
+            "attribute_hash", "source_batch_id", "valid_from",
+            F.lead("valid_from").over(ordered).alias("valid_to"),
+        ).withColumn("is_current", F.col("valid_to").isNull()).cache()
+        target = spark.table(TABLE).select(*history.columns)
+        # Never erase customers or their earliest known version through truncated input.
+        starts = source.groupBy("customer_id").agg(F.min("valid_from").alias("source_start"))
+        coverage = target.join(starts, "customer_id", "left")
+        if coverage.filter(F.col("source_start").isNull()
+                           | (F.col("source_start") > F.col("valid_from"))).count():
+            raise ValueError("history rebuild source does not cover existing history")
+        rows = history.count()
+        action = "replay"
+        if history.exceptAll(target).count() or target.exceptAll(history).count():
+            history.writeTo(TABLE).overwrite(F.lit(True))
+            action = "replace"
+        validate_target(spark)
+        published = spark.table(TABLE).select(*history.columns)
+        if history.exceptAll(published).count() or published.exceptAll(history).count():
+            raise RuntimeError("history rebuild publication post-condition failed")
+        return {"status": "ready", "mode": "rebuild", "action": action,
+                "source_rows": source_rows, "history_rows": rows}
+    finally:
+        source.unpersist()
+        if history is not None:
+            history.unpersist()
 
 
 def with_history_columns(source: DataFrame) -> DataFrame:
@@ -201,11 +264,21 @@ def apply_customer_history(
 
 
 def main() -> None:
-    batch_id = required_environment("COMMERCE_BATCH_ID")
+    mode = os.environ.get("COMMERCE_CUSTOMER_HISTORY_MODE", "forward")
+    if mode not in {"forward", "rebuild"}:
+        raise ValueError("COMMERCE_CUSTOMER_HISTORY_MODE must be forward or rebuild")
+    batch_id = required_environment("COMMERCE_BATCH_ID") if mode == "forward" else None
     spark = build_session("lakehouse-ops-commerce-customer-scd2")
     spark.sparkContext.setLogLevel("WARN")
     try:
-        print(json.dumps(write_selected_batch(spark, batch_id=batch_id), sort_keys=True))
+        if mode == "rebuild":
+            create_table(spark, required_environment("LAKEHOUSE_BUCKET"))
+            report = rebuild_customer_history(
+                spark, spark.table("lakehouse.silver.commerce_customers"),
+            )
+        else:
+            report = write_selected_batch(spark, batch_id=batch_id)
+        print(json.dumps(report, sort_keys=True))
     finally:
         spark.stop()
 

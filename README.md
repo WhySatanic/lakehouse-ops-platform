@@ -96,6 +96,9 @@ Customer silver preserves intentional NULL emails as valid completeness evidence
 rejecting malformed non-NULL emails, missing required values, and duplicate identities.
 Customer history tracks changed names and email completeness as deterministic Iceberg
 SCD2 versions, with one current row and guarded forward-only effective periods.
+An opt-in [history rebuild](docs/runbooks/commerce-customer-history-rebuild.md) handles
+late effective-time observations from complete retained silver history with one atomic
+Iceberg replacement and snapshot-stable replay; default forward mode is unchanged.
 
 ```bash
 uv sync --dev
