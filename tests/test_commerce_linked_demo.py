@@ -16,13 +16,15 @@ def checkout(root):
     source.parent.mkdir(parents=True)
     source.touch()
     (source.parent / "commerce_owner_exit.py").touch()
+    (source.parent / "commerce_pipeline_profile.py").touch()
+    (root / "compose.spark-memory.yaml").touch()
 
 
 @pytest.mark.parametrize("failure", [None, "docker", "spark-image", "config", "start",
                                     "linked", "stop",
                                     "timeout", "launch", "bad_report", "absent_report",
                                     "malformed_report"])
-@pytest.mark.parametrize("scenario", ["linked", "owner-exit"])
+@pytest.mark.parametrize("scenario", ["linked", "owner-exit", "profile"])
 def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Path, failure,
                                                                   monkeypatch, scenario):
     checkout(tmp_path)
@@ -41,9 +43,14 @@ def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Pa
         commands.append(name)
         project = kwargs["env"]["COMPOSE_PROJECT_NAME"]
         projects.append(project)
-        assert project.startswith(f"lakehouse-ops-{scenario}-demo-")
+        prefix = "scale" if scenario == "profile" else scenario
+        assert project.startswith(f"lakehouse-ops-{prefix}-demo-")
         assert kwargs["cwd"] == tmp_path and kwargs["timeout"] > 0
-        assert kwargs["env"]["COMPOSE_FILE"] == str(tmp_path / "compose.yaml")
+        expected_files = [str(tmp_path / "compose.yaml")]
+        if scenario == "profile":
+            expected_files.append(str(tmp_path / "compose.spark-memory.yaml"))
+            assert kwargs["env"]["COMPOSE_PATH_SEPARATOR"] == os.pathsep
+        assert kwargs["env"]["COMPOSE_FILE"] == os.pathsep.join(expected_files)
         assert "AWS_SESSION_TOKEN" not in kwargs["env"]
         if command[:2] == ["docker", "compose"]:
             assert command[command.index("--project-name") + 1] == project
@@ -54,10 +61,15 @@ def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Pa
         if name == "stop":
             assert command[-len(SERVICES):] == list(SERVICES)
         if name == "linked":
-            expected = ("commerce_linked_acceptance" if scenario == "linked" else
-                        "commerce_owner_exit")
+            expected = {"linked": "commerce_linked_acceptance", "owner-exit": "commerce_owner_exit",
+                        "profile": "commerce_pipeline_profile"}[scenario]
             assert command[2] == f"lakehouse_ops.{expected}"
-            assert kwargs["timeout"] == (1800 if scenario == "linked" else 6600)
+            expected_timeout = {"linked": 1800, "owner-exit": 6600, "profile": 3600}[scenario]
+            assert kwargs["timeout"] == expected_timeout
+            if scenario == "profile":
+                assert command[-3:] == ["--orders", "100", "1000"]
+            else:
+                assert "--orders" not in command
             if failure == "timeout":
                 raise subprocess.TimeoutExpired(command, kwargs["timeout"])
             if failure == "launch":
@@ -65,7 +77,8 @@ def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Pa
             if failure != "absent_report":
                 acceptance = output / "acceptance"
                 acceptance.mkdir()
-                retained = "linked.json" if scenario == "linked" else "owner-exit.json"
+                retained = {"linked": "linked.json", "owner-exit": "owner-exit.json",
+                            "profile": "profile.json"}[scenario]
                 (acceptance / retained).write_text(json.dumps({
                     "status": "failed" if failure == "bad_report" else "ready",
                 }))
