@@ -377,7 +377,17 @@ compute, even with an empty queue. Only transport errors and HTTP 429/502/503/50
 retried. SQL, authentication, malformed responses, and failed gold quality checks fail
 immediately. Compose/Spark stages never automatically repeat within this command;
 exhausted verification leaves the checkpoint unchanged. These bounds limit attempts
-and inter-attempt delay, not total query runtime or cleanup of abandoned read-only queries.
+and inter-attempt delay. The normal runner also applies a 120-second wall-clock budget
+to each gold verification query, including HTTP waits and all result pages. Override it
+with `COMMERCE_QUERY_TIMEOUT_SECONDS`, an integer from 1 to 86400; invalid values fail
+before S3 access or compute. On expiry, the existing Trino client attempts cancellation
+of that query's latest owned URI with a separate five-second cleanup limit. It discards
+partial results, records a failed run, leaves the checkpoint unchanged, and releases
+the runner lock. Deadline expiry is not automatically retried within that attempt;
+rerun the same batch after investigating the failure. A missing query ID or failed
+cancellation does not prove server-side termination. The standalone gold commands and
+default generic Trino client retain their previous behavior. This is a per-query bound,
+not a shared deadline for the whole pipeline or scheduled cycle.
 Retry warnings go to stderr, so stdout stays one JSON report. CI injects one HTTP 503 at
 the Trino client boundary, then delegates to the real coordinator and retains separate
 retry evidence alongside the pipeline result; it does not simulate a real server outage.

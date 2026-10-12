@@ -35,6 +35,18 @@ class CommercePipelineError(RuntimeError):
     pass
 
 
+def commerce_query_timeout_seconds() -> int:
+    """Bound each runner gold query, including result pagination and HTTP waits."""
+    setting = "COMMERCE_QUERY_TIMEOUT_SECONDS"
+    try:
+        timeout = int(os.environ.get(setting, "120"))
+    except ValueError as error:
+        raise CommercePipelineError(f"{setting} must be an integer") from error
+    if not 1 <= timeout <= 86400:
+        raise CommercePipelineError(f"{setting} must be between 1 and 86400")
+    return timeout
+
+
 def run_compose_stage(
     service: str, batch: dict[str, str], *, bucket: str,
     journal: CommerceRunJournal | None = None,

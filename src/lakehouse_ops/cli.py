@@ -21,6 +21,7 @@ from lakehouse_ops.commerce_gold_gate import (
 )
 from lakehouse_ops.commerce_pipeline import (
     CommercePipelineError,
+    commerce_query_timeout_seconds,
     run_commerce_batch,
     run_compose_stage,
 )
@@ -617,12 +618,15 @@ def main(argv: list[str] | None = None) -> int:
         except CommerceGoldGateError as error:
             parser.error(str(error))
         try:
+            query_timeout = commerce_query_timeout_seconds()
             with commerce_runner_lock():
                 planner = CommerceBatchPlanner(
                     _create_s3_client(args), bucket=args.s3_bucket, prefix=args.s3_prefix,
                     state_path=args.state,
                 )
-                with TrinoClient(args.server, user=args.user) as client:
+                with TrinoClient(
+                    args.server, user=args.user, query_timeout=query_timeout,
+                ) as client:
                     journal = CommerceRunJournal(Path(str(args.state) + ".runs.sqlite3"))
                     report = run_commerce_batch(
                         planner, client.query,
