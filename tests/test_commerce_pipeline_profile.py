@@ -3,12 +3,11 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
 from lakehouse_ops import commerce_pipeline_profile as profile
-from lakehouse_ops.trino import TrinoQueryStats
+from lakehouse_ops.trino import TrinoQueryResult, TrinoQueryStats
 
 
 def test_memory_parser_ignores_other_stage_output():
@@ -46,6 +45,7 @@ def test_two_volume_evidence_or_retained_failure(
 ):
     monkeypatch.setenv("COMPOSE_PROJECT_NAME", "lakehouse-ops-scale-test")
     running = failure == "existing"
+    selected_volume = 100
 
     class Client:
         def __init__(self, *args, **kwargs):
@@ -64,11 +64,14 @@ def test_two_volume_evidence_or_retained_failure(
             return [{"files": 1, "bytes": 1024}]
 
         def query_with_stats(self, sql):
-            return SimpleNamespace(query_id="q1", rows=({"revenue": 100},),
-                                   stats=TrinoQueryStats("FINISHED", 1, 1, 1, 1, 1, 1, 1, 0))
+            row = {"revenue": 100}
+            if "AS orders" in sql:
+                row["orders"] = selected_volume
+            return TrinoQueryResult("q1", (row,),
+                                    TrinoQueryStats("FINISHED", 1, 1, 1, 1, 1, 1, 1, 0))
 
     def execute(args, output, label):
-        nonlocal running
+        nonlocal running, selected_volume
         assert "--s3-bucket" in args
         if "landing" in label:
             return {}
@@ -77,6 +80,7 @@ def test_two_volume_evidence_or_retained_failure(
         if failure == "second-run" and label == "sample-2":
             raise subprocess.CalledProcessError(2, args)
         running = True
+        selected_volume = 100 if label == "sample-1" else 1000
         fixture = next((output / label).iterdir())
         batch = json.loads((fixture / "manifest.json").read_text())["batch_id"]
         observations = [{"app_name": str(i), "kind": "spark_container_memory",
@@ -104,3 +108,42 @@ def test_two_volume_evidence_or_retained_failure(
         assert [s["orders"] for s in result["samples"]] == [100, 1000]
         assert result["samples"][0]["idle_replay"] == "verified"
         assert result["samples"][0]["cumulative_current_files"][0]["bytes"] == 1024
+        assert result["samples"][1]["query_costs"]["detail"]["rows"][0]["orders"] == 1000
+
+
+@pytest.mark.parametrize("failure", [None, "revenue", "orders", "volume", "empty", "duplicate"])
+def test_detail_daily_costs_reconcile_before_evidence(failure):
+    statements = []
+
+    class Client:
+        def query_with_stats(self, sql):
+            statements.append(sql)
+            row = {"orders": 100, "revenue": 12345}
+            if failure == "volume":
+                row["orders"] = 99
+            if len(statements) == 2:
+                if failure == "revenue":
+                    row["revenue"] += 1
+                if failure == "orders":
+                    row["orders"] -= 1
+            rows = () if failure == "empty" else (row,)
+            if failure == "duplicate":
+                rows = (row, row)
+            return TrinoQueryResult(f"q{len(statements)}", rows,
+                                    TrinoQueryStats("FINISHED", 2, 3, 4, 5, 6, 7, 8, 0))
+
+    if failure:
+        with pytest.raises(ValueError, match="reconcile"):
+            profile.query_costs(Client(), "0123456789abcdef", 100)
+    else:
+        result = profile.query_costs(Client(), "0123456789abcdef", 100)
+        assert result["detail"]["stats"]["processed_bytes"] == 6
+        assert result["daily"]["query_id"] == "q2"
+    assert "GROUP BY order_id" in statements[0]
+    assert "LEFT JOIN" in statements[0]
+    assert all("source_batch_id='0123456789abcdef'" in sql for sql in statements)
+
+
+def test_query_costs_rejects_unbound_batch_before_query():
+    with pytest.raises(ValueError, match="batch ID"):
+        profile.query_costs(None, "' OR true --", 100)

@@ -37,6 +37,21 @@ seven container memory reports, current Iceberg file counts/bytes by table, and 
 Trino revenue query ID/result/statistics. File inventories are cumulative current
 files across batches, not per-batch physical bytes or orphan-file accounting.
 
+Each new sample additionally retains `query_costs`: separate IDs, results and Trino
+statistics for a detail orders/payments aggregation and the materialized daily mart.
+Payments are grouped by order before the left join so split payments do not multiply
+the order count. Both inputs are restricted to the selected batch. Order count and
+captured revenue must reconcile, and the count must equal the selected fixture volume.
+The old `query_id`, `query_stats` and `query_rows` fields remain available unchanged.
+
+The detail query runs first, then daily gold, once per volume. There are no repetitions,
+cache controls, percentile estimates or latency thresholds. Startup/JIT, caches, the
+shared warm stack and query order can dominate elapsed time. Processed rows/bytes and
+physical input bytes are engine query statistics, not source size or total storage.
+Query peak memory is distinct from the Spark cgroup/container memory observations.
+Equality here is reconciliation against materialized data, not an independent revenue
+oracle; the linked acceptance uses a separate literal oracle.
+
 Each successful sample is followed by an idle runner invocation; its file inventory
 must remain unchanged. This demonstrates checkpoint replay only, not interruption,
 partial-stage recovery, compaction or exactly-once behavior under crashes. All child
@@ -86,3 +101,24 @@ Earlier failed measurements remain separate: one missed bucket forwarding; anoth
 completed processing but failed on Windows-default decoding of Docker UTF-8 logs.
 Its checkpoint was not reset or relabelled as failed processing. The completed
 experiment used a fresh project.
+
+## Detail versus daily query evidence, 2026-10-12
+
+A fresh `lakehouse-ops-scale-query-v1` stack completed both full runner volumes,
+seven observed Spark memory records per batch, and idle replay with unchanged files.
+The new query pairs returned identical counts (100 / 1000) and captured revenue
+(278410 / 2733643 cents), with zero reported spilled bytes.
+
+| Orders | Detail processed rows | Detail physical input bytes | Daily processed rows | Daily physical input bytes | Detail / daily elapsed ms |
+| --- | --- | --- | --- | --- | --- |
+| 100 | 298 | 15817 | 31 | 4248 | 292 / 69 |
+| 1000 | 2998 | 91579 | 31 | 4257 | 117 / 52 |
+
+Detail IDs: `20261012_070451_00017_t4irp`, `20261012_070635_00049_t4irp`.
+Daily IDs: `20261012_070451_00018_t4irp`, `20261012_070635_00050_t4irp`.
+The smaller elapsed time at the larger volume is not evidence of improved scaling;
+these are single sequential observations, not a controlled latency benchmark.
+
+Retained local report: `artifacts/commerce-query-scale-20261012/profile.json`, SHA256
+`8a182899f918bc0c56baa3c96e60938d2e14a684979ff37fcf6de635258ab683`.
+The earlier scale report remains unchanged. No product version or release change.

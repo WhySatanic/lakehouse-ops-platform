@@ -289,6 +289,11 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
   - [x] Provide opt-in per-container Spark cgroup-v2 memory observations with a real
     Parquet write/read smoke test. Full commerce multi-volume capacity and recovery
     measurements remain planned; see [memory diagnostics](runbooks/spark-container-memory.md).
+  - [x] Execute the full commerce runner at two small volumes with stage timing,
+    Spark container memory, cumulative files, batch-scoped detail/daily Trino query
+    costs and verified idle replay. Retain explicit warm-stack/query-order limits;
+    see [two-volume measurement](runbooks/commerce-pipeline-scale.md). Crash recovery
+    at scale, maintenance and production capacity remain unmeasured.
 
 Exit criterion: one documented command and one scheduled path take a reproducible source
 batch through quality checks into a Trino-queryable gold mart, with safe reruns, bounded
