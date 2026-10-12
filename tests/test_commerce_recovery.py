@@ -101,6 +101,9 @@ def test_failed_retry_retains_baseline_without_checkpoint(tmp_path: Path):
                           evidence=evidence)
     assert evidence["published_before_retry"] == baseline
     assert "published_after_retry" not in evidence
+    assert set(evidence["phase_elapsed_seconds"]) == {
+        "interrupted_attempt", "audit_before_retry", "retry",
+    }
     assert not state.exists()
 
 
@@ -164,3 +167,67 @@ def test_recovery_accepts_only_metadata_only_snapshot_growth(tmp_path: Path, cha
                               evidence=evidence)
     assert evidence["published_before_retry"][0]["snapshots"] == 1
     assert "published_after_retry" in evidence
+
+
+def test_phase_timing_includes_interruption_and_excludes_external_audits(tmp_path: Path):
+    state = tmp_path / "checkpoint.json"
+    ticks = iter([0, 10, 20, 23, 30, 42, 50, 54, 60, 61])
+    def query(_):
+        return [{"days": 1, "orders": 1, "captured_revenue_cents": 100, "invalid_days": 0}]
+    result = exercise_recovery(
+        Planner(state), query, lambda *_: None,
+        lambda: [{"rows": 1, "snapshots": 1}], state, clock=lambda: next(ticks),
+    )
+    assert result["phase_elapsed_seconds"] == {
+        "interrupted_attempt": 10, "audit_before_retry": 3, "retry": 12,
+        "audit_after_retry": 4, "idle_replay": 1,
+    }
+
+
+@pytest.mark.parametrize("orders", ["99", "10001", "not-an-integer"])
+def test_order_bounds_rejected_before_creating_artifacts(tmp_path: Path, monkeypatch, orders):
+    from lakehouse_ops.commerce_recovery import main
+
+    output = tmp_path / "evidence"
+    monkeypatch.setenv("COMPOSE_PROJECT_NAME", "lakehouse-ops-recovery-test")
+    monkeypatch.setattr("sys.argv", ["recovery", "--output", str(output),
+                                    "--s3-endpoint-url", "http://localhost:19300",
+                                    "--server", "http://localhost:18300", "--orders", orders])
+    with pytest.raises(SystemExit) as error:
+        main()
+    assert error.value.code == 2
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("orders", [100, 1000, 10000])
+def test_main_uses_selected_volume_and_retains_it_in_report(tmp_path: Path, monkeypatch, orders):
+    import json
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+
+    import lakehouse_ops.commerce_recovery as recovery
+
+    output = tmp_path / "evidence"
+    selected = []
+
+    def fixture(path, config):
+        selected.append(config.orders)
+        return SimpleNamespace(path=path)
+
+    monkeypatch.setenv("COMPOSE_PROJECT_NAME", "lakehouse-ops-recovery-test")
+    monkeypatch.setattr("sys.argv", ["recovery", "--output", str(output),
+                                    "--s3-endpoint-url", "http://localhost:19300",
+                                    "--server", "http://localhost:18300", "--orders", str(orders)])
+    monkeypatch.setattr(recovery, "commerce_runner_lock", nullcontext)
+    monkeypatch.setattr(recovery, "TrinoClient", lambda *_args, **_kw: nullcontext(
+        SimpleNamespace(query=lambda _: []),
+    ))
+    monkeypatch.setattr(recovery.boto3, "client", lambda *_args, **_kw: object())
+    monkeypatch.setattr(recovery, "generate_commerce_fixture", fixture)
+    monkeypatch.setattr(recovery, "CommerceS3LandingZone", lambda *_args, **_kw:
+                        SimpleNamespace(write=lambda _: None))
+    monkeypatch.setattr(recovery, "exercise_recovery", lambda *_args, **_kw: {"status": "ready"})
+    assert recovery.main() == 0
+    assert selected == [orders]
+    report = json.loads((output / "recovery.json").read_text())
+    assert report == {"status": "ready", "fixture_orders": orders}
