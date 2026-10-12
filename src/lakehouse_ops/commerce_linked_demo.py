@@ -21,6 +21,9 @@ SCENARIOS = {
                "three_linked_snapshots_fresh_reference_stack", 1800),
     "owner-exit": ("commerce_owner_exit", "owner-exit.json", "lakehouse-ops-owner-exit-demo-",
                    "owner_kill_after_completed_gold_fresh_reference_stack", 6600),
+    "linked-history": ("commerce_linked_acceptance", "linked.json",
+                       "lakehouse-ops-linked-history-demo-",
+                       "three_linked_snapshots_and_manual_late_customer_maintenance", 2400),
 }
 
 
@@ -87,7 +90,8 @@ def demo(root: Path, output: Path, *, run: Any = subprocess.run,
         execute(scenario, [sys.executable, "-m", f"lakehouse_ops.{module}",
                            "--output", str(output / "acceptance"), "--s3-endpoint-url",
                            f"http://localhost:{env['MINIO_API_PORT']}", "--server",
-                           f"http://localhost:{env['TRINO_HTTP_PORT']}"], timeout)
+                           f"http://localhost:{env['TRINO_HTTP_PORT']}"] +
+                (["--late-customer-history"] if scenario == "linked-history" else []), timeout)
         acceptance = json.loads((output / f"acceptance/{retained}").read_text())
         if acceptance.get("status") != "ready":
             raise RuntimeError(f"{scenario} acceptance did not retain a ready report")

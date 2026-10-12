@@ -22,7 +22,7 @@ def checkout(root):
                                     "linked", "stop",
                                     "timeout", "launch", "bad_report", "absent_report",
                                     "malformed_report"])
-@pytest.mark.parametrize("scenario", ["linked", "owner-exit"])
+@pytest.mark.parametrize("scenario", ["linked", "owner-exit", "linked-history"])
 def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Path, failure,
                                                                   monkeypatch, scenario):
     checkout(tmp_path)
@@ -54,10 +54,12 @@ def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Pa
         if name == "stop":
             assert command[-len(SERVICES):] == list(SERVICES)
         if name == "linked":
-            expected = ("commerce_linked_acceptance" if scenario == "linked" else
+            expected = ("commerce_linked_acceptance" if scenario != "owner-exit" else
                         "commerce_owner_exit")
             assert command[2] == f"lakehouse_ops.{expected}"
-            assert kwargs["timeout"] == (1800 if scenario == "linked" else 6600)
+            expected_timeout = {"linked": 1800, "owner-exit": 6600, "linked-history": 2400}
+            assert kwargs["timeout"] == expected_timeout[scenario]
+            assert ("--late-customer-history" in command) == (scenario == "linked-history")
             if failure == "timeout":
                 raise subprocess.TimeoutExpired(command, kwargs["timeout"])
             if failure == "launch":
@@ -65,7 +67,7 @@ def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Pa
             if failure != "absent_report":
                 acceptance = output / "acceptance"
                 acceptance.mkdir()
-                retained = "linked.json" if scenario == "linked" else "owner-exit.json"
+                retained = "owner-exit.json" if scenario == "owner-exit" else "linked.json"
                 (acceptance / retained).write_text(json.dumps({
                     "status": "failed" if failure == "bad_report" else "ready",
                 }))

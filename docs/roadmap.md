@@ -362,6 +362,12 @@ It retains a journal and per-batch evidence, verifies snapshot-stable current-ma
 replay and a compute-free idle run. This is a bounded single-writer scenario, not
 general CDC or retroactive customer-history correction.
 
+The opt-in [one-command late-history demo](runbooks/commerce-history-correction-demo.md)
+adds explicit late-effective customer maintenance after those three loads on a fresh
+scoped stack. It verifies the literal corrected history, unchanged current revenue
+and checkpoint, and snapshot-stable rebuild replay. The late source stays pending;
+automatic backfill planning and a fourth forward checkpoint remain out of scope.
+
 Linked acceptance propagates the batch journal to every production/current-mart
 container and retains final mart replay as a separate attempt without a checkpoint.
 Container launch intent, hash-bound labels and completion/timeout evidence now share
