@@ -74,6 +74,10 @@ jobs:
           uv run python -m lakehouse_ops.verified_build --attempts 3
           --delay-seconds 5 -- docker compose --profile catalog --profile compute build
           minio hive-metastore spark-bronze spark-silver
+      - name: Verify commerce stage timeout cleanup
+        run: >-
+          LAKEOPS_RUN_DOCKER_TIMEOUT_SMOKE=1 uv run pytest
+          tests/integration/test_commerce_stage_timeout.py -q -o addopts=''
       - name: Start core lakehouse services
         run: >-
           docker compose --profile catalog --profile compute up -d --wait
@@ -92,7 +96,7 @@ jobs:
             --output artifacts/commerce-change-scenario
           docker run --rm --memory 2g --cpus 2 --network none \
             --hostname lakeops-change --add-host lakeops-change:127.0.0.1 \
-            -e SPARK_LOCAL_IP=127.0.0.1 -e PYTHONPATH=/repo/jobs/spark \
+            -e SPARK_LOCAL_IP=127.0.0.1 -e PYTHONPATH=/repo/src:/repo/jobs/spark \
             --mount "type=bind,source=$PWD,target=/repo,readonly" \
             lakehouse-ops/spark-iceberg:3.5.9-1.11.0 \
             /opt/spark/bin/spark-submit --master 'local[2]' \

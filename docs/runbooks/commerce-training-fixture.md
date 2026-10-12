@@ -55,6 +55,44 @@ remains batch-scoped. `expected.json` describes the intended latest-snapshot/his
 semantics for subsequent Spark/Trino correction tests; it is not evidence that general
 cross-batch correction or historical SCD2 backfill has already been implemented.
 
+## Opt-in current snapshot daily mart
+
+`lakehouse.gold.commerce_current_daily` stores the latest explicitly declared complete
+snapshot separately from the existing historical batch mart. First run the selected
+batch through the documented bronze/silver pipeline. Retain its selected batch ID and
+manifest SHA-256 from `plan-commerce-batches`, then run this optional publication:
+
+```powershell
+$env:COMMERCE_BATCH_ID = "<selected-batch-id>"
+$env:COMMERCE_MANIFEST_SHA256 = "<selected-manifest-sha256>"
+docker compose --profile catalog --profile commerce-current run --rm spark-commerce-current-gold
+```
+
+The job checks the synced input under `source=commerce/batch_id=<id>`, verifies its
+manifest identity and table checksums, requires `config.source_semantics=full_snapshot`,
+and uses the existing reconciled silver/gold source validation. Ordinary fixtures that
+do not declare complete-snapshot semantics cannot replace this mart. For Trino, query
+`gold.commerce_current_daily` through the existing lakehouse catalog and sum
+`captured_revenue_cents`; do not sum snapshots in `gold.commerce_daily` as change events.
+
+A newer complete snapshot atomically replaces the current Iceberg table. Its provenance
+(batch ID, timestamp and manifest digest) is stored in every daily row in the same
+commit, so data and the ordering marker cannot advance separately. Identical replay
+checks row equality and creates no additional Iceberg snapshot. Older input is ignored;
+a conflicting identity at the same timestamp fails. Days absent from the new snapshot
+are removed. The related-snapshot Spark/Iceberg check in serving CI exercises correction,
+late arrival, replay, stale input, conflicting replay and removal of a previously present day.
+
+This version requires one writer and nonempty complete snapshots. It replaces the full
+daily result and does not yet optimize writes to changed dates, implement distributed
+writer ownership, or correct historical SCD2. It is opt-in and does not change the
+existing runner checkpoint or its eight-stage acceptance gate. The local acceptance
+test uses an isolated filesystem Iceberg catalog; main-service HMS/Trino deployment
+uses the optional Compose job above and is a distinct integration boundary.
+
+Iceberg documents atomic overwrite semantics in its
+[Spark write guide](https://iceberg.apache.org/docs/latest/spark-writes/).
+
 To inspect how source-fixture generation scales without starting Docker, use an
 empty output directory:
 
@@ -302,6 +340,24 @@ failed runs do not claim completed-phase timings. CI checks the shape and nonneg
 values in the retained real-stack report. One run is diagnostic evidence, not a
 volume benchmark, SLA, or per-job Spark memory measurement.
 
+Each Compose stage has a wall-clock limit of 1800 seconds. Set
+`COMMERCE_STAGE_TIMEOUT_SECONDS` in the runner environment to an integer from 1 to
+86400 to override it. Invalid values fail before that stage starts Docker. Each attempt
+uses a unique `lakeops-commerce-<uuid>` container name. On timeout the Compose client
+is terminated and the runner force-removes only that named container, with a separate
+30-second cleanup limit. Logs remain on stderr and the checkpoint does not advance.
+If cleanup cannot be confirmed, the error includes the exact container name; inspect
+and stop that container before retrying. This does not roll back committed Iceberg writes,
+bound S3/Trino planning time, provide a durable run journal, or handle abrupt owner death.
+Previously stages had no time limit; increase the setting explicitly for known long jobs.
+
+After building the compute image, run the isolated acceptance with
+`LAKEOPS_RUN_DOCKER_TIMEOUT_SMOKE=1 uv run pytest tests/integration/test_commerce_stage_timeout.py -q -o addopts=''`
+(PowerShell: set `$env:LAKEOPS_RUN_DOCKER_TIMEOUT_SMOKE='1'` first). It runs two
+three-second timeouts against a network-isolated sleeper in the existing Spark image,
+then checks that both uniquely named containers are absent. It does not execute Spark
+or claim Iceberg rollback. The serving integration job runs the same check.
+
 For transient coordinator or transport failures, opt into bounded read-only gold
 verification retries with `--attempts 3 --retry-delay-seconds 2`. Defaults remain one
 attempt and a two-second delay (unused without a retry). Attempts are bounded to 1..5
@@ -346,8 +402,8 @@ remote-S3 runner.
 Its S3 endpoint must refer to the same MinIO as Compose; Trino must query that stack.
 Only the `landing` prefix is supported. The selected bucket overrides `LAKEHOUSE_BUCKET`
 for child jobs. Services use `--no-deps` so they never bootstrap unrelated fixtures or
-start missing infrastructure implicitly. No automatic Spark retry, per-job timeout,
-cancellation cleanup, freshness policy, or notifications are added here. The external
+start missing infrastructure implicitly. No automatic Spark retry, abrupt-exit cleanup,
+freshness policy, or notifications are added here. The external
 cron path below is opt-in; measured recovery remains planned. Existing manual
 commands remain supported.
 

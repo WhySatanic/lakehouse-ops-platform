@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+from lakehouse_ops import commerce_pipeline as pipeline
 from lakehouse_ops.commerce_pipeline import COMMERCE_STAGES, run_commerce_batch
 from lakehouse_ops.commerce_run_journal import CommerceJournalError, CommerceRunJournal
 
@@ -181,3 +182,49 @@ def test_keyboard_interrupt_is_retained(tmp_path: Path) -> None:
     assert events(path)[-1]["error_type"] == "KeyboardInterrupt"
     assert events(path)[-1]["event"] == "failed"
     assert planner.commits == []
+
+
+def test_compose_timeout_is_journaled_and_retry_commits_only_after_verification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "journal.sqlite3"
+    planner = Planner()
+    names: list[str] = []
+
+    def process(command: list[str], **kwargs: Any) -> None:
+        if command[:2] == ["docker", "compose"]:
+            names.append(command[-2])
+            if len(names) == 1:
+                raise subprocess.TimeoutExpired(command, 1)
+        else:
+            assert command == ["docker", "rm", "--force", names[0]]
+
+    def execute(service: str, batch: dict[str, str]) -> None:
+        pipeline.run_compose_stage(service, batch, bucket="selected")
+
+    monkeypatch.setenv("COMMERCE_STAGE_TIMEOUT_SECONDS", "1")
+    monkeypatch.setattr(pipeline.subprocess, "run", process)
+    with pytest.raises(pipeline.CommercePipelineError, match="container removed"):
+        run_commerce_batch(planner, gold, run_stage=execute, journal=CommerceRunJournal(path))
+    previous = events(path)
+    assert previous[-1]["phase"] == COMMERCE_STAGES[0]
+    assert previous[-1]["event"] == "failed"
+    assert previous[-1]["error_type"] == "CommercePipelineError"
+    assert not any(row["phase"] in ("verification", "checkpoint") for row in previous)
+    assert planner.commits == []
+
+    def verify(sql: str) -> list[dict[str, int]]:
+        assert planner.commits == []
+        assert events(path)[-1]["phase"] == "verification"
+        return gold(sql)
+
+    report = run_commerce_batch(
+        planner, verify, run_stage=execute, journal=CommerceRunJournal(path),
+    )
+    rows = events(path)
+    assert report["status"] == "ready"
+    assert rows[:len(previous)] == previous
+    assert rows[-1]["run_id"] != previous[-1]["run_id"]
+    assert rows[-1]["event"] == "ready"
+    assert planner.commits == [BATCH["batch_id"]]
+    assert len(set(names)) == len(COMMERCE_STAGES) + 1

@@ -223,7 +223,10 @@ def test_compose_adapter_binds_scope_and_keeps_stdout_for_json(
     monkeypatch: pytest.MonkeyPatch, failure: str | None,
 ) -> None:
     def run(command: list[str], **kwargs: Any) -> None:
-        assert command[-4:] == ["run", "--rm", "--no-deps", "spark-commerce-bronze"]
+        assert command[-6:-2] == ["run", "--rm", "--no-deps", "--name"]
+        assert command[-2].startswith("lakeops-commerce-")
+        assert command[-1] == "spark-commerce-bronze"
+        assert kwargs["timeout"] == 1800
         assert kwargs["env"]["COMMERCE_BATCH_ID"] == BATCH["batch_id"]
         assert kwargs["env"]["COMMERCE_MANIFEST_SHA256"] == BATCH["manifest_sha256"]
         assert kwargs["env"]["LAKEHOUSE_BUCKET"] == "selected-bucket"
@@ -240,3 +243,79 @@ def test_compose_adapter_binds_scope_and_keeps_stdout_for_json(
             pipeline.run_compose_stage("spark-commerce-bronze", BATCH, bucket="selected-bucket")
     else:
         pipeline.run_compose_stage("spark-commerce-bronze", BATCH, bucket="selected-bucket")
+
+
+@pytest.mark.parametrize("value", ["0", "86401", "-1", "nan", "1.5", ""])
+def test_invalid_stage_timeout_never_starts_docker(
+    value: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("COMMERCE_STAGE_TIMEOUT_SECONDS", value)
+    monkeypatch.setattr(pipeline.subprocess, "run", lambda *a, **k: pytest.fail("must not run"))
+    with pytest.raises(pipeline.CommercePipelineError, match="COMMERCE_STAGE_TIMEOUT_SECONDS"):
+        pipeline.run_compose_stage("spark-commerce-bronze", BATCH, bucket="selected-bucket")
+
+
+@pytest.mark.parametrize("cleanup", ["ok", "exit", "timeout", "missing"])
+def test_stage_timeout_cleans_only_owned_container_and_preserves_checkpoint(
+    cleanup: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("COMMERCE_STAGE_TIMEOUT_SECONDS", "1")
+    calls: list[list[str]] = []
+
+    def run(command: list[str], **kwargs: Any) -> None:
+        calls.append(command)
+        if len(calls) == 1:
+            assert kwargs["timeout"] == 1
+            raise subprocess.TimeoutExpired(command, 1)
+        assert command == ["docker", "rm", "--force", calls[0][-2]]
+        assert kwargs["timeout"] == 30
+        assert kwargs["check"] is True
+        if cleanup == "exit":
+            raise subprocess.CalledProcessError(1, command)
+        if cleanup == "timeout":
+            raise subprocess.TimeoutExpired(command, 30)
+        if cleanup == "missing":
+            raise FileNotFoundError("docker unavailable")
+
+    monkeypatch.setattr(pipeline.subprocess, "run", run)
+    planner = Planner()
+    message = "container removed" if cleanup == "ok" else "cleanup unconfirmed"
+    with pytest.raises(pipeline.CommercePipelineError, match=message):
+        pipeline.run_commerce_batch(
+            planner, lambda _: pytest.fail("must not verify"),
+            run_stage=lambda service, batch: pipeline.run_compose_stage(
+                service, batch, bucket="selected-bucket",
+            ),
+        )
+    assert len(calls) == 2
+    assert planner.commits == []
+    assert planner.pending
+
+
+def test_retry_after_timeout_uses_new_container_then_commits_after_verification(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("COMMERCE_STAGE_TIMEOUT_SECONDS", "1")
+    names: list[str] = []
+
+    def run(command: list[str], **kwargs: Any) -> None:
+        if command[:2] == ["docker", "compose"]:
+            names.append(command[-2])
+            if len(names) == 1:
+                raise subprocess.TimeoutExpired(command, 1)
+        else:
+            assert command == ["docker", "rm", "--force", names[0]]
+
+    monkeypatch.setattr(pipeline.subprocess, "run", run)
+    planner = Planner()
+    def execute(service: str, batch: dict[str, str]) -> None:
+        pipeline.run_compose_stage(service, batch, bucket="selected")
+
+    with pytest.raises(pipeline.CommercePipelineError, match="timed out"):
+        pipeline.run_commerce_batch(planner, gold, run_stage=execute)
+    assert planner.commits == []
+    report = pipeline.run_commerce_batch(planner, gold, run_stage=execute)
+    assert report["status"] == "ready"
+    assert planner.commits == [BATCH["batch_id"]]
+    assert len(names) == len(pipeline.COMMERCE_STAGES) + 1
+    assert len(names) == len(set(names))

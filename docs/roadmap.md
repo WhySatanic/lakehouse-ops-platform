@@ -265,6 +265,11 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
     current row, contiguous effective periods, and rejection of out-of-order changes.
   - [x] Publish the tested batch-scoped daily gold mart with order-day revenue, buying
     customers, and payment-quality measures, including replay and Trino checks.
+  - [x] Provide an opt-in current daily mart for explicitly declared complete snapshots,
+    with atomic data/provenance publication, correction and late-arrival acceptance,
+    replay without another Iceberg snapshot, stale-input protection and removed-day checks.
+    This first version uses full-result replacement and one writer; bounded partition
+    recomputation and historical SCD2 correction remain planned.
 - [ ] Schedule the pipeline with retries, freshness checks, and actionable notifications.
   - [x] Provide an opt-in cron cycle that runs one bounded batch attempt and then
     submits source and backlog freshness observations, including after run failure.
@@ -291,8 +296,20 @@ late-data correction, freshness monitoring, and retained operational evidence.
 The commerce CLI retains per-attempt local SQLite execution events, including stage
 transitions, hash-bound batch identity, failures and checkpoint intent/completion.
 Real process-exit acceptance preserves incomplete evidence across a new attempt.
+Combined timeout/retry acceptance retains the failed attempt, records a new run ID,
+and advances the checkpoint only after successful gold verification.
 The processing checkpoint remains authoritative; journal events are diagnostic,
 not automatic restart instructions or transactional coordination with Iceberg.
+
+Compose commerce stages now have a configurable wall-clock limit, unique container
+ownership and scoped timeout cleanup. Real Docker acceptance verifies removal on two
+attempts; unit checks cover failed cleanup, unchanged checkpoint and a verified retry.
+Abrupt-owner-exit recovery remains separate work.
+
+Do not idle solely because a PR's CI is pending. Continue one independent increment
+on a separate branch from current main, keeping dependencies and merge order explicit.
+Prioritize failures/review feedback, and merge only after all mandatory checks pass
+on the exact current PR head with no conflicts or unresolved review comments.
 
 Next correction acceptance foundation: a deterministic three-snapshot commerce scenario
 with a literal latest-order/daily-revenue/customer-history oracle, compatible S3 landing,
