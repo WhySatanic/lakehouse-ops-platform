@@ -6,6 +6,7 @@ import sys
 import time
 from collections.abc import Callable
 from typing import Any
+from uuid import uuid4
 
 import httpx
 
@@ -34,6 +35,13 @@ class CommercePipelineError(RuntimeError):
 
 
 def run_compose_stage(service: str, batch: dict[str, str], *, bucket: str) -> None:
+    try:
+        timeout = int(os.environ.get("COMMERCE_STAGE_TIMEOUT_SECONDS", "1800"))
+    except ValueError as error:
+        raise CommercePipelineError("COMMERCE_STAGE_TIMEOUT_SECONDS must be an integer") from error
+    if not 1 <= timeout <= 86400:
+        raise CommercePipelineError("COMMERCE_STAGE_TIMEOUT_SECONDS must be between 1 and 86400")
+    container = f"lakeops-commerce-{uuid4().hex}"
     environment = {
         **os.environ, "COMMERCE_BATCH_ID": batch["batch_id"],
         "COMMERCE_MANIFEST_SHA256": batch["manifest_sha256"], "LAKEHOUSE_BUCKET": bucket,
@@ -41,9 +49,22 @@ def run_compose_stage(service: str, batch: dict[str, str], *, bucket: str) -> No
     try:
         subprocess.run(
             ["docker", "compose", "--profile", "catalog", "--profile", "compute",
-             "run", "--rm", "--no-deps", service],
-            env=environment, check=True, stdout=sys.stderr,
+             "run", "--rm", "--no-deps", "--name", container, service],
+            env=environment, check=True, stdout=sys.stderr, timeout=timeout,
         )
+    except subprocess.TimeoutExpired as error:
+        try:
+            subprocess.run(
+                ["docker", "rm", "--force", container], check=True,
+                stdout=sys.stderr, stderr=sys.stderr, timeout=30,
+            )
+        except (OSError, subprocess.SubprocessError) as cleanup_error:
+            raise CommercePipelineError(
+                f"commerce stage timed out: {service}; container cleanup unconfirmed: {container}"
+            ) from cleanup_error
+        raise CommercePipelineError(
+            f"commerce stage timed out after {timeout}s: {service}; container removed: {container}"
+        ) from error
     except (OSError, subprocess.CalledProcessError) as error:
         raise CommercePipelineError(f"commerce stage failed: {service}") from error
 

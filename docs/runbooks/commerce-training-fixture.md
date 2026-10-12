@@ -267,6 +267,24 @@ failed runs do not claim completed-phase timings. CI checks the shape and nonneg
 values in the retained real-stack report. One run is diagnostic evidence, not a
 volume benchmark, SLA, or per-job Spark memory measurement.
 
+Each Compose stage has a wall-clock limit of 1800 seconds. Set
+`COMMERCE_STAGE_TIMEOUT_SECONDS` in the runner environment to an integer from 1 to
+86400 to override it. Invalid values fail before that stage starts Docker. Each attempt
+uses a unique `lakeops-commerce-<uuid>` container name. On timeout the Compose client
+is terminated and the runner force-removes only that named container, with a separate
+30-second cleanup limit. Logs remain on stderr and the checkpoint does not advance.
+If cleanup cannot be confirmed, the error includes the exact container name; inspect
+and stop that container before retrying. This does not roll back committed Iceberg writes,
+bound S3/Trino planning time, provide a durable run journal, or handle abrupt owner death.
+Previously stages had no time limit; increase the setting explicitly for known long jobs.
+
+After building the compute image, run the isolated acceptance with
+`LAKEOPS_RUN_DOCKER_TIMEOUT_SMOKE=1 uv run pytest tests/integration/test_commerce_stage_timeout.py -q -o addopts=''`
+(PowerShell: set `$env:LAKEOPS_RUN_DOCKER_TIMEOUT_SMOKE='1'` first). It runs two
+three-second timeouts against a network-isolated sleeper in the existing Spark image,
+then checks that both uniquely named containers are absent. It does not execute Spark
+or claim Iceberg rollback. The serving integration job runs the same check.
+
 For transient coordinator or transport failures, opt into bounded read-only gold
 verification retries with `--attempts 3 --retry-delay-seconds 2`. Defaults remain one
 attempt and a two-second delay (unused without a retry). Attempts are bounded to 1..5
@@ -311,8 +329,8 @@ remote-S3 runner.
 Its S3 endpoint must refer to the same MinIO as Compose; Trino must query that stack.
 Only the `landing` prefix is supported. The selected bucket overrides `LAKEHOUSE_BUCKET`
 for child jobs. Services use `--no-deps` so they never bootstrap unrelated fixtures or
-start missing infrastructure implicitly. No automatic Spark retry, per-job timeout,
-cancellation cleanup, freshness policy, or notifications are added here. The external
+start missing infrastructure implicitly. No automatic Spark retry, abrupt-exit cleanup,
+freshness policy, or notifications are added here. The external
 cron path below is opt-in; measured recovery remains planned. Existing manual
 commands remain supported.
 
