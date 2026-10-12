@@ -82,11 +82,20 @@ def write_selected_batch(
 ) -> dict[str, int | str]:
     bucket = required_environment("LAKEHOUSE_BUCKET")
     create_table(spark, bucket)
-    source = with_history_columns(
+    return apply_customer_history(
+        spark,
         spark.table("lakehouse.silver.commerce_customers").filter(
             F.col("source_batch_id") == batch_id
-        )
-    ).cache()
+        ),
+        batch_id=batch_id,
+    )
+
+
+def apply_customer_history(
+    spark: SparkSession, source: DataFrame, *, batch_id: str,
+) -> dict[str, int | str]:
+    """Apply selected validated silver rows to an existing Iceberg history table."""
+    source = with_history_columns(source).cache()
     source_rows = source.count()
     if source_rows == 0:
         raise RuntimeError(f"selected commerce customer silver batch is empty: {batch_id}")
