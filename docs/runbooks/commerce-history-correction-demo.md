@@ -103,3 +103,11 @@ used a new project and output directory. After successful shutdown its own empty
 network was also released to avoid consuming another subnet. Stopped containers
 and volumes remain; reconnecting that retained project requires recreating its
 Compose network rather than resetting data. No unrelated networks were changed.
+
+After integrating current main including scoped cleanup, all eight local check
+commands passed again: 1084 tests passed, 21 expected opt-in skips, 92.22% coverage,
+and three actual Docker ownership/timeout/Spark-memory smokes. Evidence:
+`artifacts/local-history-correction-demo-20261012-v2/`. Both real scoped cleanup
+smokes and the read-only history evidence check also passed together, without
+changing the retained history report/checkpoint/journal. JUnit:
+`artifacts/history-correction-demo-20261012-v2-main211.xml`.
