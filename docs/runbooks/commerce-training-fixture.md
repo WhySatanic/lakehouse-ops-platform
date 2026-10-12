@@ -276,6 +276,17 @@ do not trim an already committed manifest in place.
 
 ### One-shot batch runner
 
+The related-snapshot Spark acceptance also checks customer SCD2 against the literal
+`expected.json` history oracle. It executes the production history application logic
+against a local Iceberg table: the first snapshot inserts Alice, the second closes
+that version and inserts Alice Updated, and the third inserts no customer version.
+The resulting two contiguous periods and exactly one current version must match the
+oracle. Replaying the latest customer snapshot leaves history rows unchanged; applying
+the older changed snapshot is rejected before any history write or new snapshot.
+This confirms chronological history semantics only, not retrospective customer
+correction support. The isolated Hadoop-catalog acceptance does not replace the
+existing HMS/S3/Trino checks or a full-pipeline memory/volume benchmark.
+
 From the repository root, with Compose images built, MinIO initialized, Hive Metastore
 healthy, and Trino coordinator/workers running, process one next pending batch:
 
