@@ -8,6 +8,8 @@ import os
 import re
 import subprocess
 import sys
+import time
+from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -88,6 +90,47 @@ def query_costs(client: TrinoClient, batch_id: str, orders: int) -> dict[str, An
     }
 
 
+def snapshot_inventory(client: TrinoClient) -> list[dict[str, Any]]:
+    tables = client.query(
+        "SELECT table_schema, table_name FROM lakehouse.information_schema.tables "
+        "WHERE table_schema IN ('bronze','silver','gold') "
+        "AND table_name LIKE 'commerce_%' ORDER BY table_schema, table_name"
+    )
+    inventory = []
+    for table in tables:
+        schema = table["table_schema"].replace('"', '""')
+        name = table["table_name"].replace('"', '""')
+        snapshots = client.query(
+            f'SELECT snapshot_id FROM lakehouse."{schema}"."{name}$snapshots" '
+            "ORDER BY snapshot_id"
+        )
+        inventory.append({"table": f"{schema}.{name}",
+                          "snapshot_ids": [row["snapshot_id"] for row in snapshots]})
+    return inventory
+
+
+def measure_idle_replay(
+    client: TrinoClient, command: list[str], output: Path, label: str, *,
+    clock: Callable[[], float] = time.perf_counter,
+) -> dict[str, Any]:
+    """Time the idle child only; catalog verification is deliberately outside its timer."""
+    files = file_inventory(client)
+    snapshots = snapshot_inventory(client)
+    started = clock()
+    idle = execute(command, output, label)
+    elapsed = clock() - started
+    if (idle.get("status") != "idle" or idle.get("batch_id") is not None
+            or idle.get("completed_stages") != []):
+        raise ValueError("checkpoint replay did not report a compute-free idle run")
+    if file_inventory(client) != files or snapshot_inventory(client) != snapshots:
+        raise ValueError("idle checkpoint replay changed files or snapshots")
+    return {
+        "status": "verified", "elapsed_seconds": elapsed,
+        "scope": "single_idle_child_wall_time_including_startup_not_capacity",
+        "completed_stages": [], "files": files, "snapshots": snapshots,
+    }
+
+
 def profile(output: Path, *, orders: list[int], endpoint: str, server: str) -> dict[str, Any]:
     if len(orders) != 2 or not 100 <= orders[0] < orders[1]:
         raise ValueError("requires two ascending order volumes >= 100")
@@ -140,15 +183,14 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str) -> d
                     f"WHERE source_batch_id='{fixture.batch_id}'"
                 )
                 costs = query_costs(client, fixture.batch_id, volume)
-                idle = execute(command, output, f"{label}-idle")
-                if idle.get("status") != "idle" or file_inventory(client) != files:
-                    raise ValueError("idle checkpoint replay changed the file inventory")
+                idle = measure_idle_replay(client, command, output, f"{label}-idle")
                 report["samples"].append({
                     "orders": volume, "batch_id": fixture.batch_id, "config": asdict(config),
                     "run": run, "memory": memory, "cumulative_current_files": files,
                     "query_id": query.query_id, "query_stats": asdict(query.stats),
                     "query_rows": query.rows, "idle_replay": "verified",
                     "query_costs": costs,
+                    "idle_replay_observation": idle,
                 })
                 (output / "profile.json").write_text(json.dumps(report, indent=2))
         report["status"] = "ready"
