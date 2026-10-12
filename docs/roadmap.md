@@ -333,6 +333,11 @@ the reviewed Iceberg pins and bounded attempts. Real cold-builder acceptance cov
 successful recovery and continued rejection of a wrong pin. This is download
 resilience, not a measured CI speedup or cross-job cache.
 
+The opt-in [one-command local check](runbooks/commerce-local-check.md) combines full
+quality gates with isolated real Docker timeout-cleanup and Spark-memory smoke tests.
+It retains step logs, JUnit and failure evidence without starting an existing stack.
+It is not full commerce acceptance and does not disable or replace mandatory CI.
+
 Next correction acceptance foundation: a deterministic three-snapshot commerce scenario
 with a literal latest-order/daily-revenue/customer-history oracle, compatible S3 landing,
 conditional replay, chronological planning and hash-bound checkpoint smoke checks.
