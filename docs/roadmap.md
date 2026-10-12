@@ -327,6 +327,12 @@ on a separate branch from current main, keeping dependencies and merge order exp
 Prioritize failures/review feedback, and merge only after all mandatory checks pass
 on the exact current PR head with no conflicts or unresolved review comments.
 
+The opt-in [verified Maven build retry](runbooks/verified-maven-build.md) switches
+to a fixed alternate Maven Central endpoint only after checksum rejection, retaining
+the reviewed Iceberg pins and bounded attempts. Real cold-builder acceptance covers
+successful recovery and continued rejection of a wrong pin. This is download
+resilience, not a measured CI speedup or cross-job cache.
+
 Next correction acceptance foundation: a deterministic three-snapshot commerce scenario
 with a literal latest-order/daily-revenue/customer-history oracle, compatible S3 landing,
 conditional replay, chronological planning and hash-bound checkpoint smoke checks.

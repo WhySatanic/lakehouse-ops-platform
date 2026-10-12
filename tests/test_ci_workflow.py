@@ -2,6 +2,16 @@ import json
 from pathlib import Path
 
 
+def test_catalog_compute_builds_keep_checksums_and_enable_bounded_endpoint_fallback():
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert workflow.count("--attempts 3 --maven-central-fallback") == 3
+    dockerfile = Path("infra/spark/Dockerfile").read_text()
+    assert "ARG MAVEN_CENTRAL_URL=https://repo1.maven.org/maven2" in dockerfile
+    for digest in ("94b8e36fc329f0293d44ba9e01b784a56e9501affec1842d898144c51f6e486a",
+                   "38f01da7e96850cdd05e6616d758b77b43314b712a8808e3f9a824d56976162f"):
+        assert f"ADD --checksum=sha256:{digest}" in dockerfile
+
+
 def test_lakehouse_integration_timeout_covers_observed_runtime() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     job = workflow.split("  lakehouse-integration:\n", maxsplit=1)[1]
