@@ -81,6 +81,9 @@ For relational SQL and pipeline practice, the deterministic
 [commerce fixture](docs/runbooks/commerce-training-fixture.md) generates linked customers,
 products, orders, and payments with exact counts of NULLs, duplicates, late events, and
 invalid payments. It uses only synthetic local data and verifies checksums on rerun.
+The opt-in [commerce recovery acceptance](docs/runbooks/commerce-recovery-acceptance.md)
+injects a caught interruption after real gold publication, then verifies a safe retry
+and idle checkpoint replay using full row hashes and Iceberg file inventories.
 Generated batches can be landed in MinIO with conditional writes. The table files are
 uploaded first and the verified manifest is published last as the batch commit marker.
 The same runbook shows how to plan a bounded incremental batch, checkpoint it only after
