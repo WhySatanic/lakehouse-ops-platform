@@ -9,6 +9,13 @@ import pytest
 
 from lakehouse_ops.commerce_local_check import check, main
 
+SMOKES = (
+    '<testcase classname="tests.integration.test_commerce_stage_timeout" '
+    'name="test_real_compose_timeout_removes_owned_container"/>'
+    '<testcase classname="tests.integration.test_spark_memory" '
+    'name="test_real_spark_session_emits_container_memory"/>'
+)
+
 
 def checkout(root: Path):
     source = root / "src/lakehouse_ops/commerce_pipeline.py"
@@ -34,7 +41,7 @@ def test_all_gates_and_real_smokes_are_required(tmp_path: Path, monkeypatch):
             assert kwargs["env"]["LAKEOPS_RUN_SPARK_MEMORY_SMOKE"] == "1"
             assert kwargs["env"]["LAKEOPS_RUN_DOCKER_TIMEOUT_SMOKE"] == "1"
             (output / "docker-smoke.xml").write_text(
-                '<testsuites><testsuite><testcase/><testcase/></testsuite></testsuites>',
+                f'<testsuites><testsuite>{SMOKES}</testsuite></testsuites>',
             )
         else:
             assert "LAKEOPS_RUN_SPARK_MEMORY_SMOKE" not in kwargs["env"]
@@ -46,6 +53,22 @@ def test_all_gates_and_real_smokes_are_required(tmp_path: Path, monkeypatch):
     assert all(step["status"] == "ready" for step in report["steps"])
     assert all(step["elapsed_seconds"] >= 0 for step in report["steps"])
     assert json.loads((output / "check.json").read_text()) == report
+
+
+def test_new_passing_ownership_smoke_does_not_reject_required_smokes(tmp_path: Path):
+    checkout(tmp_path)
+    output = tmp_path / "evidence"
+
+    def run(command, **kwargs):
+        (output / "docker-smoke.xml").write_text(
+            f'<testsuites><testsuite>{SMOKES}'
+            '<testcase classname="tests.integration.test_commerce_stage_timeout" '
+            'name="test_real_container_labels_match_prelaunch_journal"/>'
+            '</testsuite></testsuites>',
+        )
+        return SimpleNamespace(returncode=0)
+
+    assert check(tmp_path, output, run=run)["status"] == "ready"
 
 
 @pytest.mark.parametrize("failure", ["exit", "launch", "timeout"])
@@ -69,6 +92,9 @@ def test_failure_stops_and_retains_evidence(tmp_path: Path, failure):
 
 
 @pytest.mark.parametrize("xml", ["invalid", "<testsuites/>",
+                                '<testsuites><testcase/><testcase/></testsuites>',
+                                f'<testsuites>{SMOKES}<testcase><skipped/></testcase>'
+                                '</testsuites>',
                                 '<testsuites><testcase/><testcase><skipped/></testcase>'
                                 '</testsuites>'])
 def test_skipped_missing_or_invalid_smoke_evidence_is_not_success(tmp_path: Path, xml):

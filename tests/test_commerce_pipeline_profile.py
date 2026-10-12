@@ -60,6 +60,8 @@ def test_two_volume_evidence_or_retained_failure(
         def query(self, sql):
             if "information_schema" in sql:
                 return [{"table_schema": "gold", "table_name": "commerce_daily"}] if running else []
+            if "$snapshots" in sql:
+                return [{"snapshot_id": 100}]
             assert '"gold"."commerce_daily$files"' in sql
             return [{"files": 1, "bytes": 1024}]
 
@@ -76,7 +78,8 @@ def test_two_volume_evidence_or_retained_failure(
         if "landing" in label:
             return {}
         if "idle" in label:
-            return {"status": "ready" if failure == "idle" else "idle"}
+            return {"status": "ready" if failure == "idle" else "idle",
+                    "batch_id": None, "completed_stages": []}
         if failure == "second-run" and label == "sample-2":
             raise subprocess.CalledProcessError(2, args)
         running = True
@@ -109,6 +112,40 @@ def test_two_volume_evidence_or_retained_failure(
         assert result["samples"][0]["idle_replay"] == "verified"
         assert result["samples"][0]["cumulative_current_files"][0]["bytes"] == 1024
         assert result["samples"][1]["query_costs"]["detail"]["rows"][0]["orders"] == 1000
+        assert result["samples"][0]["idle_replay_observation"]["status"] == "verified"
+
+
+@pytest.mark.parametrize("failure", [None, "files", "snapshots", "compute", "batch"])
+def test_idle_measurement_excludes_audit_time_and_rejects_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure,
+):
+    executed = False
+    ticks = iter([10.0, 10.25])
+
+    class Client:
+        def query(self, sql):
+            if "information_schema" in sql:
+                return [{"table_schema": "gold", "table_name": "commerce_daily"}]
+            if "$snapshots" in sql:
+                return [{"snapshot_id": 2 if executed and failure == "snapshots" else 1}]
+            return [{"files": 2 if executed and failure == "files" else 1, "bytes": 1024}]
+
+    def execute(args, output, label):
+        nonlocal executed
+        executed = True
+        return {"status": "idle", "batch_id": "wrong" if failure == "batch" else None,
+                "completed_stages": ["spark"] if failure == "compute" else []}
+
+    monkeypatch.setattr(profile, "execute", execute)
+    if failure:
+        with pytest.raises(ValueError, match="checkpoint replay"):
+            profile.measure_idle_replay(Client(), [], tmp_path, "idle", clock=lambda: next(ticks))
+    else:
+        observation = profile.measure_idle_replay(
+            Client(), [], tmp_path, "idle", clock=lambda: next(ticks),
+        )
+        assert observation["elapsed_seconds"] == 0.25
+        assert observation["snapshots"] == [{"table": "gold.commerce_daily", "snapshot_ids": [1]}]
 
 
 @pytest.mark.parametrize("failure", [None, "revenue", "orders", "volume", "empty", "duplicate"])

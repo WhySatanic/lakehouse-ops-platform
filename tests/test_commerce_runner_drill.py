@@ -8,15 +8,23 @@ import pytest
 
 from lakehouse_ops import cli
 from lakehouse_ops.commerce_gold_gate import check_commerce_gold_with_retry
+from lakehouse_ops.commerce_run_journal import CommerceRunJournal
 from lakehouse_ops.commerce_runner_lock import commerce_runner_lock
 
 
+@pytest.mark.parametrize("with_journal", [False, True])
 def test_fault_drill_delegates_recovery_and_retains_attempt_evidence(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, with_journal: bool,
 ) -> None:
     exercise = runpy.run_path("tests/integration/exercise_commerce_runner_retry.py")["exercise"]
     real_client = httpx.Client
     forwarded = []
+    journal = CommerceRunJournal(tmp_path / "run.sqlite3") if with_journal else None
+    stages = []
+
+    def stage(service: str, batch: dict[str, str], *, bucket: str,
+              journal: CommerceRunJournal | None = None) -> None:
+        stages.append((service, batch, bucket, journal))
 
     def upstream(request: httpx.Request) -> httpx.Response:
         forwarded.append(request)
@@ -39,7 +47,7 @@ def test_fault_drill_delegates_recovery_and_retains_attempt_evidence(
     def command(arguments: list[str]) -> int:
         assert arguments == ["run-commerce-batch", "--attempts", "3"]
         with commerce_runner_lock(), cli.TrinoClient("http://test.invalid", user="test") as trino:
-            cli.run_compose_stage("bronze-input-sync", {}, bucket="test")
+            cli.run_compose_stage("bronze-input-sync", {}, bucket="test", journal=journal)
             report = check_commerce_gold_with_retry(
                 trino.query, "a" * 16, attempts=3, delay_seconds=0,
             )
@@ -48,11 +56,12 @@ def test_fault_drill_delegates_recovery_and_retains_attempt_evidence(
 
     monkeypatch.setattr(httpx, "Client", client)
     monkeypatch.setattr(cli, "main", command)
-    monkeypatch.setattr(cli, "run_compose_stage", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cli, "run_compose_stage", stage)
     monkeypatch.chdir(tmp_path)
     evidence = tmp_path / "artifacts" / "retry.json"
     exercise(["--attempts", "3"], evidence)
     assert len(forwarded) == 1
+    assert stages == [("bronze-input-sync", {}, "test", journal)]
     assert json.loads(evidence.read_text()) == {
         "status": "ready", "injected_http_status": 503, "statement_attempts": 2,
         "verification_backend": "real_trino",

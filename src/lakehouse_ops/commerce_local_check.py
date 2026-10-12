@@ -62,11 +62,20 @@ def check(root: Path, output: Path, *, run: Any = subprocess.run) -> dict[str, A
                     raise RuntimeError(f"{name} exited with {result.returncode}")
                 if name == "docker-smoke":
                     cases = ET.parse(output / "docker-smoke.xml").findall(".//testcase")
-                    if len(cases) != 2 or any(
+                    required = {
+                        ("tests.integration.test_commerce_stage_timeout",
+                         "test_real_compose_timeout_removes_owned_container"),
+                        ("tests.integration.test_spark_memory",
+                         "test_real_spark_session_emits_container_memory"),
+                    }
+                    executed = {(case.get("classname"),
+                                 case.get("name", "").split("[", 1)[0]) for case in cases}
+                    if not required <= executed or any(
                         case.find(tag) is not None
                         for case in cases for tag in ("skipped", "failure", "error")
                     ):
-                        raise RuntimeError("requires two executed, passing Docker smoke tests")
+                        raise RuntimeError("requires executed, passing timeout and memory smokes "
+                                           "and no skipped or failed collected smoke tests")
                 step["status"] = "ready"
             finally:
                 step["elapsed_seconds"] = round(time.perf_counter() - started, 6)
