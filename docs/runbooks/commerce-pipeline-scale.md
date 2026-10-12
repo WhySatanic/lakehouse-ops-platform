@@ -122,3 +122,53 @@ these are single sequential observations, not a controlled latency benchmark.
 Retained local report: `artifacts/commerce-query-scale-20261012/profile.json`, SHA256
 `8a182899f918bc0c56baa3c96e60938d2e14a684979ff37fcf6de635258ab683`.
 The earlier scale report remains unchanged. No product version or release change.
+
+## Timed idle replay with snapshot audit
+
+New full profiles retain `idle_replay_observation` beside the existing
+`idle_replay: verified` field. It measures the wall time of the idle CLI child,
+including Python startup, S3 planning and local journal writes. The before/after
+Trino audits are outside this timer. Each sample requires an idle result with no
+selected batch or completed stage, unchanged current file counts/bytes and the
+same complete retained snapshot-ID lists for every commerce table.
+
+The unchanged file counts/bytes are aggregate evidence, not file-content hashes.
+Snapshot inventory is observational and assumes the existing single-writer profile.
+Concurrent writers or maintenance can invalidate the observation. This is not a
+crash-recovery measurement, a latency percentile or production throughput claim.
+Old reports remain readable but do not acquire measurements retroactively.
+
+A short opt-in acceptance can use a completed local scale checkpoint. It copies
+the checkpoint into a new evidence directory, runs three idle children against
+the same retained stack and compares the source/copy checkpoint bytes afterward.
+It does not rerun Spark or edit the previous scale report. Set local development
+S3 credentials as for the original scale run, then:
+
+```powershell
+$env:LAKEOPS_RUN_COMMERCE_IDLE_PROFILE_SMOKE = "1"
+$env:LAKEOPS_IDLE_PROFILE_CHECKPOINT = "artifacts/commerce-query-scale-20261012/checkpoint.json"
+$env:LAKEOPS_IDLE_PROFILE_OUTPUT = "artifacts/commerce-idle-profile-20261012-v2"
+$env:LAKEOPS_IDLE_PROFILE_SERVER = "http://localhost:18300"
+$env:LAKEOPS_IDLE_PROFILE_ENDPOINT = "http://localhost:19300"
+uv run --frozen pytest tests/integration/test_commerce_idle_measurement.py -q --no-cov
+Remove-Item Env:LAKEOPS_RUN_COMMERCE_IDLE_PROFILE_SMOKE
+uv run --frozen python -m lakehouse_ops.local_quality
+```
+
+The optional smoke expects the 13-table scale fixture, not the linked acceptance's
+extra current-gold table. No public CLI options, data migration or release change.
+Rollback restores the prior report shape without changing warehouse data.
+
+Retained local evidence on 2026-10-12, `lakehouse-ops-scale-query-v1`: three
+idle child wall times were 0.9127, 0.9235 and 0.9084 seconds. Each retained the same
+13 tables, 26 snapshot IDs and 22 current files; source/copied checkpoint bytes
+were unchanged. The complete acceptance including catalog audits took 16.06 seconds.
+Report `artifacts/commerce-idle-profile-20261012-v2/idle-profile.json`, SHA-256:
+`233ba3e0eaae32a23d0e3e0bbeaa915924b8fe84405bbdc0094cec5fb8ce85d0`.
+The first attempt's JUnit/logs remain separate: its observations were idle but an
+incorrect 14-table test expectation failed against the actual 13-table scale fixture.
+No timings were inserted into the historical two-volume reports.
+Fresh local quality passed all seven gates: 899 tests passed, ten opt-in skips,
+90.75% coverage. Full-profile wiring is covered by two-volume unit acceptance;
+this short live check exercised the retained stack's idle path, not a new full
+two-volume Spark execution. Mandatory remote CI remains a separate merge gate.
