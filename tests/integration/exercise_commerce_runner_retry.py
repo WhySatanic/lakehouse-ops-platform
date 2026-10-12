@@ -52,8 +52,8 @@ def exercise(arguments: list[str], evidence: Path) -> None:
         transport = httpx.MockTransport(forward)
         client = stack.enter_context(httpx.Client(transport=transport))
 
-        def trino(server: str, *, user: str) -> TrinoClient:
-            return TrinoClient(server, user=user, client=client)
+        def trino(server: str, *, user: str, query_timeout: float | None = None) -> TrinoClient:
+            return TrinoClient(server, user=user, client=client, query_timeout=query_timeout)
 
         with patch.object(cli, "TrinoClient", trino), patch.object(cli, "run_compose_stage", stage):
             assert cli.main(["run-commerce-batch", *arguments]) == 0

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import subprocess
 from contextlib import closing
 from pathlib import Path
 
 import httpx
 import pytest
+from integration import exercise_commerce_runner_retry as retry_exercise
 from test_cli import FakeS3Client
 from test_trino import final_stats
 
@@ -97,3 +99,46 @@ def test_runner_rejects_bad_query_budget_before_s3(
         cli.main(["run-commerce-batch", "--s3-bucket", "lakehouse"])
     assert caught.value.code == 2
     assert "COMMERCE_QUERY_TIMEOUT_SECONDS" in capsys.readouterr().err
+
+
+def test_ci_retry_adapter_preserves_the_runner_query_budget(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("COMMERCE_QUERY_TIMEOUT_SECONDS", "7")
+    fixture = cli.generate_commerce_fixture(tmp_path / "fixture", cli.CommerceFixtureConfig(
+        customers=4, products=2, orders=6, null_customer_emails=1,
+        duplicate_orders=1, late_orders=1, invalid_payments=1,
+    ))
+    s3 = FakeS3Client()
+    cli.CommerceS3LandingZone(s3, bucket="lakehouse").write(fixture.path)
+    monkeypatch.setattr(cli, "_create_s3_client", lambda _: s3)
+    monkeypatch.setattr(cli, "run_compose_stage", lambda *a, **k: None)
+    monkeypatch.setattr(retry_exercise.subprocess, "run", lambda command, **kwargs:
+        subprocess.CompletedProcess(command, 2, "", "another commerce runner holds"))
+    original_client = httpx.Client
+    requests = []
+
+    def healthy(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert 0 < request.extensions["timeout"]["read"] <= 7
+        return httpx.Response(200, json={
+            "id": "healthy", "columns": [{"name": name} for name in
+                ("days", "orders", "captured_revenue_cents", "invalid_days")],
+            "data": [[2, 6, 1000, 0]], "stats": final_stats(),
+        })
+
+    def client(**kwargs: object) -> httpx.Client:
+        if "transport" not in kwargs:
+            kwargs["transport"] = httpx.MockTransport(healthy)
+        return original_client(**kwargs)
+
+    monkeypatch.setattr(retry_exercise.httpx, "Client", client)
+    evidence = tmp_path / "retry.json"
+    retry_exercise.exercise([
+        "--s3-bucket", "lakehouse", "--state", str(tmp_path / "checkpoint.json"),
+        "--attempts", "2", "--retry-delay-seconds", "0",
+    ], evidence)
+    assert json.loads(evidence.read_text())["statement_attempts"] == 2
+    assert len(requests) == 1
+    assert (tmp_path / "checkpoint.json").exists()
