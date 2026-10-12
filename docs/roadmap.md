@@ -327,6 +327,12 @@ observes Docker state for journal-recorded stage names in one explicit project,
 checks run/batch/manifest/project/service ownership and distinguishes daemon failure
 from absence. It performs no cleanup and does not infer runner liveness or orphanhood.
 
+The opt-in [single-container operator cleanup](runbooks/commerce-container-cleanup.md)
+uses that ownership evidence under the same checkout's runner lock, requires an explicit
+stage/attempt and stop acknowledgement, and removes only the verified immutable Docker ID.
+Real process-exit and reused-name acceptance leave replacement containers untouched.
+This is manual local cleanup, not automatic orphan detection or Iceberg transaction recovery.
+
 Do not idle solely because a PR's CI is pending. Continue one independent increment
 on a separate branch from current main, keeping dependencies and merge order explicit.
 Prioritize failures/review feedback, and merge only after all mandatory checks pass
