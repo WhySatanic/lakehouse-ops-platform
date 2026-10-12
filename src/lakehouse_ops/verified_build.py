@@ -39,6 +39,7 @@ def run_verified_build(
     delay_seconds: float = 5,
     run: RunOnce = run_once,
     sleep: Sleep = time.sleep,
+    maven_central_fallback: bool = False,
 ) -> int:
     if not command:
         raise ValueError("verified build command is required")
@@ -47,12 +48,27 @@ def run_verified_build(
     if delay_seconds < 0:
         raise ValueError("delay_seconds must be non-negative")
 
+    current = list(command)
+    if maven_central_fallback and (
+        current[:2] != ["docker", "compose"] or "build" not in current[2:]
+        or any("MAVEN_CENTRAL_URL=" in argument for argument in current)
+    ):
+        raise ValueError("Maven fallback requires Compose build without an explicit endpoint")
+
     for attempt in range(1, attempts + 1):
-        return_code, output = run(command)
+        return_code, output = run(current)
         if return_code == 0:
             return 0
         if attempt == attempts or not is_retryable_failure(output):
             return return_code
+
+        if maven_central_fallback and attempt == 1:
+            position = current.index("build") + 1
+            current[position:position] = [
+                "--build-arg", "MAVEN_CENTRAL_URL=https://repo.maven.apache.org/maven2",
+            ]
+            print("Retrying through the alternate Maven Central endpoint; checksums unchanged.",
+                  file=sys.stderr)
 
         print(
             f"Checksum mismatch detected; retrying verified build "
@@ -70,6 +86,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--attempts", type=int, default=3)
     parser.add_argument("--delay-seconds", type=float, default=5)
+    parser.add_argument("--maven-central-fallback", action="store_true")
     parser.add_argument("command", nargs=argparse.REMAINDER)
     return parser
 
@@ -85,6 +102,7 @@ def main(argv: list[str] | None = None) -> int:
             command,
             attempts=args.attempts,
             delay_seconds=args.delay_seconds,
+            maven_central_fallback=args.maven_central_fallback,
         )
     except ValueError as error:
         parser.error(str(error))

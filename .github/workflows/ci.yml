@@ -71,7 +71,7 @@ jobs:
           --profile serving config --quiet
       - name: Build catalog and compute images
         run: >-
-          uv run python -m lakehouse_ops.verified_build --attempts 3
+          uv run python -m lakehouse_ops.verified_build --attempts 3 --maven-central-fallback
           --delay-seconds 5 -- docker compose --profile catalog --profile compute build
           minio hive-metastore spark-bronze spark-silver
       - name: Verify commerce stage timeout cleanup
@@ -172,7 +172,7 @@ jobs:
             --profile secure-query config --quiet
       - name: Build catalog and compute images
         run: >-
-          uv run python -m lakehouse_ops.verified_build --attempts 3
+          uv run python -m lakehouse_ops.verified_build --attempts 3 --maven-central-fallback
           --delay-seconds 5 -- docker compose --profile catalog --profile compute build
           minio hive-metastore spark-bronze spark-silver
       - name: Start Ranger Admin dependencies
@@ -425,7 +425,7 @@ jobs:
           docker compose --profile observability config --quiet
       - name: Build catalog and compute images
         run: >-
-          uv run python -m lakehouse_ops.verified_build --attempts 3
+          uv run python -m lakehouse_ops.verified_build --attempts 3 --maven-central-fallback
           --delay-seconds 5 -- docker compose --profile catalog --profile compute build
           minio hive-metastore spark-bronze spark-silver
       - name: Start core services
