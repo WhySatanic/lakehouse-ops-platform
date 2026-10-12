@@ -16,6 +16,12 @@ from typing import Any
 
 PORT_NAMES = ("MINIO_API_PORT", "MINIO_CONSOLE_PORT", "HIVE_METASTORE_PORT", "TRINO_HTTP_PORT")
 SERVICES = ("minio", "metastore-db", "hive-metastore", "trino-coordinator", "trino-worker")
+SCENARIOS = {
+    "linked": ("commerce_linked_acceptance", "linked.json", "lakehouse-ops-linked-demo-",
+               "three_linked_snapshots_fresh_reference_stack", 1800),
+    "owner-exit": ("commerce_owner_exit", "owner-exit.json", "lakehouse-ops-owner-exit-demo-",
+                   "owner_kill_after_completed_gold_fresh_reference_stack", 6600),
+}
 
 
 def free_ports() -> dict[str, str]:
@@ -29,14 +35,18 @@ def free_ports() -> dict[str, str]:
         return ports
 
 
-def demo(root: Path, output: Path, *, run: Any = subprocess.run) -> dict[str, Any]:
+def demo(root: Path, output: Path, *, run: Any = subprocess.run,
+         scenario: str = "linked") -> dict[str, Any]:
+    if scenario not in SCENARIOS:
+        raise ValueError("unsupported reference-stack scenario")
+    module, retained, prefix, scope, timeout = SCENARIOS[scenario]
     root, output = root.resolve(), output.resolve()
-    if not (root / "src/lakehouse_ops/commerce_linked_acceptance.py").is_file():
+    if not (root / f"src/lakehouse_ops/{module}.py").is_file():
         raise ValueError("requires the lakehouse-ops-platform checkout root")
     if output.exists() and any(output.iterdir()):
         raise ValueError("requires an empty output directory")
     output.mkdir(parents=True, exist_ok=True)
-    project = f"lakehouse-ops-linked-demo-{uuid.uuid4().hex}"
+    project = f"{prefix}{uuid.uuid4().hex}"
     env = dict(os.environ)
     env.pop("AWS_SESSION_TOKEN", None)
     env.pop("COMPOSE_PROFILES", None)
@@ -48,7 +58,7 @@ def demo(root: Path, output: Path, *, run: Any = subprocess.run) -> dict[str, An
                "--profile", "compute", "--profile", "query"]
     report: dict[str, Any] = {"status": "failed", "project": project, "steps": [],
                               "ports": {name: env[name] for name in PORT_NAMES},
-                              "scope": "three_linked_snapshots_fresh_reference_stack"}
+                              "scope": scope}
     started = False
 
     def execute(name: str, command: list[str], timeout: int) -> None:
@@ -74,14 +84,14 @@ def demo(root: Path, output: Path, *, run: Any = subprocess.run) -> dict[str, An
         started = True  # Even partially failed startup needs scoped shutdown.
         execute("start", [*compose, "up", "-d", "--wait", "--wait-timeout", "180",
                           "--no-build", "--pull", "never", *SERVICES], 240)
-        execute("linked", [sys.executable, "-m", "lakehouse_ops.commerce_linked_acceptance",
+        execute(scenario, [sys.executable, "-m", f"lakehouse_ops.{module}",
                            "--output", str(output / "acceptance"), "--s3-endpoint-url",
                            f"http://localhost:{env['MINIO_API_PORT']}", "--server",
-                           f"http://localhost:{env['TRINO_HTTP_PORT']}"], 1800)
-        linked = json.loads((output / "acceptance/linked.json").read_text())
-        if linked.get("status") != "ready":
-            raise RuntimeError("linked acceptance did not retain a ready report")
-        report["acceptance"] = linked
+                           f"http://localhost:{env['TRINO_HTTP_PORT']}"], timeout)
+        acceptance = json.loads((output / f"acceptance/{retained}").read_text())
+        if acceptance.get("status") != "ready":
+            raise RuntimeError(f"{scenario} acceptance did not retain a ready report")
+        report["acceptance"] = acceptance
         report["status"] = "ready"
     except (OSError, RuntimeError, subprocess.TimeoutExpired, ValueError) as error:
         report.update(status="failed", error_type=type(error).__name__, error=str(error))

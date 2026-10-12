@@ -322,6 +322,12 @@ reacquires the OS lock without removing its file, and checks rows/files across r
 Termination inside an active Spark stage or Iceberg commit and orphan-stage cleanup
 remain separate work; this bounded drill is not automatic production crash recovery.
 
+The opt-in [one-command owner-exit demo](runbooks/commerce-owner-exit-demo.md) creates
+a fresh scoped reference stack, selects free ports, runs that same forced-exit/retry
+acceptance and retains diagnostics before stopping only its own services. It reuses
+the linked demo lifecycle without changing the default linked scenario or claiming
+recovery inside an active Spark transaction.
+
 The opt-in [recorded-container inspection](runbooks/commerce-container-inspection.md)
 observes Docker state for journal-recorded stage names in one explicit project,
 checks run/batch/manifest/project/service ownership and distinguishes daemon failure
