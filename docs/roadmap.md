@@ -322,6 +322,11 @@ reacquires the OS lock without removing its file, and checks rows/files across r
 Termination inside an active Spark stage or Iceberg commit and orphan-stage cleanup
 remain separate work; this bounded drill is not automatic production crash recovery.
 
+Forced-owner-exit diagnostics support bounded fixture volumes and retained monotonic
+interrupted/retry/audit/idle phase times, with the existing opt-in Spark memory overlay.
+They keep the same completed-gold boundary and do not claim in-transaction recovery,
+an isolated host benchmark or production capacity.
+
 The opt-in [recorded-container inspection](runbooks/commerce-container-inspection.md)
 observes Docker state for journal-recorded stage names in one explicit project,
 checks run/batch/manifest/project/service ownership and distinguishes daemon failure
