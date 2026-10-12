@@ -282,6 +282,10 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
     stages, Trino gold verification, checkpoint, accepted freshness observations,
     and an idle rerun in live-stack CI.
 - [ ] Measure runtime, memory, file growth, maintenance, and recovery as volume increases.
+  - [x] Retain repeated read-only detail/mart queries at two completed fixture volumes,
+    with excluded warm-up, balanced alternating order, raw query IDs and metric ranges,
+    unchanged snapshots/checkpoint and reconciled results. See [query observations](runbooks/commerce-query-observations.md).
+    These warm reads do not measure full-pipeline capacity or concurrent throughput.
   - [x] Retain per-stage and checkpoint elapsed time for a successful one-shot commerce
     run, including verification retries, without claiming volume benchmarks.
   - [x] Retain two-size, checksum-verified source-fixture generation time, Python heap

@@ -64,12 +64,14 @@ def file_inventory(client: TrinoClient) -> list[dict[str, Any]]:
     return inventory
 
 
-def query_costs(client: TrinoClient, batch_id: str, orders: int) -> dict[str, Any]:
+def query_costs(
+    client: TrinoClient, batch_id: str, orders: int, *, daily_first: bool = False,
+) -> dict[str, Any]:
     """Compare a batch-scoped detail aggregation with its materialized daily mart."""
     if re.fullmatch(r"[0-9a-f]{16}", batch_id) is None:
         raise ValueError("requires a fixture batch ID")
     predicate = f"source_batch_id='{batch_id}'"
-    detail = client.query_with_stats(
+    detail_sql = (
         "WITH payments AS (SELECT order_id, "
         "sum(CASE WHEN status='captured' THEN amount_cents ELSE 0 END) AS revenue "
         f"FROM lakehouse.silver.commerce_payments WHERE {predicate} GROUP BY order_id) "
@@ -77,15 +79,22 @@ def query_costs(client: TrinoClient, batch_id: str, orders: int) -> dict[str, An
         "FROM lakehouse.silver.commerce_orders o LEFT JOIN payments p "
         f"ON o.order_id=p.order_id WHERE o.{predicate}"
     )
-    daily = client.query_with_stats(
+    daily_sql = (
         "SELECT sum(order_count) AS orders, sum(captured_revenue_cents) AS revenue "
         f"FROM lakehouse.gold.commerce_daily WHERE {predicate}"
     )
+    if daily_first:
+        daily = client.query_with_stats(daily_sql)
+        detail = client.query_with_stats(detail_sql)
+    else:
+        detail = client.query_with_stats(detail_sql)
+        daily = client.query_with_stats(daily_sql)
     if (len(detail.rows) != 1 or len(daily.rows) != 1 or detail.rows != daily.rows
             or detail.rows[0]["orders"] != orders):
         raise ValueError("detail and daily query results do not reconcile to selected volume")
     return {
-        "scope": "single_detail_then_daily_query_not_capacity",
+        "scope": ("single_daily_then_detail_query_not_capacity" if daily_first
+                  else "single_detail_then_daily_query_not_capacity"),
         "detail": asdict(detail), "daily": asdict(daily),
     }
 
