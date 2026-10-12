@@ -323,6 +323,11 @@ on a separate branch from current main, keeping dependencies and merge order exp
 Prioritize failures/review feedback, and merge only after all mandatory checks pass
 on the exact current PR head with no conflicts or unresolved review comments.
 
+The opt-in [one-command local check](runbooks/commerce-local-check.md) combines full
+quality gates with isolated real Docker timeout-cleanup and Spark-memory smoke tests.
+It retains step logs, JUnit and failure evidence without starting an existing stack.
+It is not full commerce acceptance and does not disable or replace mandatory CI.
+
 Next correction acceptance foundation: a deterministic three-snapshot commerce scenario
 with a literal latest-order/daily-revenue/customer-history oracle, compatible S3 landing,
 conditional replay, chronological planning and hash-bound checkpoint smoke checks.
