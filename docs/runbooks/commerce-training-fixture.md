@@ -525,7 +525,11 @@ timestamp change expires the previous current row at the batch timestamp and ins
 deterministic new version. Unchanged customers produce no version. The job fails when a
 changed batch is not newer than current history, and verifies one current row plus valid
 effective periods after each run. Run batches in ascending `source_batch_at` order;
-identical replay inserts zero rows.
+identical replay inserts zero rows and creates no snapshot. Closing the old period and
+inserting its replacement use one staged Iceberg MERGE, so a failure cannot publish
+only the closed period. The target rejects both zero and multiple current versions
+per customer. The existing related-snapshot acceptance exercises failures immediately
+before and after publication, mixed new/changed customers, and committed-batch retry.
 
 The daily gold job reads one explicitly selected batch of validated orders, customers,
 products, and payments and publishes `lakehouse.gold.commerce_daily`. Its grain is

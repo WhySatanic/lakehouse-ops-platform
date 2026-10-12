@@ -5,6 +5,13 @@ pull requests. Dates are intentionally absent: merge only completed, understood 
 The roadmap is open-ended; completing these phases establishes a stable core and creates
 new expansion tracks rather than ending development.
 
+The accepted [2026-10-12 repository audit](repository-audit-2026-10-12.md) determines
+the next delivery order: integrity and continuation after late correction, one shared
+runner/demo/CI path, repeated whole-pipeline measurements, then a reproducible release.
+Its acceptance criteria take precedence over expanding optional profiles. Atomic SCD2
+publication is only part of the first milestone; ordinary queue continuation after a
+late correction must also pass before that milestone is considered complete.
+
 ## Phase 1 — reliable foundation
 
 - [x] Repository standards, CI quality gate, architecture, and roadmap.
@@ -263,6 +270,9 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
   orders, customers, and payment-quality measures.
   - [x] Maintain replay-safe customer SCD2 history with deterministic versions, one
     current row, contiguous effective periods, and rejection of out-of-order changes.
+    Forward publication closes and inserts in one Iceberg snapshot, with real
+    pre/post-publication failure and snapshot-stable retry acceptance. Exactly one
+    current version is required, including detection of missing current versions.
   - [x] Publish the tested batch-scoped daily gold mart with order-day revenue, buying
     customers, and payment-quality measures, including replay and Trino checks.
   - [x] Provide an opt-in current daily mart for explicitly declared complete snapshots,

@@ -7,6 +7,7 @@ import hashlib
 import json
 from pathlib import Path
 
+from check_commerce_scd2_atomic import check_atomic_history
 from commerce_customer_scd2 import apply_customer_history, rebuild_customer_history
 from gold_commerce_current import TABLE, publish_snapshot
 from gold_commerce_daily import summarize
@@ -196,6 +197,7 @@ def main() -> None:
         )
         assert spark.table(TABLE).count() == 1
         assert spark.table(TABLE).first().captured_revenue_cents == 1500
+        check_atomic_history(spark, customers)
         print(
             json.dumps(
                 {
@@ -204,6 +206,7 @@ def main() -> None:
                     "replay_and_stale_snapshot": "verified",
                     "removed_day": "verified",
                     "customer_history": "literal_oracle_verified",
+                    "atomic_forward_history": "failure_boundaries_and_replay_verified",
                     "customer_versions_inserted": history_insertions,
                     "customer_replay": "verified",
                     "old_changed_customer": "rejected_without_writes",

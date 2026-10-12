@@ -115,11 +115,10 @@ def create_table(spark: SparkSession, bucket: str) -> None:
 
 def validate_target(spark: SparkSession) -> None:
     target = spark.table("lakehouse.gold.dim_customers_scd2")
-    duplicate_current = (
-        target.filter(F.col("is_current"))
-        .groupBy("customer_id")
-        .count()
-        .filter(F.col("count") > 1)
+    invalid_current = (
+        target.groupBy("customer_id")
+        .agg(F.sum(F.when(F.col("is_current"), 1).otherwise(0)).alias("current_versions"))
+        .filter(F.col("current_versions") != 1)
         .count()
     )
     invalid_periods = target.filter(
@@ -136,7 +135,7 @@ def validate_target(spark: SparkSession) -> None:
         )
         .count()
     )
-    if duplicate_current or invalid_periods or discontinuous_periods:
+    if invalid_current or invalid_periods or discontinuous_periods:
         raise RuntimeError("customer SCD2 target invariants failed")
 
 
@@ -198,17 +197,6 @@ def apply_customer_history(
     target_rows_before = target.count()
     current_rows_before = target.filter(F.col("is_current")).count()
 
-    changed.createOrReplaceTempView("commerce_customer_history_changes")
-    spark.sql(
-        """
-        MERGE INTO lakehouse.gold.dim_customers_scd2 AS target
-        USING commerce_customer_history_changes AS source
-        ON target.customer_id = source.customer_id
-           AND target.is_current = true
-        WHEN MATCHED AND target.attribute_hash <> source.attribute_hash THEN
-          UPDATE SET valid_to = source.valid_from, is_current = false
-        """
-    )
     new_versions = changed.select(
         F.sha2(
             F.concat_ws(":", "customer_id", "attribute_hash", "source_batch_id"),
@@ -226,7 +214,31 @@ def apply_customer_history(
         F.lit(True).alias("is_current"),
     )
     if changed_rows:
-        new_versions.writeTo("lakehouse.gold.dim_customers_scd2").append()
+        # Existing customers need a matched closing row and an unmatched insert row.
+        # New customers need only the insert row. Publish both in one snapshot.
+        closing = new_versions.join(current.select("customer_id"), "customer_id").withColumn(
+            "merge_customer_id", F.col("customer_id"),
+        )
+        inserts = new_versions.withColumn("merge_customer_id", F.lit(None).cast("string"))
+        closing.unionByName(inserts).createOrReplaceTempView("commerce_customer_history_changes")
+        spark.sql(
+            """
+            MERGE INTO lakehouse.gold.dim_customers_scd2 AS target
+            USING commerce_customer_history_changes AS source
+            ON target.customer_id = source.merge_customer_id
+               AND target.is_current = true
+            WHEN MATCHED THEN
+              UPDATE SET valid_to = source.valid_from, is_current = false
+            WHEN NOT MATCHED AND source.merge_customer_id IS NULL THEN
+              INSERT (customer_version_id, customer_id, full_name, email,
+                      email_is_missing, registered_at, attribute_hash, source_batch_id,
+                      valid_from, valid_to, is_current)
+              VALUES (source.customer_version_id, source.customer_id, source.full_name,
+                      source.email, source.email_is_missing, source.registered_at,
+                      source.attribute_hash, source.source_batch_id, source.valid_from,
+                      source.valid_to, source.is_current)
+            """
+        )
 
     validate_target(spark)
     target_after = spark.table("lakehouse.gold.dim_customers_scd2")
