@@ -327,6 +327,12 @@ on a separate branch from current main, keeping dependencies and merge order exp
 Prioritize failures/review feedback, and merge only after all mandatory checks pass
 on the exact current PR head with no conflicts or unresolved review comments.
 
+The opt-in [verified Maven build retry](runbooks/verified-maven-build.md) switches
+to a fixed alternate Maven Central endpoint only after checksum rejection, retaining
+the reviewed Iceberg pins and bounded attempts. Real cold-builder acceptance covers
+successful recovery and continued rejection of a wrong pin. This is download
+resilience, not a measured CI speedup or cross-job cache.
+
 The opt-in [one-command local check](runbooks/commerce-local-check.md) combines full
 quality gates with isolated real Docker timeout-cleanup and Spark-memory smoke tests.
 It retains step logs, JUnit and failure evidence without starting an existing stack.
