@@ -17,6 +17,7 @@ from lakehouse_ops.commerce_run_journal import CommerceJournalError
 
 def inspect_containers(
     path: Path, *, project: str, limit: int = 10, run: Any = subprocess.run,
+    run_id: str | None = None, container_name: str | None = None,
 ) -> dict[str, Any]:
     if not project or type(limit) is not int or not 1 <= limit <= 100:
         raise ValueError("requires an explicit project and limit between 1 and 100")
@@ -28,7 +29,9 @@ def inspect_containers(
             rows = connection.execute(
                 "SELECT run_id,batch_id,manifest_sha256,service,container_name,project_hint "
                 "FROM commerce_container_events WHERE project_hint=? AND event='launch_intent' "
-                "ORDER BY sequence DESC LIMIT ?", (project, limit + 1),
+                "AND (? IS NULL OR run_id=?) AND (? IS NULL OR container_name=?) "
+                "ORDER BY sequence DESC LIMIT ?",
+                (project, run_id, run_id, container_name, container_name, limit + 1),
             ).fetchall()
     except sqlite3.Error as error:
         raise CommerceJournalError(f"cannot inspect container journal: {path}: {error}") from error
