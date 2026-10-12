@@ -306,6 +306,10 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
     fresh catalogs, with interrupted/retry/audit/idle timing, Spark container memory
     and unchanged row/file evidence. See [recovery observations](runbooks/commerce-recovery-acceptance.md).
     This does not measure SIGKILL or failure inside a transaction, maintenance or capacity.
+  - [x] Retain repeated read-only detail/mart queries at two completed fixture volumes,
+    with excluded warm-up, balanced alternating order, raw query IDs and metric ranges,
+    unchanged snapshots/checkpoint and reconciled results. See [query observations](runbooks/commerce-query-observations.md).
+    These warm reads do not measure full-pipeline capacity or concurrent throughput.
 
 Exit criterion: one documented command and one scheduled path take a reproducible source
 batch through quality checks into a Trino-queryable gold mart, with safe reruns, bounded
