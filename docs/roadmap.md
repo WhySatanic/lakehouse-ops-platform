@@ -286,6 +286,9 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
     run, including verification retries, without claiming volume benchmarks.
   - [x] Retain two-size, checksum-verified source-fixture generation time, Python heap
     peak, and JSONL byte-growth evidence in CI, separate from Spark capacity claims.
+  - [x] Provide opt-in per-container Spark cgroup-v2 memory observations with a real
+    Parquet write/read smoke test. Full commerce multi-volume capacity and recovery
+    measurements remain planned; see [memory diagnostics](runbooks/spark-container-memory.md).
 
 Exit criterion: one documented command and one scheduled path take a reproducible source
 batch through quality checks into a Trino-queryable gold mart, with safe reruns, bounded

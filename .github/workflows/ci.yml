@@ -78,6 +78,10 @@ jobs:
         run: >-
           LAKEOPS_RUN_DOCKER_TIMEOUT_SMOKE=1 uv run pytest
           tests/integration/test_commerce_stage_timeout.py -q -o addopts=''
+      - name: Verify Spark container memory observation
+        run: >-
+          LAKEOPS_RUN_SPARK_MEMORY_SMOKE=1 uv run pytest
+          tests/integration/test_spark_memory.py -q -s -o addopts=''
       - name: Start core lakehouse services
         run: >-
           docker compose --profile catalog --profile compute up -d --wait
