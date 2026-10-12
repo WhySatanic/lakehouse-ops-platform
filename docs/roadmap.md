@@ -367,6 +367,13 @@ container and retains final mart replay as a separate attempt without a checkpoi
 Container launch intent, hash-bound labels and completion/timeout evidence now share
 the corresponding run ID; automatic orphan-stage recovery remains planned.
 
+An opt-in [late customer correction drill](runbooks/commerce-late-customer-correction.md)
+extends linked acceptance with an earlier-effective observation arriving after the three
+snapshots. It runs real S3/bronze/customer-silver ingestion and the existing history rebuild,
+checks literal corrected periods and snapshot-stable replay, and preserves current revenue
+and processing checkpoint. This is manual single-writer history maintenance, not automatic
+late-batch planning or a fourth checkpoint; the default forward runner is unchanged.
+
 The opt-in [one-command linked demo](runbooks/commerce-linked-demo.md) wraps that
 acceptance in a fresh uniquely named local Docker stack, automatically selects
 ports, retains logs and evidence, and stops only its own services without deleting
