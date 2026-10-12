@@ -15,6 +15,7 @@ from lakehouse_ops.commerce_gold_gate import (
     check_commerce_gold_with_retry,
     validate_commerce_gold_retry,
 )
+from lakehouse_ops.commerce_run_journal import CommerceRunJournal
 from lakehouse_ops.ingestion.commerce_batches import CommerceBatchPlanner
 from lakehouse_ops.trino import TrinoProtocolError, TrinoQueryError
 
@@ -77,8 +78,35 @@ def run_commerce_batch(
     attempts: int = 1,
     delay_seconds: float = 2,
     clock: Callable[[], float] = time.perf_counter,
+    journal: CommerceRunJournal | None = None,
 ) -> dict[str, Any]:
     validate_commerce_gold_retry(attempts, delay_seconds)
+    if journal:
+        journal.record("planning", "started")
+    try:
+        report = _run_commerce_batch(
+            planner, query, run_stage=run_stage, attempts=attempts,
+            delay_seconds=delay_seconds, clock=clock, journal=journal,
+        )
+    except BaseException as error:
+        if journal:
+            journal.record(journal.phase, "failed", error_type=type(error).__name__)
+        raise
+    if journal:
+        journal.record("run", report["status"])
+    return report
+
+
+def _run_commerce_batch(
+    planner: CommerceBatchPlanner,
+    query: Callable[[str], list[dict[str, Any]]],
+    *,
+    run_stage: Callable[[str, dict[str, str]], None],
+    attempts: int = 1,
+    delay_seconds: float = 2,
+    clock: Callable[[], float] = time.perf_counter,
+    journal: CommerceRunJournal | None = None,
+) -> dict[str, Any]:
     started = clock()
     plan = planner.plan(max_batches=1)
     if not plan["batches"]:
@@ -87,15 +115,23 @@ def run_commerce_batch(
     planning_seconds = last - started
     batch = plan["batches"][0]
     batch_id = batch["batch_id"]
+    if journal:
+        journal.record("planning", "selected", batch=batch)
     completed = []
     stage_seconds: dict[str, float] = {}
     for service in COMMERCE_STAGES:
+        if journal:
+            journal.record(service, "started")
         run_stage(service, batch)
+        if journal:
+            journal.record(service, "completed")
         now = clock()
         stage_seconds[service] = now - last
         last = now
         completed.append(service)
     try:
+        if journal:
+            journal.record("verification", "started")
         verification = check_commerce_gold_with_retry(
             query, batch_id, attempts=attempts, delay_seconds=delay_seconds,
         )
@@ -104,7 +140,12 @@ def run_commerce_batch(
     now = clock()
     verification_seconds = now - last
     last = now
+    if journal:
+        journal.record("verification", "completed")
+        journal.record("checkpoint", "started")
     checkpoint = planner.commit(batch_id, expected_manifest_sha256=batch["manifest_sha256"])
+    if journal:
+        journal.record("checkpoint", "completed")
     finished = clock()
     return {
         "status": "ready", "batch_id": batch_id, "completed_stages": completed,

@@ -293,10 +293,18 @@ late-data correction, freshness monitoring, and retained operational evidence.
 
 ## Sustainable contribution rhythm
 
+The commerce CLI retains per-attempt local SQLite execution events, including stage
+transitions, hash-bound batch identity, failures and checkpoint intent/completion.
+Real process-exit acceptance preserves incomplete evidence across a new attempt.
+Combined timeout/retry acceptance retains the failed attempt, records a new run ID,
+and advances the checkpoint only after successful gold verification.
+The processing checkpoint remains authoritative; journal events are diagnostic,
+not automatic restart instructions or transactional coordination with Iceberg.
+
 Compose commerce stages now have a configurable wall-clock limit, unique container
 ownership and scoped timeout cleanup. Real Docker acceptance verifies removal on two
 attempts; unit checks cover failed cleanup, unchanged checkpoint and a verified retry.
-Durable execution journaling and abrupt-owner-exit recovery remain separate work.
+Abrupt-owner-exit recovery remains separate work.
 
 Do not idle solely because a PR's CI is pending. Continue one independent increment
 on a separate branch from current main, keeping dependencies and merge order explicit.
