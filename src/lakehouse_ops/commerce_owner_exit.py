@@ -8,6 +8,7 @@ import multiprocessing as mp
 import os
 import sqlite3
 import time
+from collections.abc import Callable
 from contextlib import redirect_stderr
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,15 @@ from lakehouse_ops.ingestion.commerce_fixture import (
 )
 from lakehouse_ops.ingestion.commerce_s3_landing import CommerceS3LandingZone
 from lakehouse_ops.trino import TrinoClient
+
+
+def measured_phase(timings: dict[str, float], phase: str, operation: Callable[[], Any],
+                   *, clock: Callable[[], float] = time.perf_counter) -> Any:
+    started = clock()
+    try:
+        return operation()
+    finally:
+        timings[phase] = round(clock() - started, 6)
 
 
 def force_owner_exit(target: Any, args: tuple, *, timeout: float = 1800) -> int:
@@ -87,13 +97,18 @@ def main() -> int:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--s3-endpoint-url", required=True)
     parser.add_argument("--server", required=True)
+    parser.add_argument("--orders", type=int, default=100)
     args = parser.parse_args()
+    if not 100 <= args.orders <= 10_000:
+        parser.error("--orders must be between 100 and 10000")
     if not os.environ.get("COMPOSE_PROJECT_NAME", "").startswith("lakehouse-ops-owner-exit"):
         parser.error("requires dedicated lakehouse-ops-owner-exit project")
     if args.output.exists() and any(args.output.iterdir()):
         parser.error("requires empty output")
     args.output.mkdir(parents=True, exist_ok=True)
-    report: dict[str, Any] = {"status": "failed", "scope": "owner_kill_after_completed_gold"}
+    timings: dict[str, float] = {}
+    report: dict[str, Any] = {"status": "failed", "scope": "owner_kill_after_completed_gold",
+                              "fixture_orders": args.orders, "phase_elapsed_seconds": timings}
     state = args.output / "checkpoint.json"
     try:
         with commerce_runner_lock(), TrinoClient(
@@ -103,14 +118,13 @@ def main() -> int:
                 raise ValueError("requires fresh commerce catalog")
             s3 = boto3.client("s3", endpoint_url=args.s3_endpoint_url, region_name="us-east-1")
             fixture = generate_commerce_fixture(args.output / "fixture", CommerceFixtureConfig(
-                customers=10, products=5, orders=100, null_customer_emails=1,
+                customers=10, products=5, orders=args.orders, null_customer_emails=1,
                 duplicate_orders=1, late_orders=1, invalid_payments=1,
                 batch_at="2026-02-03T00:00:00+00:00",
             ))
             CommerceS3LandingZone(s3, bucket="lakehouse").write(fixture.path)
-        report["owner_exit_code"] = force_owner_exit(
-            owner, (args.output, args.s3_endpoint_url, args.server),
-        )
+        report["owner_exit_code"] = measured_phase(timings, "interrupted_attempt", lambda:
+            force_owner_exit(owner, (args.output, args.s3_endpoint_url, args.server)))
         # Reacquisition proves OS-lock release without deleting a possibly live lock file.
         with commerce_runner_lock(), TrinoClient(
             args.server, user="lakehouse-recovery-drill",
@@ -124,7 +138,8 @@ def main() -> int:
             if not first or first[-1][1:] != (COMMERCE_STAGES[-1], "started"):
                 raise ValueError("incomplete owner journal boundary missing")
             report.update(checkpoint_before_retry="absent", incomplete_owner_events=first)
-            before = audit_tables(trino.query)
+            before = measured_phase(timings, "audit_before_retry", lambda:
+                audit_tables(trino.query))
             report["published_before_retry"] = before
             if not before:
                 raise ValueError("completed publication has no tables")
@@ -134,13 +149,13 @@ def main() -> int:
                 (args.output / "retry.log").open("w", encoding="utf-8") as log,
                 redirect_stderr(log),
             ):
-                retry = run_commerce_batch(
+                retry = measured_phase(timings, "retry", lambda: run_commerce_batch(
                     planner, trino.query, attempts=3, journal=journal,
                     run_stage=lambda service, batch: run_compose_stage(
                         service, batch, bucket="lakehouse", journal=journal,
                     ),
-                )
-            after = audit_tables(trino.query)
+                ))
+            after = measured_phase(timings, "audit_after_retry", lambda: audit_tables(trino.query))
             report.update(retry=retry, published_after_retry=after)
             def data(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 return [{k: v for k, v in row.items() if k != "snapshots"} for row in rows]
@@ -153,7 +168,8 @@ def main() -> int:
             def no_compute(*_: Any) -> None:
                 raise ValueError("idle started compute")
 
-            idle = run_commerce_batch(planner, trino.query, run_stage=no_compute)
+            idle = measured_phase(timings, "idle_replay", lambda:
+                run_commerce_batch(planner, trino.query, run_stage=no_compute))
             if idle["status"] != "idle":
                 raise ValueError("retry did not commit checkpoint")
             report.update(status="ready", idle=idle)
