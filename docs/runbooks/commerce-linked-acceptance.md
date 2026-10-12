@@ -45,6 +45,39 @@ stdout/Python stderr. Native Docker/Spark stderr remains in the invoking termina
 Retain it separately for diagnostics. Previously committed checkpoints remain
 authoritative on later acceptance failure; do not reset them to obtain a green report.
 
+All eight production stages and the optional current mart now receive their batch's
+`CommerceRunJournal`. Before launching each Compose container, the standard executor
+persists its unique name, service, project hint, run ID and hash-bound batch identity.
+The same identity is attached as Docker labels; completion or scoped timeout cleanup
+is appended to `commerce_container_events`. This closes the acceptance wrapper's
+previous gap: it retained pipeline events but did not pass ownership to its executor.
+
+The final current-mart replay has a separate run ID in the same journal, including
+verification and a terminal ready/failed event. It never writes a checkpoint and
+never appends pipeline events to an already completed batch run. A successful linked
+scenario therefore has four ready runs but only three completed checkpoints, with
+28 launch intents and 28 completed container events. A replay failure preserves the
+three existing checkpoints and is retained as its own failed attempt. The compute-free
+idle check starts no container and adds no journal attempt.
+
+These records are diagnostic ownership evidence, not automatic orphan removal,
+crash recovery inside an active Spark stage, or distributed coordination. A forced
+owner exit can still leave a running container; inspect its exact recorded identity
+before any manual cleanup. Existing stage timeouts and scoped cleanup are unchanged.
+
+After a fresh successful run, verify retained ownership evidence without modifying
+the journal, checkpoint or report:
+
+```powershell
+$env:LAKEOPS_RUN_LINKED_OWNERSHIP_SMOKE = '1'
+$env:LAKEOPS_LINKED_OWNERSHIP_DIRECTORY = 'artifacts/commerce-linked-demo'
+uv run --frozen pytest tests/integration/test_commerce_linked_ownership.py --no-cov
+```
+
+The retained-evidence test checks distinct batch/replay run IDs, all 28 unique
+containers' intent/completion pairs, manifest identity and unchanged evidence hashes.
+Old acceptance journals without ownership events do not satisfy this smoke test.
+
 Only this acceptance wrapper inserts the optional current-mart/oracle step before
 checkpoint. The default scheduled pipeline remains unchanged. This is a bounded,
 single-writer full-snapshot scenario, not general CDC, deletions, multi-writer
@@ -53,6 +86,19 @@ The separate history-rebuild work is not invoked or required by this driver.
 No version or release change.
 
 ## Local evidence, 2026-10-12
+
+The fresh `lakehouse-ops-linked-ownership-20261012` stack completed the corrected
+driver in 377.24 seconds including startup (before service stop). Revenue/history
+oracles passed for all three snapshots. SQLite retained four ready runs, exactly
+three checkpoints, and 28 unique containers with 28 launch intents and 28 completions.
+A live Spark container's run/batch/manifest/project labels matched its prelaunch row.
+The retained-evidence smoke passed and preserved all three evidence-file hashes.
+Scoped timeout/label Docker tests also passed. Only this experiment's services were
+stopped; volumes, checkpoints and logs were retained, with no running project container.
+
+Report: `artifacts/linked-ownership-20261012/linked.json`, SHA256
+`c8ef0e80f400e065e32f9445632ad7816cac2f539d63df7c8a54caccf2b03ee9`.
+The earlier unowned journal was rejected by the new retained-evidence test, as expected.
 
 The isolated `lakehouse-ops-linked-v3` reference stack completed all three batches
 with `status=ready`. Trino observed 1000, 1500 and 2200 cents, the exact customer

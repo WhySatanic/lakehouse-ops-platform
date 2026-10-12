@@ -351,6 +351,11 @@ It retains a journal and per-batch evidence, verifies snapshot-stable current-ma
 replay and a compute-free idle run. This is a bounded single-writer scenario, not
 general CDC or retroactive customer-history correction.
 
+Linked acceptance propagates the batch journal to every production/current-mart
+container and retains final mart replay as a separate attempt without a checkpoint.
+Container launch intent, hash-bound labels and completion/timeout evidence now share
+the corresponding run ID; automatic orphan-stage recovery remains planned.
+
 The opt-in [one-command linked demo](runbooks/commerce-linked-demo.md) wraps that
 acceptance in a fresh uniquely named local Docker stack, automatically selects
 ports, retains logs and evidence, and stops only its own services without deleting

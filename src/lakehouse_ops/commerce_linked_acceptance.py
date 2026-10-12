@@ -10,7 +10,7 @@ from collections.abc import Callable
 from contextlib import redirect_stderr
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import boto3
 
@@ -24,6 +24,12 @@ from lakehouse_ops.trino import TrinoClient
 
 CURRENT_STAGE = "spark-commerce-current-gold"
 CURRENT_TABLE = "lakehouse.gold.commerce_current_daily"
+
+
+class LinkedStageRunner(Protocol):
+    def __call__(
+        self, service: str, batch: dict[str, str], *, journal: CommerceRunJournal,
+    ) -> None: ...
 
 
 def utc_timestamp(value: str | None) -> str | None:
@@ -77,7 +83,7 @@ def verify_snapshot(
 
 def exercise_linked_batches(
     planner: CommerceBatchPlanner, query: Callable[[str], list[dict[str, Any]]],
-    run_stage: Callable[[str, dict[str, str]], None], expected: dict[str, Any],
+    run_stage: LinkedStageRunner, expected: dict[str, Any],
     output: Path, report: dict[str, Any],
 ) -> None:
     pending = planner.plan(max_batches=4)["batches"]
@@ -97,10 +103,10 @@ def exercise_linked_batches(
         ) -> None:
             if selected["batch_id"] != wanted_batch["batch_id"]:
                 raise ValueError("planner selected a different batch")
-            run_stage(service, selected)
+            run_stage(service, selected, journal=run_journal)
             if service == COMMERCE_STAGES[-1]:
                 run_journal.record(CURRENT_STAGE, "started")
-                run_stage(CURRENT_STAGE, selected)
+                run_stage(CURRENT_STAGE, selected, journal=run_journal)
                 current_sample["oracle"] = verify_snapshot(
                     query, expected, ordinal, wanted_batch["batch_id"],
                 )
@@ -114,11 +120,22 @@ def exercise_linked_batches(
         sample["status"] = "ready"
     snapshots_sql = ('SELECT count(*) AS snapshots FROM lakehouse.gold.'
                      '"commerce_current_daily$snapshots"')
-    before = query(snapshots_sql)
-    run_stage(CURRENT_STAGE, pending[-1])
-    verify_snapshot(query, expected, 2, pending[-1]["batch_id"])
-    if query(snapshots_sql) != before:
-        raise ValueError("current mart replay added a snapshot")
+    replay = CommerceRunJournal(output / "run-journal.sqlite3")
+    replay.record("replay", "selected", batch=pending[-1])
+    try:
+        before = query(snapshots_sql)
+        replay.record(CURRENT_STAGE, "started")
+        run_stage(CURRENT_STAGE, pending[-1], journal=replay)
+        replay.record(CURRENT_STAGE, "completed")
+        replay.record("verification", "started")
+        verify_snapshot(query, expected, 2, pending[-1]["batch_id"])
+        if query(snapshots_sql) != before:
+            raise ValueError("current mart replay added a snapshot")
+        replay.record("verification", "completed")
+    except BaseException as error:
+        replay.record(replay.phase, "failed", error_type=type(error).__name__)
+        raise
+    replay.record("run", "ready")
 
     def no_compute(*_: Any) -> None:
         raise ValueError("idle checkpoint replay started compute")
@@ -172,8 +189,8 @@ def main() -> int:
             ):
                 exercise_linked_batches(
                     planner, trino.query,
-                    lambda service, batch: run_compose_stage(
-                        service, batch, bucket="lakehouse",
+                    lambda service, batch, *, journal: run_compose_stage(
+                        service, batch, bucket="lakehouse", journal=journal,
                     ),
                     expected, args.output, report,
                 )

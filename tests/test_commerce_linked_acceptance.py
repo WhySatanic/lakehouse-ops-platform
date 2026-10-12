@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
 
 from lakehouse_ops.commerce_change_scenario import generate_change_scenario
+from lakehouse_ops.commerce_journal_inspection import inspect_journal
 from lakehouse_ops.commerce_linked_acceptance import (
     CURRENT_STAGE,
     exercise_linked_batches,
@@ -15,7 +17,8 @@ from lakehouse_ops.commerce_pipeline import COMMERCE_STAGES
 
 
 @pytest.mark.parametrize("failure", [None, "oracle", "current_stage", "replay_snapshot",
-                                     "revenue", "orders", "current_flag"])
+                                     "revenue", "orders", "current_flag", "replay_stage",
+                                     "ownership"])
 def test_linked_snapshot_oracles_precede_checkpoint(tmp_path: Path, failure: str | None):
     generate_change_scenario(tmp_path / "scenario")
     expected = json.loads((tmp_path / "scenario" / "expected.json").read_text())
@@ -24,6 +27,7 @@ def test_linked_snapshot_oracles_precede_checkpoint(tmp_path: Path, failure: str
     stages = []
     index = 0
     current_calls = 0
+    owners = []
 
     class Planner:
         def plan(self, **kwargs):
@@ -36,14 +40,23 @@ def test_linked_snapshot_oracles_precede_checkpoint(tmp_path: Path, failure: str
             commits.append(batch_id)
             return {"created": True}
 
-    def stage(service, batch):
+    def stage(service, batch, *, journal=None):
         nonlocal index, current_calls
+        assert journal is not None, "linked stages must retain container ownership"
+        assert journal.batch == batch
         index = next(i for i, item in enumerate(batches) if item["batch_id"] == batch["batch_id"])
+        owners.append((journal.run_id, batch["batch_id"]))
+        journal.record_container(service, f"owned-{len(owners)}", "launch_intent",
+                                 batch=batch, project_hint="linked-test")
+        if failure == "ownership" and index == 1:
+            raise OSError("ownership journal failed")
         stages.append(service)
         if service == CURRENT_STAGE:
             current_calls += 1
             if failure == "current_stage" and index == 1:
                 raise RuntimeError("current publication failed")
+            if failure == "replay_stage" and current_calls == 4:
+                raise RuntimeError("replay publication failed")
 
     def query(sql):
         if "$snapshots" in sql:
@@ -72,11 +85,14 @@ def test_linked_snapshot_oracles_precede_checkpoint(tmp_path: Path, failure: str
 
     report = {}
     if failure:
-        with pytest.raises((ValueError, RuntimeError)):
+        with pytest.raises((ValueError, RuntimeError, OSError)):
             exercise_linked_batches(Planner(), query, stage, expected, tmp_path, report)
-        assert len(commits) == (3 if failure == "replay_snapshot" else
+        assert len(commits) == (3 if failure in {"replay_snapshot", "replay_stage"} else
                                 2 if failure == "orders" else 1)
         assert "samples" in report
+        attempts = inspect_journal(tmp_path / "run-journal.sqlite3")["runs"]
+        assert attempts[0]["outcome"] == "failed"
+        assert attempts[0]["checkpoint_completed_events"] == 0
     else:
         exercise_linked_batches(Planner(), query, stage, expected, tmp_path, report)
         assert report["status"] == "ready"
@@ -86,6 +102,21 @@ def test_linked_snapshot_oracles_precede_checkpoint(tmp_path: Path, failure: str
             [1000, 1500, 2200]
         )
         assert len(commits) == 3
+        attempts = inspect_journal(tmp_path / "run-journal.sqlite3")["runs"]
+        assert len(attempts) == 4
+        assert all(attempt["outcome"] == "ready" for attempt in attempts)
+        assert [attempt["checkpoint_completed_events"] for attempt in attempts] == [0, 1, 1, 1]
+        assert len(set(run_id for run_id, _ in owners)) == 4
+        for i, batch in enumerate(batches):
+            selected = owners[i * 9:(i + 1) * 9]
+            assert len({run_id for run_id, _ in selected}) == 1
+            assert {batch_id for _, batch_id in selected} == {batch["batch_id"]}
+        assert owners[-1][0] != owners[-2][0]
+        with sqlite3.connect(tmp_path / "run-journal.sqlite3") as connection:
+            count = connection.execute(
+                "SELECT count(*) FROM commerce_container_events",
+            ).fetchone()[0]
+            assert count == 28
 
 
 def test_wrong_pending_scenario_rejected_before_compute(tmp_path: Path):
