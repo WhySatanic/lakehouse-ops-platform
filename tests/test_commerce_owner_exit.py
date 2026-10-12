@@ -41,15 +41,20 @@ def test_actual_owned_process_kill_and_lock_release(tmp_path: Path, mode):
 
 
 @pytest.mark.parametrize("failure", [None, "existing", "checkpoint", "journal", "files", "idle"])
-def test_main_retains_failure_or_verified_retry(tmp_path: Path, monkeypatch, failure):
+@pytest.mark.parametrize("orders", [100, 1000])
+def test_main_retains_failure_or_verified_retry(tmp_path: Path, monkeypatch, failure, orders):
     output = tmp_path / "drill"
     monkeypatch.setenv("COMPOSE_PROJECT_NAME", "lakehouse-ops-owner-exit-test")
     monkeypatch.setattr(sys, "argv", ["drill", "--output", str(output),
-                                    "--s3-endpoint-url", "unused", "--server", "unused"])
+                                    "--s3-endpoint-url", "unused", "--server", "unused",
+                                    "--orders", str(orders)])
     monkeypatch.setattr(drill.boto3, "client", lambda *a, **kw: object())
-    monkeypatch.setattr(drill, "generate_commerce_fixture", lambda *a: SimpleNamespace(
-        path=output / "fixture", batch_id="a" * 16,
-    ))
+    def fixture(path, config):
+        assert config.orders == orders
+        assert (config.customers, config.products, config.invalid_payments) == (10, 5, 1)
+        return SimpleNamespace(path=path, batch_id="a" * 16)
+
+    monkeypatch.setattr(drill, "generate_commerce_fixture", fixture)
     monkeypatch.setattr(drill, "CommerceS3LandingZone", lambda *a, **kw: SimpleNamespace(
         write=lambda *_: None,
     ))
@@ -113,9 +118,58 @@ def test_main_retains_failure_or_verified_retry(tmp_path: Path, monkeypatch, fai
     assert drill.main() == (2 if failure else 0)
     report = json.loads((output / "owner-exit.json").read_text())
     assert report["status"] == ("failed" if failure else "ready")
+    assert report["fixture_orders"] == orders
+    assert all(value >= 0 for value in report["phase_elapsed_seconds"].values())
     if not failure:
         assert report["checkpoint_before_retry"] == "absent"
         assert report["owner_exit_code"] == -9
+        assert set(report["phase_elapsed_seconds"]) == {
+            "interrupted_attempt", "audit_before_retry", "retry",
+            "audit_after_retry", "idle_replay",
+        }
+    elif failure == "existing":
+        assert report["phase_elapsed_seconds"] == {}
+    elif failure in ("checkpoint", "journal"):
+        assert set(report["phase_elapsed_seconds"]) == {"interrupted_attempt"}
+    elif failure == "files":
+        assert set(report["phase_elapsed_seconds"]) == {
+            "interrupted_attempt", "audit_before_retry", "retry", "audit_after_retry",
+        }
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_measured_phase_retains_result_or_original_error(failure):
+    ticks = iter([3.0, 5.12345678])
+    timings = {}
+    sentinel = RuntimeError("original phase failure")
+
+    def operation():
+        if failure:
+            raise sentinel
+        return {"status": "ready"}
+
+    if failure:
+        with pytest.raises(RuntimeError) as error:
+            drill.measured_phase(timings, "retry", operation, clock=lambda: next(ticks))
+        assert error.value is sentinel
+    else:
+        assert drill.measured_phase(timings, "retry", operation, clock=lambda: next(ticks)) == {
+            "status": "ready",
+        }
+    assert timings == {"retry": 2.123457}
+
+
+@pytest.mark.parametrize("orders", ["99", "10001", "0", "not-an-integer"])
+def test_invalid_volume_rejected_before_output_or_network(tmp_path, monkeypatch, orders):
+    output = tmp_path / "absent"
+    monkeypatch.setattr(sys, "argv", ["drill", "--output", str(output),
+                                    "--s3-endpoint-url", "unused", "--server", "unused",
+                                    "--orders", orders])
+    monkeypatch.setattr(drill.boto3, "client", lambda *a, **kw: pytest.fail("no network"))
+    with pytest.raises(SystemExit) as error:
+        drill.main()
+    assert error.value.code == 2
+    assert not output.exists()
 
 
 def test_owner_passes_pipeline_journal_to_every_container_before_boundary(tmp_path, monkeypatch):

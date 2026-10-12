@@ -127,6 +127,17 @@ uv run --frozen python -m lakehouse_ops.commerce_history_correction_demo \
 The maintenance verifies a literal three-period history and unchanged revenue/checkpoint;
 it does not automatically checkpoint the late source as a fourth forward batch.
 
+For a fresh scoped measurement of two full pipeline volumes, including Spark memory,
+Iceberg files, Trino query statistics and idle replay, use the
+[one-command pipeline profile](docs/runbooks/commerce-pipeline-profile-demo.md):
+
+```bash
+uv run --frozen python -m lakehouse_ops.commerce_pipeline_profile_demo \
+  --output artifacts/commerce-pipeline-profile-demo --orders 100 1000
+```
+
+The second sample shares a warm stack; this is not production capacity or crash recovery.
+
 For forced runner termination after completed gold and a verified retry on another
 fresh stack, use the [one-command owner-exit demo](docs/runbooks/commerce-owner-exit-demo.md):
 

@@ -24,6 +24,8 @@ SCENARIOS = {
     "linked-history": ("commerce_linked_acceptance", "linked.json",
                        "lakehouse-ops-linked-history-demo-",
                        "three_linked_snapshots_and_manual_late_customer_maintenance", 2400),
+    "profile": ("commerce_pipeline_profile", "profile.json", "lakehouse-ops-scale-demo-",
+                "two_volume_pipeline_fresh_reference_stack", 3600),
 }
 
 
@@ -39,13 +41,21 @@ def free_ports() -> dict[str, str]:
 
 
 def demo(root: Path, output: Path, *, run: Any = subprocess.run,
-         scenario: str = "linked") -> dict[str, Any]:
+         scenario: str = "linked", orders: tuple[int, int] | None = None) -> dict[str, Any]:
     if scenario not in SCENARIOS:
         raise ValueError("unsupported reference-stack scenario")
     module, retained, prefix, scope, timeout = SCENARIOS[scenario]
+    if scenario == "profile":
+        orders = (100, 1000) if orders is None else orders
+        if len(orders) != 2 or not 100 <= orders[0] < orders[1] <= 10_000:
+            raise ValueError("requires two ascending order volumes between 100 and 10000")
+    elif orders is not None:
+        raise ValueError("order volumes are only supported for the profile scenario")
     root, output = root.resolve(), output.resolve()
     if not (root / f"src/lakehouse_ops/{module}.py").is_file():
         raise ValueError("requires the lakehouse-ops-platform checkout root")
+    if scenario == "profile" and not (root / "compose.spark-memory.yaml").is_file():
+        raise ValueError("requires the Spark memory Compose overlay")
     if output.exists() and any(output.iterdir()):
         raise ValueError("requires an empty output directory")
     output.mkdir(parents=True, exist_ok=True)
@@ -57,6 +67,10 @@ def demo(root: Path, output: Path, *, run: Any = subprocess.run,
                COMPOSE_FILE=str(root / "compose.yaml"), COMMERCE_STAGE_TIMEOUT_SECONDS="300",
                MINIO_INGEST_USER="lakeops-ingest", MINIO_INGEST_PASSWORD="ingest-development-only",
                AWS_ACCESS_KEY_ID="lakeops-ingest", AWS_SECRET_ACCESS_KEY="ingest-development-only")
+    if scenario == "profile":
+        env["COMPOSE_PATH_SEPARATOR"] = os.pathsep
+        env["COMPOSE_FILE"] = os.pathsep.join(str(root / name) for name in
+                                             ("compose.yaml", "compose.spark-memory.yaml"))
     compose = ["docker", "compose", "--project-name", project, "--profile", "catalog",
                "--profile", "compute", "--profile", "query"]
     report: dict[str, Any] = {"status": "failed", "project": project, "steps": [],
@@ -91,7 +105,8 @@ def demo(root: Path, output: Path, *, run: Any = subprocess.run,
                            "--output", str(output / "acceptance"), "--s3-endpoint-url",
                            f"http://localhost:{env['MINIO_API_PORT']}", "--server",
                            f"http://localhost:{env['TRINO_HTTP_PORT']}"] +
-                (["--late-customer-history"] if scenario == "linked-history" else []), timeout)
+                (["--late-customer-history"] if scenario == "linked-history" else []) +
+                (["--orders", *(str(value) for value in orders)] if orders else []), timeout)
         acceptance = json.loads((output / f"acceptance/{retained}").read_text())
         if acceptance.get("status") != "ready":
             raise RuntimeError(f"{scenario} acceptance did not retain a ready report")
