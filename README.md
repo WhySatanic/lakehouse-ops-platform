@@ -116,6 +116,17 @@ uv run --frozen python -m lakehouse_ops.commerce_linked_demo \
 Docker and the reference images must already be available. This bounded demonstration
 does not replace separate crash-recovery, capacity or release-candidate evidence.
 
+For forced runner termination after completed gold and a verified retry on another
+fresh stack, use the [one-command owner-exit demo](docs/runbooks/commerce-owner-exit-demo.md):
+
+```bash
+uv run --frozen python -m lakehouse_ops.commerce_owner_exit_demo \
+  --output artifacts/commerce-owner-exit-demo
+```
+
+This retains the interrupted journal and checks unchanged rows/files before the final
+idle run. It does not simulate failure inside an active Spark or Iceberg transaction.
+
 ```bash
 uv sync --dev
 uv run lakeops ingest-weather \
