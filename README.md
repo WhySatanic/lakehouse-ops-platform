@@ -116,6 +116,17 @@ uv run --frozen python -m lakehouse_ops.commerce_linked_demo \
 Docker and the reference images must already be available. This bounded demonstration
 does not replace separate crash-recovery, capacity or release-candidate evidence.
 
+To run the same three loads followed by explicit late-effective customer history
+maintenance, use the [late history demonstration](docs/runbooks/commerce-history-correction-demo.md):
+
+```bash
+uv run --frozen python -m lakehouse_ops.commerce_history_correction_demo \
+  --output artifacts/commerce-history-correction-demo
+```
+
+The maintenance verifies a literal three-period history and unchanged revenue/checkpoint;
+it does not automatically checkpoint the late source as a fourth forward batch.
+
 For a fresh scoped measurement of two full pipeline volumes, including Spark memory,
 Iceberg files, Trino query statistics and idle replay, use the
 [one-command pipeline profile](docs/runbooks/commerce-pipeline-profile-demo.md):

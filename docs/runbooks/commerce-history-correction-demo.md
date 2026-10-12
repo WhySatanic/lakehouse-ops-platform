@@ -1,0 +1,113 @@
+# One-command late customer history demonstration
+
+With local Docker and the already built reference images, from the checkout:
+
+```powershell
+uv run --frozen python -m lakehouse_ops.commerce_history_correction_demo `
+  --output artifacts/commerce-history-correction-demo
+```
+
+Use a new empty output directory. The private module starts a fresh uniquely named
+`lakehouse-ops-linked-history-demo-<uuid>` reference stack with automatically selected
+ports, runs the production ingestion and correction acceptance, and stops only its
+five MinIO/metastore/Trino services. No images are pulled or built; volumes, journal,
+checkpoint, tables and logs are retained. Parent environment and unrelated projects
+are unchanged. Port selection does not reserve ports until Docker starts.
+
+## Scenario
+
+1. Land three full snapshots in MinIO using conditional, content-verified replay.
+   Process a new order, a changed order, and a late order/payment correction through
+   all production Spark stages, current gold and independent literal Trino oracles.
+   Captured revenue must be 1000, 1500 and 2200 cents respectively.
+2. Verify snapshot-stable current-mart replay and a compute-free idle run for those
+   three processed batches.
+3. Land a late-effective customer observation for February 1 noon. Process its
+   bronze and customer silver input, then rebuild the retained customer history.
+   The literal oracle requires Alice, Alice Corrected, then Alice Updated, with
+   contiguous midnight/noon/February 2 boundaries. Revenue remains 2200 cents.
+4. Repeat the history rebuild. Exactly one history snapshot may be added across
+   correction and replay; current-revenue snapshots and processing checkpoint bytes
+   must remain unchanged. Two separate maintenance runs retain ownership journals.
+
+The last two steps are explicit customer-only maintenance, not a fourth forward
+batch or automatic backfill. The synthetic complete late source contains other
+tables, but order/payment/product silver is not processed for it. It remains
+uncheckpointed; the forward-only runner is not supposed to silently accept it.
+The idle observation belongs to step 2, before this late source is landed.
+
+## Evidence and limits
+
+`demo.json` records command outcomes and elapsed times. `acceptance/linked.json`
+contains three batch oracles plus `late_customer_correction` with the corrected
+history, replay status, checkpoint invariant and maintenance run IDs.
+`acceptance/stages.log` and `acceptance/run-journal.sqlite3` retain actual stage
+execution and ownership evidence. Failures retain logs and a failed report; only
+this project's services are stopped, including after partially failed startup.
+
+After the demo completes, independently recheck its retained evidence without
+starting services or writing to the report, checkpoint or journal:
+
+```powershell
+$env:LAKEOPS_RUN_HISTORY_CORRECTION_SMOKE = '1'
+$env:LAKEOPS_HISTORY_CORRECTION_DIRECTORY = 'artifacts/commerce-history-correction-demo/acceptance'
+uv run --frozen pytest tests/integration/test_commerce_retained_history_correction.py -q -o addopts=
+Remove-Item Env:LAKEOPS_RUN_HISTORY_CORRECTION_SMOKE
+Remove-Item Env:LAKEOPS_HISTORY_CORRECTION_DIRECTORY
+```
+
+This read-only smoke requires six ready journal runs, exactly three processing
+checkpoints, two separate maintenance runs without checkpoint events, five owned
+maintenance containers and the literal corrected history. It also compares retained
+file SHA256 values before/after inspection. It supplements, not replaces, the actual
+Spark/MinIO/Trino execution.
+
+Startup is bounded by 240 seconds, the acceptance child by 2400 seconds, and stop
+by 120 seconds. Per-stage limits remain 300 seconds. Child timeout is not guaranteed
+whole-process-tree cleanup; inspect the owned stage containers and logs afterward.
+
+This bounded single-writer scenario requires complete retained silver history. It
+does not demonstrate distributed exactly-once execution, interruption inside an
+Iceberg commit, arbitrary source retention, automatic correction planning, release
+readiness or production capacity. It does not replace mandatory CI or release evidence.
+
+## Compatibility
+
+The existing linked and owner-exit demo commands keep their default behavior. The
+new module selects the already implemented late-history acceptance flag explicitly;
+it does not change public CLI contracts, table schemas, forward runner semantics or
+version. Rollback removes only the opt-in demo wiring, without resetting stored data.
+
+## Local execution, 2026-10-12
+
+Fresh project `lakehouse-ops-linked-history-demo-8d9520866da54dc28100aca293c51209`
+completed the production three-load path and both manual maintenance runs. Literal
+revenue/history oracles passed: the final revenue was 2200 cents, corrected history
+had three periods, exactly one history snapshot was added across correction/replay,
+and checkpoint bytes and current-revenue snapshots stayed unchanged. The separate
+read-only retained-evidence smoke also passed, confirming six ready journal runs,
+three processing checkpoints and five distinct owned maintenance containers.
+
+Retained report: `artifacts/history-correction-demo-20261012-v2/acceptance/linked.json`.
+SHA256: `13fda16ba65bd13a8aad52d0ec489ebb4a3786f0266da9e2917855927a22f522`.
+The parent demo report, logs and retained-smoke JUnit remain local evidence, not
+release assets. Initial local quality passed all eight commands: 1065 tests passed,
+19 expected opt-in skips, 92.20% coverage and three actual Docker smokes. Logs:
+`artifacts/local-history-correction-demo-20261012-v1/`.
+
+The first startup attempt is retained separately in
+`artifacts/history-correction-demo-20261012-v1/`: Docker's default subnet pool was
+exhausted before any service started. An already completed, owned test network was
+verified empty and removed; no volumes or data were deleted. The second attempt
+used a new project and output directory. After successful shutdown its own empty
+network was also released to avoid consuming another subnet. Stopped containers
+and volumes remain; reconnecting that retained project requires recreating its
+Compose network rather than resetting data. No unrelated networks were changed.
+
+After integrating current main including scoped cleanup, all eight local check
+commands passed again: 1084 tests passed, 21 expected opt-in skips, 92.22% coverage,
+and three actual Docker ownership/timeout/Spark-memory smokes. Evidence:
+`artifacts/local-history-correction-demo-20261012-v2/`. Both real scoped cleanup
+smokes and the read-only history evidence check also passed together, without
+changing the retained history report/checkpoint/journal. JUnit:
+`artifacts/history-correction-demo-20261012-v2-main211.xml`.

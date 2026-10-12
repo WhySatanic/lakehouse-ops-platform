@@ -21,6 +21,9 @@ SCENARIOS = {
                "three_linked_snapshots_fresh_reference_stack", 1800),
     "owner-exit": ("commerce_owner_exit", "owner-exit.json", "lakehouse-ops-owner-exit-demo-",
                    "owner_kill_after_completed_gold_fresh_reference_stack", 6600),
+    "linked-history": ("commerce_linked_acceptance", "linked.json",
+                       "lakehouse-ops-linked-history-demo-",
+                       "three_linked_snapshots_and_manual_late_customer_maintenance", 2400),
     "profile": ("commerce_pipeline_profile", "profile.json", "lakehouse-ops-scale-demo-",
                 "two_volume_pipeline_fresh_reference_stack", 3600),
 }
@@ -102,6 +105,7 @@ def demo(root: Path, output: Path, *, run: Any = subprocess.run,
                            "--output", str(output / "acceptance"), "--s3-endpoint-url",
                            f"http://localhost:{env['MINIO_API_PORT']}", "--server",
                            f"http://localhost:{env['TRINO_HTTP_PORT']}"] +
+                (["--late-customer-history"] if scenario == "linked-history" else []) +
                 (["--orders", *(str(value) for value in orders)] if orders else []), timeout)
         acceptance = json.loads((output / f"acceptance/{retained}").read_text())
         if acceptance.get("status") != "ready":

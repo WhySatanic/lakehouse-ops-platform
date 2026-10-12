@@ -24,7 +24,7 @@ def checkout(root):
                                     "linked", "stop",
                                     "timeout", "launch", "bad_report", "absent_report",
                                     "malformed_report"])
-@pytest.mark.parametrize("scenario", ["linked", "owner-exit", "profile"])
+@pytest.mark.parametrize("scenario", ["linked", "owner-exit", "linked-history", "profile"])
 def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Path, failure,
                                                                   monkeypatch, scenario):
     checkout(tmp_path)
@@ -62,10 +62,13 @@ def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Pa
             assert command[-len(SERVICES):] == list(SERVICES)
         if name == "linked":
             expected = {"linked": "commerce_linked_acceptance", "owner-exit": "commerce_owner_exit",
+                        "linked-history": "commerce_linked_acceptance",
                         "profile": "commerce_pipeline_profile"}[scenario]
             assert command[2] == f"lakehouse_ops.{expected}"
-            expected_timeout = {"linked": 1800, "owner-exit": 6600, "profile": 3600}[scenario]
+            expected_timeout = {"linked": 1800, "owner-exit": 6600, "linked-history": 2400,
+                                "profile": 3600}[scenario]
             assert kwargs["timeout"] == expected_timeout
+            assert ("--late-customer-history" in command) == (scenario == "linked-history")
             if scenario == "profile":
                 assert command[-3:] == ["--orders", "100", "1000"]
             else:
@@ -78,6 +81,7 @@ def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Pa
                 acceptance = output / "acceptance"
                 acceptance.mkdir()
                 retained = {"linked": "linked.json", "owner-exit": "owner-exit.json",
+                            "linked-history": "linked.json",
                             "profile": "profile.json"}[scenario]
                 (acceptance / retained).write_text(json.dumps({
                     "status": "failed" if failure == "bad_report" else "ready",
