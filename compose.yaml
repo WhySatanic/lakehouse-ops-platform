@@ -700,6 +700,20 @@ services:
       ]
     restart: "no"
 
+  spark-commerce-current-gold:
+    extends:
+      service: spark-commerce-daily-gold
+    profiles: ["commerce-current"]
+    environment:
+      COMMERCE_INPUT_ROOT: /opt/lakehouse/input
+      COMMERCE_MANIFEST_SHA256: ${COMMERCE_MANIFEST_SHA256:-}
+      PYTHONPATH: /opt/lakehouse/src:/opt/lakehouse/jobs
+    volumes:
+      - ./src:/opt/lakehouse/src:ro
+      - bronze-input:/opt/lakehouse/input:ro
+    command:
+      ["/opt/spark/bin/spark-submit", "/opt/lakehouse/jobs/gold_commerce_current.py"]
+
   commerce-daily-gold-check:
     image: lakehouse-ops/spark-iceberg:3.5.9-1.11.0
     profiles: ["compute"]
