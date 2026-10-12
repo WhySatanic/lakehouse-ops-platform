@@ -38,6 +38,26 @@ diagnostic evidence, not a release bundle. Native Docker stderr remains in the t
 The journal is not an Iceberg transaction coordinator or an automatic restart plan.
 Failure preserves evidence and never resets a checkpoint or warehouse.
 
+Both the original owner and its retry pass their pipeline journal to every Docker
+stage. The same attempt ID therefore links stage events to durable container launch
+intent and completion records, including all eight original containers after forced
+owner termination. The retry has its own attempt ID and eight different container
+names. These ownership records do not advance the checkpoint or change the interrupted
+pipeline's last-stage `started` event. Completed stages use auto-removal; absence of
+their containers later is expected, not proof of an orphan or permission to clean up.
+
+Inspect fresh retained acceptance evidence without starting compute:
+
+```powershell
+$env:LAKEOPS_OWNER_EVIDENCE_DIRECTORY = (Resolve-Path artifacts/commerce-owner-exit-demo).Path
+$env:LAKEOPS_RUN_JOURNAL_INSPECTION_SMOKE = '1'
+$env:LAKEOPS_RUN_OWNER_OWNERSHIP_SMOKE = '1'
+uv run --frozen pytest tests/integration/test_commerce_retained_journal.py --no-cov
+```
+
+The ownership check requires evidence produced after this journal propagation fix;
+older retained journals remain usable by the original journal-inspection check alone.
+
 The boundary wait is bounded to 30 minutes. EOF, invalid markers or timeout cause failure,
 not replay. Cleanup targets only the spawned owner PID. A failure *before* the completed
 marker may leave an in-flight Docker stage: inspect that project's containers and ensure
@@ -62,6 +82,27 @@ violate the asserted row/file invariants and is not labelled snapshot-stable rec
 Report: `artifacts/commerce-owner-exit-20261012/owner-exit.json`, SHA256
 `9468ac0f7b118b5c3f2079cede87f1176b8501d4204b505922771738820a47e8`.
 Local quality gates: 897 passed, nine skipped, 90.59% coverage.
+
+### Container ownership propagation evidence
+
+Fresh `lakehouse-ops-owner-exit-ownership-20261012` repeated the real forced termination
+with journal propagation enabled. The owner exited with `-15`, retained 17 pipeline
+events and eight completed container launches, and wrote no checkpoint. The retry
+retained 23 pipeline events, eight different completed launches and one completed
+checkpoint. The container journal contains 16 launch intents and 16 completions across
+two distinct attempt IDs, with matching batch, manifest, service and project identities.
+Both read-only retained-evidence tests passed without changing the journal/checkpoint.
+
+All 14 tables again kept identical row/current-file hashes; retry verified 100 orders,
+31 days and 278410 captured cents, then the runner returned compute-free idle. Only
+this reference project's five persistent services were stopped; its volumes remain.
+The failure boundary is still after completed gold, not inside a Spark transaction.
+
+Report: `artifacts/commerce-owner-ownership-20261012/owner-exit.json`, SHA256
+`2d655e7ea8662ff66e67519b05af8ae41f6c41dc5983d6cd3ed30e3c1011229a`.
+Local one-command quality check on main including merged #205: 990 passed, 17 skipped,
+91.59% coverage, plus three
+real Docker smoke tests. The ownership smoke is opt-in and adds no CI stack startup.
 
 After successful acceptance, stop only this project's services, retaining all volumes:
 

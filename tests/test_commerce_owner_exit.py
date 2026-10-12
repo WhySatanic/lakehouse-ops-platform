@@ -92,11 +92,21 @@ def test_main_retains_failure_or_verified_retry(tmp_path: Path, monkeypatch, fai
 
     def run(planner, query, **kwargs):
         if "journal" in kwargs:
+            batch = {"batch_id": "a" * 16, "manifest_sha256": "b" * 64}
+            kwargs["journal"].record("planning", "selected", batch=batch)
+            kwargs["run_stage"]("retry-stage", batch)
             kwargs["journal"].record("run", "ready")
             return {"status": "ready", "batch_id": "a" * 16}
         return {"status": "ready" if failure == "idle" else "idle"}
 
     monkeypatch.setattr(drill, "run_commerce_batch", run)
+    def compose(service, batch, *, bucket, journal=None):
+        assert journal is not None, "retry containers must retain attempt identity"
+        assert journal.batch == batch
+        journal.record_container(service, "retry-owned", "launch_intent",
+                                 batch=batch, project_hint="lakehouse-ops-owner-exit-test")
+
+    monkeypatch.setattr(drill, "run_compose_stage", compose)
     monkeypatch.setattr(
         drill, "commerce_runner_lock", lambda: commerce_runner_lock(tmp_path / "lock"),
     )
@@ -106,3 +116,50 @@ def test_main_retains_failure_or_verified_retry(tmp_path: Path, monkeypatch, fai
     if not failure:
         assert report["checkpoint_before_retry"] == "absent"
         assert report["owner_exit_code"] == -9
+
+
+def test_owner_passes_pipeline_journal_to_every_container_before_boundary(tmp_path, monkeypatch):
+    batch = {"batch_id": "a" * 16, "manifest_sha256": "b" * 64}
+    planner = SimpleNamespace(plan=lambda **kw: {"batches": [batch]},
+                              commit=lambda *a, **kw: pytest.fail("must not checkpoint"))
+    monkeypatch.setattr(drill.boto3, "client", lambda *a, **kw: object())
+    monkeypatch.setattr(drill, "CommerceBatchPlanner", lambda *a, **kw: planner)
+    monkeypatch.setattr(drill, "commerce_runner_lock",
+                        lambda: commerce_runner_lock(tmp_path / "lock"))
+
+    class Trino:
+        def __init__(self, *a, **kw):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            pass
+
+        def query(self, sql):
+            pytest.fail("must pause before verification")
+
+    monkeypatch.setattr(drill, "TrinoClient", Trino)
+    run_ids = []
+    def compose(service, selected, *, bucket, journal=None):
+        assert journal is not None, "owner containers must retain attempt identity"
+        assert journal.batch == selected == batch
+        run_ids.append(journal.run_id)
+        journal.record_container(service, f"owner-{len(run_ids)}", "launch_intent",
+                                 batch=selected, project_hint="owner-test")
+
+    monkeypatch.setattr(drill, "run_compose_stage", compose)
+    def paused(seconds):
+        raise RuntimeError("boundary reached")
+
+    monkeypatch.setattr(drill.time, "sleep", paused)
+    markers = []
+    with pytest.raises(RuntimeError, match="boundary reached"):
+        drill.owner(SimpleNamespace(send=markers.append), tmp_path, "unused", "unused")
+    assert markers == [{"boundary": "gold_published", "pid": os.getpid()}]
+    assert len(run_ids) == 8 and len(set(run_ids)) == 1
+    with sqlite3.connect(tmp_path / "journal.sqlite3") as connection:
+        assert connection.execute("SELECT DISTINCT run_id FROM commerce_run_events").fetchall() == [
+            (run_ids[0],),
+        ]
