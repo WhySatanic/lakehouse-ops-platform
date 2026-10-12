@@ -7,6 +7,8 @@
 3. Keep commits cohesive and explain why the change exists.
 4. Add or update tests and operational documentation with the implementation.
 5. Run `uv run ruff check .` and `uv run pytest` before requesting review.
+   For combined quality gates and two real isolated Docker smoke checks, use the
+   [one-command local check](docs/runbooks/commerce-local-check.md).
 6. Squash only noisy fixups; preserve meaningful engineering steps.
 
 ## Definition of done
