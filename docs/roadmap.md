@@ -294,6 +294,10 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
     costs and verified idle replay. Retain explicit warm-stack/query-order limits;
     see [two-volume measurement](runbooks/commerce-pipeline-scale.md). Crash recovery
     at scale, maintenance and production capacity remain unmeasured.
+  - [x] Provide a [one-command full pipeline measurement](runbooks/commerce-pipeline-profile-demo.md)
+    with fresh scoped services, automatic ports and memory overlay, two configurable
+    bounded volumes, retained logs and scoped shutdown. The second sample remains
+    warm; this does not add forced-exit recovery or production capacity evidence.
   - [x] Measure caught-exception recovery after gold at 100/1000 orders on separate
     fresh catalogs, with interrupted/retry/audit/idle timing, Spark container memory
     and unchanged row/file evidence. See [recovery observations](runbooks/commerce-recovery-acceptance.md).
