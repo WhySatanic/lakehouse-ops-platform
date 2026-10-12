@@ -78,3 +78,13 @@ gates passed with 893 tests, ten opt-in skips, and 90.73% coverage. Retained JUn
 `230984a03f5f2248293e5c5711e8f3485fd61e50851ba560c4a68f7cd5cda582`.
 The quality summary is retained in `artifacts/commerce-ownership-quality-20261012.log`.
 This is adapter/ownership acceptance, not a fresh full Spark commerce capacity run.
+
+The transient-Trino recovery drill forwards the CLI's optional journal unchanged
+through its stage interceptor. Its local regression covers both `None` and a real
+journal object. Omitting this forwarding causes a pre-stage `TypeError` in the live
+CI path; it must not be worked around by disabling journaling or its acceptance.
+After this correction, fresh local quality passed with 894 tests, ten opt-in skips,
+and 90.73% coverage. Both real Docker ownership/timeout checks passed again in
+13.03 seconds. Retained artifact `artifacts/commerce-ownership-fix-20261012.xml`
+SHA-256: `0ce4cfc00afb4366793e892b4f44a4d8fad7c449ae1486930e1fce22440d5599`.
+The full remote integration must still pass on the corrected PR head.

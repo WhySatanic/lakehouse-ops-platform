@@ -11,6 +11,7 @@ from unittest.mock import patch
 import httpx
 
 from lakehouse_ops import cli
+from lakehouse_ops.commerce_run_journal import CommerceRunJournal
 from lakehouse_ops.trino import TrinoClient
 
 
@@ -19,7 +20,8 @@ def exercise(arguments: list[str], evidence: Path) -> None:
     rejected = 0
     run_stage = cli.run_compose_stage
 
-    def stage(service: str, batch: dict[str, str], *, bucket: str) -> None:
+    def stage(service: str, batch: dict[str, str], *, bucket: str,
+              journal: CommerceRunJournal | None = None) -> None:
         nonlocal rejected
         if rejected == 0:
             competitor = subprocess.run(
@@ -33,7 +35,7 @@ def exercise(arguments: list[str], evidence: Path) -> None:
             assert "another commerce runner holds" in competitor.stderr
             assert competitor.stdout == ""
             rejected += 1
-        run_stage(service, batch, bucket=bucket)
+        run_stage(service, batch, bucket=bucket, journal=journal)
 
     with ExitStack() as stack:
         upstream = stack.enter_context(httpx.Client(timeout=30))
