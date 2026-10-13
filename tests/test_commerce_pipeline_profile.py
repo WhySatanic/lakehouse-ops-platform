@@ -97,6 +97,21 @@ def test_two_volume_evidence_or_retained_failure(
 
     monkeypatch.setattr(profile, "TrinoClient", Client)
     monkeypatch.setattr(profile, "execute", execute)
+    class Sampler:
+        def __init__(self, project):
+            assert project == "lakehouse-ops-scale-test"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def report(self):
+            return {"status": "observed", "peak_observed_bytes": 100,
+                    "samples": [], "errors": []}
+
+    monkeypatch.setattr(profile, "StackMemorySampler", Sampler)
     if failure:
         with pytest.raises((ValueError, subprocess.CalledProcessError)):
             profile.profile(tmp_path, orders=[100, 1000], endpoint="unused", server="unused")
