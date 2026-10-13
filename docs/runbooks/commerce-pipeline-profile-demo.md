@@ -24,6 +24,21 @@ verification and checkpoint timings, cumulative current Iceberg files/bytes, and
 batch-scoped Trino detail/daily query statistics. Query order count and revenue must
 reconcile. Each batch then runs an idle replay with unchanged file/snapshot inventories.
 
+Each new sample additionally retains `stack_memory` and a separate
+`sample-N.stack-memory.json`. The observer polls running containers selected by the
+exact Compose project label, including core services and active one-off Spark jobs.
+It never reads all-host statistics when that project has no containers. Failed or
+incomplete observations retain their errors and `status: partial`, not a zero-byte
+success. The observer stops on both successful and failed pipeline execution.
+
+`peak_observed_bytes` is the largest **sum at one sampling time**, not the sum of
+unrelated per-container peaks. These are discrete, rounded Docker CLI observations;
+short peaks can be missed. Docker CLI subtracts inactive file cache on Linux
+([Docker stats documentation](https://docs.docker.com/reference/cli/docker/container/stats/)).
+Host/WSL VM overhead, unlabelled remote workers and other projects are excluded.
+Observer subprocesses have ten-second limits and a bounded shutdown. A failed
+sampling round cannot be used as proof of complete-stack memory coverage.
+
 `demo.json` records startup, child and shutdown command outcomes and elapsed times.
 `acceptance/profile.json` retains completed samples and measurement details, while
 per-sample stdout/stderr retain the actual stage outputs. A child failure, malformed
@@ -32,8 +47,9 @@ Only this project's five services are stopped; volumes, tables and logs are reta
 Parent environment variables and unrelated projects are not modified.
 
 The two samples share one newly created stack. The second sample is warm and has
-prior table history. File totals are cumulative, memory covers Spark containers
-only, and one detail query followed by one daily query does not establish throughput,
+prior table history. File totals are cumulative. Historical reports cover Spark
+containers only; new reports separately identify sampled project-container memory.
+One detail query followed by one daily query does not establish throughput,
 latency percentiles or production capacity. This is not the generator-only profile
 and not forced-exit recovery; idle checkpoint replay is the only recovery observation.
 Use the separate recovery/owner-exit drills for interruption evidence.

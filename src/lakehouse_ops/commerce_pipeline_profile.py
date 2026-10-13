@@ -12,6 +12,7 @@ import time
 from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
+from threading import Event, Thread
 from typing import Any
 
 from lakehouse_ops.ingestion.commerce_fixture import (
@@ -19,6 +20,77 @@ from lakehouse_ops.ingestion.commerce_fixture import (
     generate_commerce_fixture,
 )
 from lakehouse_ops.trino import TrinoClient
+
+
+def stack_memory_sample(project: str) -> dict[str, Any]:
+    """Observe only this Compose project's containers, including active one-off jobs."""
+    if project != "lakehouse-ops-scale" and not project.startswith("lakehouse-ops-scale-"):
+        raise ValueError("stack memory requires a dedicated scale project")
+    ids = subprocess.run(
+        ["docker", "ps", "--filter", f"label=com.docker.compose.project={project}",
+         "--format", "{{.ID}}"], check=True, capture_output=True, text=True, timeout=10,
+    ).stdout.split()
+    if not ids:
+        raise ValueError("no running containers in the selected project")
+    result = subprocess.run(
+        ["docker", "stats", "--no-stream", "--format", "{{json .}}", *ids],
+        check=True, capture_output=True, text=True, timeout=10,
+    )
+    containers = []
+    for line in result.stdout.splitlines():
+        row = json.loads(line)
+        used = row["MemUsage"].split("/")[0].strip()
+        match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*(B|KiB|MiB|GiB|kB|MB|GB)", used)
+        if not match:
+            raise ValueError("unrecognized Docker memory unit")
+        factors = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3,
+                   "kB": 1000, "MB": 1000**2, "GB": 1000**3}
+        containers.append({"id": row["ID"], "name": row["Name"],
+                           "used_bytes": round(float(match[1]) * factors[match[2]])})
+    if len(containers) != len(ids) or len({row["id"] for row in containers}) != len(ids):
+        raise ValueError("project containers changed during memory sampling")
+    return {"containers": containers, "used_bytes": sum(row["used_bytes"] for row in containers)}
+
+
+class StackMemorySampler:
+    """Sample the whole project during the existing runner, without controlling it."""
+
+    def __init__(self, project: str):
+        self.project = project
+        self.samples: list[dict[str, Any]] = []
+        self.errors: list[str] = []
+        self.stop = Event()
+        self.thread = Thread(target=self._observe, daemon=True)
+        self.started = time.perf_counter()
+
+    def _sample(self):
+        try:
+            sample = stack_memory_sample(self.project)
+            self.samples.append({"elapsed_seconds": time.perf_counter() - self.started, **sample})
+        except (OSError, subprocess.SubprocessError, ValueError, KeyError) as error:
+            self.errors.append(f"{type(error).__name__}: {error}")
+
+    def _observe(self):
+        while not self.stop.wait(2):
+            self._sample()
+
+    def __enter__(self):
+        self._sample()
+        self.thread.start()
+        return self
+
+    def __exit__(self, *_):
+        self.stop.set()
+        self.thread.join(timeout=25)
+        if self.thread.is_alive():
+            self.errors.append("memory observer did not finish within its bounded shutdown")
+
+    def report(self):
+        return {"status": "observed" if self.samples and not self.errors else "partial",
+                "scope": "sampled_project_container_memory_not_host_rss",
+                "cache": "Docker CLI excludes inactive file cache on Linux",
+                "peak_observed_bytes": max((s["used_bytes"] for s in self.samples), default=None),
+                "samples": list(self.samples), "errors": list(self.errors)}
 
 
 def memory_reports(log: str) -> list[dict[str, Any]]:
@@ -153,7 +225,8 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str) -> d
         "status": "running", "scope": "two_volume_sequential_warm_stack",
         "project": project, "samples": [], "recovery": "idle_checkpoint_replay_only",
         "limitations": ["not isolated per-volume capacity", "no crash recovery injection",
-                        "memory excludes HMS/MinIO/Trino and remote executors"],
+                        "sampled stack memory excludes host/VM overhead and inactive file cache",
+                        "discrete samples can miss short memory peaks"],
     }
     try:
         with TrinoClient(server, user="lakehouse-performance") as client:
@@ -177,7 +250,15 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str) -> d
                     "--s3-bucket", "lakehouse",
                     "--user", "lakehouse-performance", "--attempts", "3",
                 ]
-                run = execute(command, output, label)
+                stack_memory = StackMemorySampler(project)
+                try:
+                    with stack_memory:
+                        run = execute(command, output, label)
+                finally:
+                    stack_observation = stack_memory.report()
+                    (output / f"{label}.stack-memory.json").write_text(
+                        json.dumps(stack_observation, indent=2), encoding="utf-8",
+                    )
                 if run.get("status") != "ready" or run.get("batch_id") != fixture.batch_id:
                     raise ValueError("runner did not verify the selected volume")
                 memory = memory_reports(
@@ -196,6 +277,7 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str) -> d
                 report["samples"].append({
                     "orders": volume, "batch_id": fixture.batch_id, "config": asdict(config),
                     "run": run, "memory": memory, "cumulative_current_files": files,
+                    "stack_memory": stack_observation,
                     "query_id": query.query_id, "query_stats": asdict(query.stats),
                     "query_rows": query.rows, "idle_replay": "verified",
                     "query_costs": costs,
