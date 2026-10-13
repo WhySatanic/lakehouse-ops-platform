@@ -29,12 +29,21 @@ def test_retained_correction_has_two_ready_maintenance_runs_and_no_checkpoint():
     assert correction["oracle"]["captured_revenue_cents"] == 2200
     checkpoint = json.loads(paths[1].read_text(encoding="utf-8"))
     completed_late = "late_batch_completion" in report
-    assert len(checkpoint["processed_batches"]) == (4 if completed_late else 3)
+    following = report.get("next_batch_after_correction")
+    expected_completed = (4 if completed_late else 3) + int(following is not None)
+    assert len(checkpoint["processed_batches"]) == expected_completed
     assert (correction["batch_id"] in checkpoint["processed_batches"]) == completed_late
     runs = inspect_journal(paths[2])["runs"]
-    assert len(runs) == (7 if completed_late else 6)
+    assert len(runs) == expected_completed + 3
     assert all(run["outcome"] == "ready" for run in runs)
-    assert sum(run["checkpoint_completed_events"] for run in runs) == (4 if completed_late else 3)
+    assert sum(run["checkpoint_completed_events"] for run in runs) == expected_completed
+    if following is not None:
+        assert completed_late and following["status"] == "ready"
+        assert following["batch_id"] in checkpoint["processed_batches"]
+        assert following["completed_stages"][-1] == "spark-commerce-current-gold"
+        assert following["oracle"]["captured_revenue_cents"] == 2200
+        assert following["oracle"]["customer_history"] == CORRECTED_HISTORY
+        assert report["idle_after_next_batch"]["status"] == "idle"
     if completed_late:
         completion = report["late_batch_completion"]
         assert completion["status"] == "ready" and completion["batch_id"] == correction["batch_id"]

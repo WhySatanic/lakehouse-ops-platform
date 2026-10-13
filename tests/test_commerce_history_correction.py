@@ -13,6 +13,7 @@ from lakehouse_ops.commerce_history_correction import (
     CORRECTED_HISTORY,
     HISTORY_STAGE,
     exercise_history_correction,
+    generate_following_observation,
     generate_late_observation,
 )
 from lakehouse_ops.commerce_journal_inspection import inspect_journal
@@ -36,6 +37,28 @@ def test_late_fixture_has_hash_bound_earlier_effective_time(tmp_path: Path):
     assert json.loads((initial / "customers.jsonl").read_text())["full_name"] == "Alice"
     with pytest.raises(FileExistsError):
         generate_late_observation(initial, tmp_path / "first")
+
+
+def test_following_fixture_is_newer_hash_bound_and_preserves_latest_state(tmp_path: Path):
+    scenario = generate_change_scenario(tmp_path / "scenario")
+    latest = Path(scenario["batches"][-1]["path"])
+    before = {path.name: path.read_bytes() for path in latest.iterdir()}
+    first = generate_following_observation(latest, tmp_path / "following")
+    second = generate_following_observation(latest, tmp_path / "repeated")
+    assert first == second
+    assert first["batch_at"] == "2026-02-04T00:00:00Z"
+    assert first["batch_id"] not in [item["batch_id"] for item in scenario["batches"]]
+    manifest, objects, body = _load_fixture(tmp_path / "following")
+    assert manifest["config"]["source_semantics"] == "full_snapshot"
+    assert len(objects) == 4
+    assert hashlib.sha256(body).hexdigest() == first["manifest_sha256"]
+    for table, item in manifest["tables"].items():
+        original = [json.loads(line) for line in (latest / item["file"]).read_text().splitlines()]
+        following = [json.loads(line) for line in (
+            tmp_path / "following" / item["file"]
+        ).read_text().splitlines()]
+        assert following == original, table
+    assert {path.name: path.read_bytes() for path in latest.iterdir()} == before
 
 
 @pytest.mark.parametrize("failure", [None, "stage", "oracle", "revenue", "checkpoint",
@@ -161,6 +184,9 @@ def test_opt_in_driver_restores_history_mode_after_stage(tmp_path, monkeypatch, 
 
     monkeypatch.setattr(linked, "run_compose_stage", compose)
     monkeypatch.setattr(correction, "exercise_history_correction", exercise)
+    monkeypatch.setattr(correction, "exercise_following_batch", lambda *args: args[-1].update(
+        next_batch_after_correction={"status": "ready"}, idle_after_next_batch={"status": "idle"},
+    ))
     assert linked.main() == (2 if failure else 0)
     assert modes == ["rebuild"]
     assert os.environ.get("COMMERCE_CUSTOMER_HISTORY_MODE") == previous

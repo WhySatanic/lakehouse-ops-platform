@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from lakehouse_ops.commerce_linked_acceptance import verify_snapshot
+from lakehouse_ops.commerce_pipeline import CURRENT_STAGE, run_commerce_batch
 from lakehouse_ops.commerce_run_journal import CommerceRunJournal
 
 HISTORY = "lakehouse.gold.dim_customers_scd2"
@@ -23,16 +24,27 @@ CORRECTED_HISTORY = [
 
 
 def generate_late_observation(initial: Path, output: Path) -> dict[str, str]:
-    """Derive a complete synthetic fixture; only its customer rows will be processed."""
+    """Derive the late observation used by maintenance and full-batch continuation."""
+    return _generate_observation(initial, output, "2026-02-01T12:00:00Z", "Alice Corrected")
+
+
+def generate_following_observation(latest: Path, output: Path) -> dict[str, str]:
+    """A new full snapshot with unchanged customer and order state after correction."""
+    return _generate_observation(latest, output, "2026-02-04T00:00:00Z", None)
+
+
+def _generate_observation(
+    initial: Path, output: Path, batch_at: str, customer_name: str | None,
+) -> dict[str, str]:
     manifest = json.loads((initial / "manifest.json").read_text(encoding="utf-8"))
-    manifest["config"]["batch_at"] = "2026-02-01T12:00:00Z"
+    manifest["config"]["batch_at"] = batch_at
     bodies = {}
     for table, item in manifest["tables"].items():
         rows = [json.loads(line) for line in (initial / item["file"]).read_text(
             encoding="utf-8",
         ).splitlines()]
-        if table == "customers":
-            rows[0]["full_name"] = "Alice Corrected"
+        if table == "customers" and customer_name is not None:
+            rows[0]["full_name"] = customer_name
         bodies[item["file"]] = b"".join(
             (json.dumps(row, sort_keys=True) + "\n").encode() for row in rows
         )
@@ -46,6 +58,42 @@ def generate_late_observation(initial: Path, output: Path) -> dict[str, str]:
     (output / "manifest.json").write_bytes(body)
     return {"batch_id": manifest["batch_id"], "manifest_sha256": hashlib.sha256(body).hexdigest(),
             "batch_at": manifest["config"]["batch_at"]}
+
+
+def exercise_following_batch(
+    planner, query: Callable[[str], list[dict[str, Any]]], run_stage: Callable[..., None],
+    batch: dict[str, str], expected: dict[str, Any], output: Path, report: dict[str, Any],
+) -> None:
+    """Prove the next ordinary full snapshot preserves the corrected history."""
+    snapshots_sql = ('SELECT count(*) AS snapshots FROM lakehouse.gold.'
+                     '"dim_customers_scd2$snapshots"')
+    history_before = query(snapshots_sql)
+    journal = CommerceRunJournal(output / "run-journal.sqlite3")
+    oracle = {}
+
+    def stage(service, selected):
+        nonlocal oracle
+        if selected["batch_id"] != batch["batch_id"]:
+            raise ValueError("runner did not select the next ordinary full snapshot")
+        if selected.get("customer_history_mode") != "forward":
+            raise ValueError("next ordinary full snapshot did not use forward history")
+        run_stage(service, selected, journal=journal)
+        if service == CURRENT_STAGE:
+            oracle = verify_snapshot(query, {**expected, "customer_history": CORRECTED_HISTORY},
+                                     2, batch["batch_id"])
+            if query(snapshots_sql) != history_before:
+                raise ValueError("unchanged following customer created a history snapshot")
+
+    completed = run_commerce_batch(planner, query, run_stage=stage, journal=journal)
+    if not oracle:
+        raise ValueError("next ordinary full snapshot did not publish current gold")
+    report["next_batch_after_correction"] = {**completed, "oracle": oracle}
+    def idle_stage(*_):
+        raise ValueError("idle ran compute")
+
+    report["idle_after_next_batch"] = run_commerce_batch(planner, query, run_stage=idle_stage)
+    if report["idle_after_next_batch"]["status"] != "idle":
+        raise ValueError("next ordinary full snapshot left a pending batch")
 
 
 def exercise_history_correction(
