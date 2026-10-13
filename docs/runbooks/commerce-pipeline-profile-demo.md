@@ -61,6 +61,37 @@ Host/WSL VM overhead, unlabelled remote workers and other projects are excluded.
 Observer subprocesses have ten-second limits and a bounded shutdown. A failed
 sampling round cannot be used as proof of complete-stack memory coverage.
 
+If Docker reports exactly one requested container no longer exists, the observer
+rediscovers running IDs using the same exact project label. Only when that ID is
+absent and owned containers remain does it retry statistics once. The accepted
+sample records `resampled_after_container_exit`; it measures the new instant, not
+the vanished container's earlier peak. The failed round is discarded, never
+combined with the retry or interpreted as zero memory. Empty rediscovery, daemon
+errors, timeouts, malformed/foreign/duplicate IDs and a failed retry remain errors
+and produce `partial` evidence. No all-host fallback or unbounded retry is used.
+The race path has at most four ten-second subprocess calls; observer shutdown
+allows 45 seconds. Even successfully resampled evidence remains discrete samples,
+not continuous whole-stack coverage or host/VM memory.
+
+The real container-exit regression is opt-in:
+
+```powershell
+$env:RUN_DOCKER_STACK_MEMORY_TEST = '1'
+uv run --frozen pytest --no-cov -q -s tests/test_commerce_stack_memory.py
+Remove-Item Env:RUN_DOCKER_STACK_MEMORY_TEST
+```
+
+On 2026-10-13 this passed all 13 cases in 6.65 seconds. The Docker case starts two
+disposable, network-isolated containers from the existing local Spark image,
+removes only its stage after discovery, and exercises the actual failing Docker
+statistics call plus scoped retry. Project
+`lakehouse-ops-scale-memory-43af33e9a41f41adbe35d843c59897ca` retained core ID
+`f087efa4497d`, retired stage ID `4d6795c654a4` and 4198498 bytes for one accepted
+sample. Both disposable test containers were removed. No warehouse volumes,
+image pulls/builds or full Spark pipeline were involved. This proves handling of
+the discovery/exit race, not stack-memory cost. Historical `partial` reports are
+not rewritten or promoted; repeated 1k/10k measurements are still required.
+
 `demo.json` records startup, child and shutdown command outcomes and elapsed times.
 `acceptance/profile.json` retains completed samples and measurement details, while
 per-sample stdout/stderr retain the actual stage outputs. A child failure, malformed
