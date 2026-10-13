@@ -40,6 +40,31 @@ def free_ports() -> dict[str, str]:
         return ports
 
 
+def release_demo_network(project: str, root: Path, env: dict[str, str], run: Any) -> dict[str, str]:
+    """Release only this demo's empty network; retained volumes stay untouched."""
+    name = f"{project}_default"
+    options = dict(cwd=root, env=dict(env), capture_output=True, text=True,
+                   timeout=30, check=False)
+    inspection = run(["docker", "network", "inspect", name], **options)
+    if inspection.returncode:
+        if f"network {name} not found" in inspection.stderr.lower():
+            return {"network": name, "status": "absent"}
+        raise RuntimeError(f"demo network inspection failed: {inspection.stderr}")
+    networks = json.loads(inspection.stdout)
+    if not isinstance(networks, list) or len(networks) != 1 or not isinstance(networks[0], dict):
+        raise RuntimeError("unexpected demo network inspection response")
+    network = networks[0]
+    if (network.get("Name") != name
+            or (network.get("Labels") or {}).get("com.docker.compose.project") != project):
+        raise RuntimeError("demo network ownership differs; network retained")
+    if network.get("Containers") != {}:
+        raise RuntimeError("demo network has attached containers; network retained")
+    removed = run(["docker", "network", "rm", name], **options)
+    if removed.returncode:
+        raise RuntimeError(f"demo network release failed: {removed.stderr}")
+    return {"network": name, "status": "released"}
+
+
 def demo(root: Path, output: Path, *, run: Any = subprocess.run,
          scenario: str = "linked", orders: tuple[int, int] | None = None) -> dict[str, Any]:
     if scenario not in SCENARIOS:
@@ -118,7 +143,8 @@ def demo(root: Path, output: Path, *, run: Any = subprocess.run,
         if started:
             try:
                 execute("stop", [*compose, "stop", *SERVICES], 120)
-            except (OSError, RuntimeError, subprocess.TimeoutExpired) as error:
+                report["network_cleanup"] = release_demo_network(project, root, env, run)
+            except (OSError, RuntimeError, subprocess.TimeoutExpired, ValueError) as error:
                 report.update(status="failed", cleanup_error=str(error))
         (output / "demo.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     return report

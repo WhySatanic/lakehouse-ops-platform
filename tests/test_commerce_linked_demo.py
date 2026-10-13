@@ -21,7 +21,7 @@ def checkout(root):
 
 
 @pytest.mark.parametrize("failure", [None, "docker", "spark-image", "config", "start",
-                                    "linked", "stop",
+                                    "linked", "stop", "network-inspect", "network-release",
                                     "timeout", "launch", "bad_report", "absent_report",
                                     "malformed_report"])
 @pytest.mark.parametrize("scenario", ["linked", "owner-exit", "linked-history", "profile"])
@@ -39,6 +39,8 @@ def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Pa
                 "spark-image" if command[1] == "image" else
                 "linked" if command[1] == "-m" else
                 "config" if "config" in command else
+                "network-inspect" if command[1:3] == ["network", "inspect"] else
+                "network-release" if command[1:3] == ["network", "rm"] else
                 "start" if "up" in command else "stop")
         commands.append(name)
         project = kwargs["env"]["COMPOSE_PROJECT_NAME"]
@@ -60,6 +62,14 @@ def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Pa
             assert "--no-build" in command and command[command.index("--pull") + 1] == "never"
         if name == "stop":
             assert command[-len(SERVICES):] == list(SERVICES)
+        if name.startswith("network-"):
+            assert command[-1] == f"{project}_default"
+            assert kwargs["timeout"] == 30
+            return SimpleNamespace(returncode=int(failure == name), stderr="cleanup failed",
+                                   stdout=json.dumps([{"Name": command[-1], "Containers": {},
+                                                       "Labels": {
+                                                           "com.docker.compose.project": project,
+                                                       }}]))
         if name == "linked":
             expected = {"linked": "commerce_linked_acceptance", "owner-exit": "commerce_owner_exit",
                         "linked-history": "commerce_linked_acceptance",
@@ -94,6 +104,11 @@ def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Pa
     assert report["status"] == ("ready" if failure is None else "failed")
     assert len(set(projects)) == 1
     assert ("stop" in commands) == (failure not in ("docker", "spark-image", "config"))
+    assert ("network-inspect" in commands) == (failure not in (
+        "docker", "spark-image", "config", "stop",
+    ))
+    if failure is None:
+        assert report["network_cleanup"]["status"] == "released"
     assert all("elapsed_seconds" in step for step in report["steps"])
     assert json.loads((output / "demo.json").read_text()) == report
     assert dict(os.environ) == original

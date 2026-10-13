@@ -65,6 +65,11 @@ def test_custom_volumes_reach_only_measurement_child(tmp_path):
             (acceptance / "profile.json").write_text(json.dumps({"status": "ready"}))
         else:
             assert "--orders" not in command
+        if command[1:3] == ["network", "inspect"]:
+            return SimpleNamespace(returncode=0, stdout=json.dumps([{
+                "Name": command[-1], "Containers": {},
+                "Labels": {"com.docker.compose.project": kwargs["env"]["COMPOSE_PROJECT_NAME"]},
+            }]))
         return SimpleNamespace(returncode=0)
 
     assert demo(tmp_path, output, run=run, scenario="profile",
