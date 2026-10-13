@@ -18,8 +18,9 @@ from lakehouse_ops.commerce_runner_lock import commerce_runner_lock
 
 
 @pytest.mark.parametrize("setting", [None, "1", "86400"])
+@pytest.mark.parametrize("remaining", [None, 0.25])
 def test_runner_query_deadline_cancels_without_checkpoint_then_retries(
-    setting: str | None, monkeypatch: pytest.MonkeyPatch,
+    setting: str | None, remaining: float | None, monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path, capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
@@ -28,6 +29,9 @@ def test_runner_query_deadline_cancels_without_checkpoint_then_retries(
     else:
         monkeypatch.setenv("COMMERCE_QUERY_TIMEOUT_SECONDS", setting)
     budget = 120 if setting is None else int(setting)
+    if remaining is not None:
+        monkeypatch.setattr(cli, "commerce_remaining_seconds", lambda: remaining)
+        budget = min(budget, remaining)
     fixture = cli.generate_commerce_fixture(tmp_path / "fixture", cli.CommerceFixtureConfig(
         customers=4, products=2, orders=6, null_customer_emails=1,
         duplicate_orders=1, late_orders=1, invalid_payments=1,
@@ -63,7 +67,9 @@ def test_runner_query_deadline_cancels_without_checkpoint_then_retries(
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as http:
         def client(server: str, **kwargs: object) -> trino.TrinoClient:
-            assert kwargs.get("query_timeout") == budget
+            assert 0 < kwargs["query_timeout"] <= budget
+            if remaining is not None:
+                assert kwargs["query_timeout"] == remaining
             return trino.TrinoClient(server, client=http, **kwargs)
 
         monkeypatch.setattr(cli, "TrinoClient", client)

@@ -366,6 +366,25 @@ Iceberg writes, bound planning time, handle SIGTERM/SIGKILL, or guarantee cleanu
 a second Ctrl+C during cleanup. The existing journal retains evidence, not rollback.
 Previously stages had no time limit; increase the setting explicitly for known long jobs.
 
+The normal runner additionally shares one 3600-second compute/verification budget
+across the batch. Set `COMMERCE_RUN_TIMEOUT_SECONDS` to an integer from 1 to 86400
+for known longer jobs. Invalid values fail before planning; the CLI also validates
+before S3 client setup. Each Compose timeout is the smaller of its stage limit and
+the remaining run budget. Each CLI gold query, including retries, receives the
+smaller of its query limit and the remaining budget; retry sleeps cannot reset it.
+Expiry before checkpoint raises a pipeline error and leaves that batch pending.
+The local deadline context is reset on success, failure and interruption, so an
+expired attempt does not poison a later run or unrelated maintenance.
+
+This is not a hard deadline for the whole process: CLI setup is excluded; blocking
+S3 planning and checkpoint I/O are checked at boundaries, not forcibly interrupted.
+Docker cleanup and Trino cancellation may take additional bounded time. Custom
+query/stage callbacks must honor their own blocking limits; only the normal CLI
+and Compose adapter propagate the remaining budget into those operations. The
+scheduled cycle inherits the runner setting but its notification child and overall
+process wait are not yet bounded. No checkpoint or table migration is required;
+raise the setting explicitly if a previously longer batch now exhausts the budget.
+
 After building the compute image, run the isolated acceptance with
 `LAKEOPS_RUN_DOCKER_TIMEOUT_SMOKE=1 uv run pytest tests/integration/test_commerce_stage_timeout.py -q -o addopts=''`
 (PowerShell: set `$env:LAKEOPS_RUN_DOCKER_TIMEOUT_SMOKE='1'` first). It runs two

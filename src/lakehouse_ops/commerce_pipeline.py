@@ -5,6 +5,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable
+from contextvars import ContextVar
 from typing import Any
 from uuid import uuid4
 
@@ -36,6 +37,33 @@ class CommercePipelineError(RuntimeError):
     pass
 
 
+_RUN_BUDGET: ContextVar[tuple[float, Callable[[], float]] | None] = ContextVar(
+    "commerce_run_budget", default=None,
+)
+
+
+def commerce_run_timeout_seconds() -> int:
+    setting = "COMMERCE_RUN_TIMEOUT_SECONDS"
+    try:
+        timeout = int(os.environ.get(setting, "3600"))
+    except ValueError as error:
+        raise CommercePipelineError(f"{setting} must be an integer") from error
+    if not 1 <= timeout <= 86400:
+        raise CommercePipelineError(f"{setting} must be between 1 and 86400")
+    return timeout
+
+
+def commerce_remaining_seconds() -> float | None:
+    budget = _RUN_BUDGET.get()
+    if budget is None:
+        return None
+    deadline, clock = budget
+    remaining = deadline - clock()
+    if remaining <= 0:
+        raise CommercePipelineError("commerce run time budget exhausted; checkpoint not advanced")
+    return remaining
+
+
 def commerce_query_timeout_seconds() -> int:
     """Bound each runner gold query, including result pagination and HTTP waits."""
     setting = "COMMERCE_QUERY_TIMEOUT_SECONDS"
@@ -58,6 +86,9 @@ def run_compose_stage(
         raise CommercePipelineError("COMMERCE_STAGE_TIMEOUT_SECONDS must be an integer") from error
     if not 1 <= timeout <= 86400:
         raise CommercePipelineError("COMMERCE_STAGE_TIMEOUT_SECONDS must be between 1 and 86400")
+    remaining = commerce_remaining_seconds()
+    if remaining is not None:
+        timeout = min(timeout, remaining)
     container = f"lakeops-commerce-{uuid4().hex}"
     environment = {
         **os.environ, "COMMERCE_BATCH_ID": batch["batch_id"],
@@ -126,9 +157,11 @@ def run_commerce_batch(
     journal: CommerceRunJournal | None = None,
 ) -> dict[str, Any]:
     validate_commerce_gold_retry(attempts, delay_seconds)
-    if journal:
-        journal.record("planning", "started")
+    timeout = commerce_run_timeout_seconds()
+    token = _RUN_BUDGET.set((clock() + timeout, clock))
     try:
+        if journal:
+            journal.record("planning", "started")
         report = _run_commerce_batch(
             planner, query, run_stage=run_stage, attempts=attempts,
             delay_seconds=delay_seconds, clock=clock, journal=journal,
@@ -137,6 +170,8 @@ def run_commerce_batch(
         if journal:
             journal.record(journal.phase, "failed", error_type=type(error).__name__)
         raise
+    finally:
+        _RUN_BUDGET.reset(token)
     if journal:
         journal.record("run", report["status"])
     return report
@@ -154,6 +189,7 @@ def _run_commerce_batch(
 ) -> dict[str, Any]:
     started = clock()
     plan = planner.plan(max_batches=1)
+    commerce_remaining_seconds()
     if not plan["batches"]:
         return {"status": "idle", "batch_id": None, "completed_stages": []}
     last = clock()
@@ -169,6 +205,7 @@ def _run_commerce_batch(
     completed = []
     stage_seconds: dict[str, float] = {}
     for service in stages:
+        commerce_remaining_seconds()
         if journal:
             journal.record(service, "started")
         run_stage(service, batch)
@@ -181,17 +218,29 @@ def _run_commerce_batch(
     try:
         if journal:
             journal.record("verification", "started")
+        def bounded_query(sql: str) -> list[dict[str, Any]]:
+            commerce_remaining_seconds()
+            return query(sql)
+
+        def bounded_sleep(seconds: float) -> None:
+            remaining = commerce_remaining_seconds()
+            time.sleep(seconds if remaining is None else min(seconds, remaining))
+            commerce_remaining_seconds()
+
         verification = check_commerce_gold_with_retry(
-            query, batch_id, attempts=attempts, delay_seconds=delay_seconds,
+            bounded_query, batch_id, attempts=attempts, delay_seconds=delay_seconds,
+            sleep=bounded_sleep,
         )
     except (CommerceGoldGateError, httpx.HTTPError, TrinoProtocolError, TrinoQueryError) as error:
         raise CommercePipelineError("commerce stage failed: verify-commerce-gold") from error
     now = clock()
     verification_seconds = now - last
     last = now
+    commerce_remaining_seconds()
     if journal:
         journal.record("verification", "completed")
         journal.record("checkpoint", "started")
+    commerce_remaining_seconds()
     checkpoint = planner.commit(batch_id, expected_manifest_sha256=batch["manifest_sha256"])
     if journal:
         journal.record("checkpoint", "completed")
