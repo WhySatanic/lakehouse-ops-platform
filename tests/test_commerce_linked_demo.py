@@ -56,12 +56,12 @@ def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Pa
         assert "AWS_SESSION_TOKEN" not in kwargs["env"]
         if command[:2] == ["docker", "compose"]:
             assert command[command.index("--project-name") + 1] == project
-            assert not any(arg in command for arg in ("down", "rm", "--volumes", "build"))
+            assert not any(arg in command for arg in ("rm", "--volumes", "-v", "--rmi", "build"))
         if name == "start":
             assert command[-len(SERVICES):] == list(SERVICES)
             assert "--no-build" in command and command[command.index("--pull") + 1] == "never"
         if name == "stop":
-            assert command[-len(SERVICES):] == list(SERVICES)
+            assert command[-1] == "down"
         if name.startswith("network-"):
             assert command[-1] == f"{project}_default"
             assert kwargs["timeout"] == 30

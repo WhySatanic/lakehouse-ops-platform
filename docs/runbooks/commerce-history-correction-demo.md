@@ -9,8 +9,9 @@ uv run --frozen python -m lakehouse_ops.commerce_history_correction_demo `
 
 Use a new empty output directory. The private module starts a fresh uniquely named
 `lakehouse-ops-linked-history-demo-<uuid>` reference stack with automatically selected
-ports, runs the production ingestion and correction acceptance, and stops only its
-five MinIO/metastore/Trino services. No images are pulled or built; volumes, journal,
+ports, runs the production ingestion and correction acceptance, and removes its
+service and completed initializer containers with scoped Compose `down`.
+No images are pulled or built; named volumes, journal,
 checkpoint, tables and logs are retained. Parent environment and unrelated projects
 are unchanged. Port selection does not reserve ports until Docker starts.
 
