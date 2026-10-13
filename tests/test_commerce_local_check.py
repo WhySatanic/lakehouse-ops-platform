@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from lakehouse_ops.commerce_local_check import check, main
+from lakehouse_ops.local_quality import CHECKS
 
 SMOKES = (
     '<testcase classname="tests.integration.test_commerce_stage_timeout" '
@@ -49,10 +50,32 @@ def test_all_gates_and_real_smokes_are_required(tmp_path: Path, monkeypatch):
 
     report = check(tmp_path, output, run=run)
     assert report["status"] == "ready"
-    assert len(commands) == 8
+    assert len(commands) == len(CHECKS) + 3
+    assert commands[2:-1] == [
+        [*command, *([f"--junitxml={output / 'quality.xml'}"] if name == "tests" else [])]
+        for name, command in CHECKS
+    ]
+    assert CHECKS[-1][1][-1] == "-q", "the shared commands must not be mutated"
     assert all(step["status"] == "ready" for step in report["steps"])
     assert all(step["elapsed_seconds"] >= 0 for step in report["steps"])
     assert json.loads((output / "check.json").read_text()) == report
+
+
+@pytest.mark.parametrize("gate", ["lock", "compose"])
+def test_shared_gate_failure_stops_before_docker_smokes(tmp_path: Path, gate: str):
+    checkout(tmp_path)
+    failed_command = next(command for name, command in CHECKS if name == gate)
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(command)
+        return SimpleNamespace(returncode=1 if command == failed_command else 0)
+
+    report = check(tmp_path, tmp_path / "evidence", run=run)
+    assert report["status"] == "failed"
+    assert report["steps"][-1]["name"] == gate
+    assert calls[-1] == failed_command
+    assert all("tests/integration/test_spark_memory.py" not in command for command in calls)
 
 
 def test_new_passing_ownership_smoke_does_not_reject_required_smokes(tmp_path: Path):

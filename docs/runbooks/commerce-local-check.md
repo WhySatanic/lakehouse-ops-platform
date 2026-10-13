@@ -8,10 +8,16 @@ uv run --frozen python -m lakehouse_ops.commerce_local_check `
 ```
 
 Use a new empty output directory for each run. The opt-in private module executes
-Docker/image preflight, repository-wide lint, generated access-policy check, stable
-control-plane contract check, image-lock verification, the full default test suite
-with coverage, and actual Docker smoke tests. No public CLI contract changes.
+Docker/image preflight, the shared `local_quality.CHECKS` sequence (lock freshness,
+repository-wide lint, stable control-plane contract, generated access policy,
+image-lock verification, Compose configuration and the full default test suite with
+coverage), then actual Docker smoke tests. Both local entry points use the same
+quality command definitions and ordering; the commerce check adds only evidence
+capture and scoped smoke execution. No public CLI contract changes.
 It uses the existing open-source `lakehouse-ops/spark-iceberg:3.5.9-1.11.0` image.
+The existing step/log names are retained; `lock` and `compose` are additional steps.
+A failure in either stops before compute smoke containers are launched. This fixes
+the previous gap where the commerce check omitted both gates. CI checks remain enabled.
 If the image is missing, build only the reference compute image:
 
 ```powershell
