@@ -73,9 +73,13 @@ class CommerceFixtureResult:
 
 
 def generate_commerce_fixture(
-    output: Path, config: CommerceFixtureConfig
+    output: Path, config: CommerceFixtureConfig, *, source_semantics: str | None = None,
 ) -> CommerceFixtureResult:
+    if source_semantics not in (None, "full_snapshot"):
+        raise CommerceFixtureError("unsupported commerce fixture source semantics")
     normalized = _normalized_config(config)
+    if source_semantics is not None:
+        normalized["source_semantics"] = source_semantics
     batch_id = hashlib.sha256(_canonical_json(normalized)).hexdigest()[:16]
     destination = output / f"batch_id={batch_id}"
     if destination.exists():

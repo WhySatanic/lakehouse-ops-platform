@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from lakehouse_ops import commerce_pipeline_profile as profile
+from lakehouse_ops.commerce_pipeline import COMMERCE_STAGES, CURRENT_STAGE
 from lakehouse_ops.trino import TrinoQueryResult, TrinoQueryStats
 
 
@@ -39,7 +40,8 @@ def test_default_project_is_rejected(tmp_path: Path, monkeypatch: pytest.MonkeyP
         profile.profile(tmp_path, orders=[100, 1000], endpoint="unused", server="unused")
 
 
-@pytest.mark.parametrize("failure", [None, "memory", "idle", "existing", "second-run"])
+@pytest.mark.parametrize("failure", [None, "memory", "idle", "existing", "second-run",
+                                    "missing-current", "current-revenue", "wrong-sql-revenue"])
 def test_two_volume_evidence_or_retained_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure,
 ):
@@ -66,7 +68,10 @@ def test_two_volume_evidence_or_retained_failure(
             return [{"files": 1, "bytes": 1024}]
 
         def query_with_stats(self, sql):
-            row = {"revenue": 100}
+            revenue = {100: 278410, 1000: 2733643}[selected_volume]
+            row = {"revenue": revenue + int(failure == "wrong-sql-revenue")}
+            if "commerce_current_daily" in sql:
+                row["revenue"] += int(failure == "current-revenue")
             if "AS orders" in sql:
                 row["orders"] = selected_volume
             return TrinoQueryResult("q1", (row,),
@@ -86,14 +91,20 @@ def test_two_volume_evidence_or_retained_failure(
         selected_volume = 100 if label == "sample-1" else 1000
         fixture = next((output / label).iterdir())
         batch = json.loads((fixture / "manifest.json").read_text())["batch_id"]
+        assert json.loads((fixture / "manifest.json").read_text())["config"][
+            "source_semantics"
+        ] == "full_snapshot"
         observations = [{"app_name": str(i), "kind": "spark_container_memory",
                          "status": "unavailable" if failure == "memory" else "observed"}
-                        for i in range(7)]
+                        for i in range(8)]
         (output / f"{label}.stderr.log").write_text(
             "✓ Docker stage completed\n" + "\n".join(json.dumps(row) for row in observations),
             encoding="utf-8",
         )
-        return {"status": "ready", "batch_id": batch}
+        return {"status": "ready", "batch_id": batch,
+                "completed_stages": list(COMMERCE_STAGES) + (
+                    [] if failure == "missing-current" else [CURRENT_STAGE]
+                )}
 
     monkeypatch.setattr(profile, "TrinoClient", Client)
     monkeypatch.setattr(profile, "execute", execute)
