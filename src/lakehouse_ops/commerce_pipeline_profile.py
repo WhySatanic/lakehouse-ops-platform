@@ -15,6 +15,7 @@ from pathlib import Path
 from threading import Event, Thread
 from typing import Any
 
+from lakehouse_ops.commerce_pipeline import COMMERCE_STAGES, CURRENT_STAGE
 from lakehouse_ops.ingestion.commerce_fixture import (
     CommerceFixtureConfig,
     generate_commerce_fixture,
@@ -224,6 +225,7 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str) -> d
     report: dict[str, Any] = {
         "status": "running", "scope": "two_volume_sequential_warm_stack",
         "project": project, "samples": [], "recovery": "idle_checkpoint_replay_only",
+        "source_semantics": "full_snapshot",
         "limitations": ["not isolated per-volume capacity", "no crash recovery injection",
                         "sampled stack memory excludes host/VM overhead and inactive file cache",
                         "discrete samples can miss short memory peaks"],
@@ -239,7 +241,21 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str) -> d
                     duplicate_orders=1, late_orders=1, invalid_payments=1,
                     batch_at=f"2026-02-0{index + 1}T00:00:00+00:00",
                 )
-                fixture = generate_commerce_fixture(output / label, config)
+                fixture = generate_commerce_fixture(output / label, config,
+                                                     source_semantics="full_snapshot")
+                # Independent of Spark and the SQL marts: read this synthetic input.
+                with (fixture.path / "orders.jsonl").open(encoding="utf-8") as stream:
+                    order_ids = {json.loads(line)["order_id"] for line in stream}
+                with (fixture.path / "payments.jsonl").open(encoding="utf-8") as stream:
+                    payments = (json.loads(line) for line in stream)
+                    expected_revenue = sum(
+                        row["amount_cents"] for row in payments
+                        if row["order_id"] in order_ids and row["status"] == "captured"
+                        and type(row["amount_cents"]) is int and row["amount_cents"] >= 0
+                    )
+                expected = {"orders": len(order_ids), "revenue": expected_revenue}
+                if expected["orders"] != volume:
+                    raise ValueError("input order oracle does not match the requested volume")
                 execute([
                     "land-commerce-fixture", "--fixture", str(fixture.path),
                     "--s3-endpoint-url", endpoint, "--s3-bucket", "lakehouse",
@@ -261,11 +277,13 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str) -> d
                     )
                 if run.get("status") != "ready" or run.get("batch_id") != fixture.batch_id:
                     raise ValueError("runner did not verify the selected volume")
+                if run.get("completed_stages") != [*COMMERCE_STAGES, CURRENT_STAGE]:
+                    raise ValueError("requires all nine full-snapshot runner stages")
                 memory = memory_reports(
                     (output / f"{label}.stderr.log").read_text(encoding="utf-8")
                 )
-                if len(memory) != 7 or any(r.get("status") != "observed" for r in memory):
-                    raise ValueError("requires observed memory for all seven Spark stages")
+                if len(memory) != 8 or any(r.get("status") != "observed" for r in memory):
+                    raise ValueError("requires observed memory for all eight Spark stages")
                 files = file_inventory(client)
                 query = client.query_with_stats(
                     "SELECT sum(captured_revenue_cents) AS revenue "
@@ -273,6 +291,16 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str) -> d
                     f"WHERE source_batch_id='{fixture.batch_id}'"
                 )
                 costs = query_costs(client, fixture.batch_id, volume)
+                current = client.query_with_stats(
+                    "SELECT sum(order_count) AS orders, "
+                    "sum(captured_revenue_cents) AS revenue "
+                    "FROM lakehouse.gold.commerce_current_daily"
+                )
+                if (costs["detail"]["rows"] != (expected,)
+                        or current.rows != (expected,) or query.rows != (
+                            {"revenue": expected_revenue},
+                        )):
+                    raise ValueError("SQL results do not reconcile to independent input oracle")
                 idle = measure_idle_replay(client, command, output, f"{label}-idle")
                 report["samples"].append({
                     "orders": volume, "batch_id": fixture.batch_id, "config": asdict(config),
@@ -281,6 +309,7 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str) -> d
                     "query_id": query.query_id, "query_stats": asdict(query.stats),
                     "query_rows": query.rows, "idle_replay": "verified",
                     "query_costs": costs,
+                    "input_expected": expected, "current_query": asdict(current),
                     "idle_replay_observation": idle,
                 })
                 (output / "profile.json").write_text(json.dumps(report, indent=2))
