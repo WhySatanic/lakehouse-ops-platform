@@ -36,13 +36,21 @@ and input starting after their earliest published version are rejected before wr
 These checks cannot prove that intermediate observations have not been removed by
 retention. Incomplete silver history is not a valid rebuild source.
 
-The cached candidate is published with one Iceberg overwrite commit, rather than
-closing current rows and appending new ones in separate commits. Equal row multisets
+Both forward updates and rebuilds publish one Iceberg commit. Forward updates use a
+staged MERGE to close old periods and insert replacements atomically; the rebuild
+publishes its cached candidate with one overwrite. Equal row multisets
 produce `action: replay` without a new snapshot. Published rows and period invariants
 are checked afterwards. Failure after publication can leave a committed snapshot;
 inspect the table and retry with the same complete source, do not reset checkpoints.
 Concurrent writers or catalog/commit failures require separate operational evidence;
 this change does not claim distributed exactly-once recovery.
+
+Upgrade note: the forward writer now rejects existing customers with no current
+version, including tables left between the former close/append commits. Do not bypass
+this guard or reset the runner checkpoint. Inspect the affected history and, with
+complete retained silver observations and exclusive writer ownership, use the opt-in
+rebuild above to restore a valid table before resuming forward ingestion. No schema,
+table location or public report change is required.
 
 ## Acceptance
 
@@ -52,6 +60,14 @@ Alice Corrected until February 2, then Alice Updated as current. It verifies one
 replacement snapshot, snapshot-stable replay, rejection without writes of ambiguous,
 empty and truncated input, and a later return to Alice producing a fourth version.
 The original revenue oracle and default forward-mode rejection remain tested.
+
+The same acceptance injects failures before and immediately after the forward MERGE,
+with a changed customer and a new customer in one batch. Before publication the old
+snapshot remains intact; afterwards both customers have their complete current versions
+in exactly one new snapshot. Retrying the committed batch changes neither rows nor
+snapshot count. A customer with zero current versions is rejected, as is one with
+multiple current versions. These are single-writer Iceberg publication boundaries,
+not a claim of an atomic transaction across tables or the runner checkpoint.
 
 The same acceptance runs in mandatory serving CI and can be run locally:
 
