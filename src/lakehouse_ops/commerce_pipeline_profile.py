@@ -56,16 +56,20 @@ def stack_memory_sample(project: str) -> dict[str, Any]:
             check=True, capture_output=True, text=True, timeout=10,
         )
     except subprocess.CalledProcessError as error:
+        stderr = (error.stderr or "").strip()
         missing = re.fullmatch(
             r"Error response from daemon: No such container: ([0-9a-f]{12,64})",
-            (error.stderr or "").strip(),
+            stderr,
         )
-        if not missing or missing[1] not in ids:
+        # Docker may close an in-flight stats stream with EOF as an --rm job exits.
+        # EOF alone is not proof of retirement: check the same owned project again.
+        if (missing is None and stderr != "EOF") or (missing and missing[1] not in ids):
             raise
         fresh = discover()
-        if not fresh or missing[1] in fresh:
+        gone = set(ids) - set(fresh)
+        if not fresh or len(gone) != 1 or (missing and gone != {missing[1]}):
             raise
-        retired, ids = missing[1], fresh
+        retired, ids = gone.pop(), fresh
         # One retry only, on newly discovered owned IDs, never all-host stats.
         result = subprocess.run(
             ["docker", "stats", "--no-stream", "--format", "{{json .}}", *ids],

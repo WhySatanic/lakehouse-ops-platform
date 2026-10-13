@@ -61,9 +61,13 @@ Host/WSL VM overhead, unlabelled remote workers and other projects are excluded.
 Observer subprocesses have ten-second limits and a bounded shutdown. A failed
 sampling round cannot be used as proof of complete-stack memory coverage.
 
-If Docker reports exactly one requested container no longer exists, the observer
-rediscovers running IDs using the same exact project label. Only when that ID is
-absent and owned containers remain does it retry statistics once. The accepted
+If Docker reports exactly one requested container no longer exists, or returns
+only `EOF` as a job exits during an in-flight statistics request, the observer
+rediscovers running IDs using the same exact project label. Only when exactly one
+previously requested ID is absent and owned containers remain does it retry once.
+A named missing-container error must identify that same retired ID. An `EOF`
+with unchanged IDs, an empty project, multiple retired IDs or additional error
+text remains a failed observation; `EOF` alone is not evidence of retirement. The accepted
 sample records `resampled_after_container_exit`; it measures the new instant, not
 the vanished container's earlier peak. The failed round is discarded, never
 combined with the retry or interpreted as zero memory. Empty rediscovery, daemon
@@ -91,6 +95,22 @@ sample. Both disposable test containers were removed. No warehouse volumes,
 image pulls/builds or full Spark pipeline were involved. This proves handling of
 the discovery/exit race, not stack-memory cost. Historical `partial` reports are
 not rewritten or promoted; repeated 1k/10k measurements are still required.
+
+The post-cleanup 1k/10k run on 2026-10-14 (Europe/Moscow) completed all nine
+stages, input/SQL reconciliation and idle replay, but memory reports were `partial`.
+An independent live probe captured Docker's exact `EOF` error; short-lived
+network-isolated containers reproduced it during a statistics request. These
+partial reports are not complete-stack cost evidence.
+
+The extended opt-in regression passed 20 cases in 12.20 seconds. Besides retirement
+before discovery completes, it removes only its disposable stage while the real
+statistics request is active and requires the actual `EOF` failure. Project
+`lakehouse-ops-scale-memory-48b4777887684b738883192ef7c7bba1` then accepted a
+fresh sample for remaining core `f80e03d74f9d`, recorded retired stage
+`c5c224b8d6d0`, and observed 626688 bytes. The failed stream is not reused. Both
+containers were removed without warehouse volumes, builds, pulls or study-stack
+changes. This verifies the bounded race recovery, not continuous memory coverage
+or a completed three-repeat performance baseline.
 
 `demo.json` records startup, child and shutdown command outcomes and elapsed times.
 `acceptance/profile.json` retains completed samples and measurement details, while
