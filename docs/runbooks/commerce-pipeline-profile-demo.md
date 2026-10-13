@@ -17,6 +17,9 @@ in the same scoped lifecycle as the linked demo. It creates a unique
 checked-in Spark memory Compose overlay, and starts its own MinIO, metastore database,
 Hive Metastore, Trino coordinator and worker. It neither pulls nor builds images.
 The port probe cannot reserve ports until Docker starts; startup failures are retained.
+The shared demo teardown uses scoped Compose `down`, so completed tests leave no
+service/initializer containers in Docker Desktop. Named data volumes and evidence
+remain; no `--volumes`, image removal or global prune is used.
 
 The child explicitly declares two chronological complete snapshots and runs the
 normal commerce runner through all nine production stages, including the current

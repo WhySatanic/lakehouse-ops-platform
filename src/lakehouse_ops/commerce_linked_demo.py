@@ -142,7 +142,9 @@ def demo(root: Path, output: Path, *, run: Any = subprocess.run,
     finally:
         if started:
             try:
-                execute("stop", [*compose, "stop", *SERVICES], 120)
+                # Remove this uniquely owned stack, including completed init containers.
+                # Keep named warehouse volumes: never use --volumes or --rmi.
+                execute("stop", [*compose, "down"], 120)
                 report["network_cleanup"] = release_demo_network(project, root, env, run)
             except (OSError, RuntimeError, subprocess.TimeoutExpired, ValueError) as error:
                 report.update(status="failed", cleanup_error=str(error))

@@ -12,14 +12,18 @@ Use a new empty output directory. The opt-in private module creates a unique
 ports. It starts MinIO, PostgreSQL-backed Hive Metastore and the two-node Trino
 reference profile, then runs the existing linked-snapshot acceptance through
 all production Spark stages and independent Trino revenue/history oracles.
-After acceptance or a startup/child failure it stops only those five named
-services in its own project. It never removes volumes, warehouses, checkpoints,
-images or logs. Partially started services are also eligible for scoped shutdown.
-After a successful stop it inspects its exact `<project>_default` network and
+After acceptance or a startup/child failure it runs scoped Compose `down` for its
+unique project, removing stopped service and completed initializer containers.
+It never passes `--volumes` or `--rmi`: named warehouse volumes, checkpoints,
+images and retained evidence stay intact. Partially started services are also
+eligible for scoped shutdown. The existing `stop` step/log name is preserved.
+After successful teardown it inspects its exact `<project>_default` network and
 releases it only when its name and Compose project label match and it has no
 attached containers. This prevents repeated demonstrations from consuming all
-Docker subnet pools. Stopped containers and volumes remain; Compose recreates
-the network when that retained project is started again. No global prune is used.
+Docker subnet pools. The network normally is already absent after `down`.
+Compose recreates containers and the network using the retained named volumes
+when that exact project is started again. No global prune is used. Container-local
+Docker logs are removed with their containers; acceptance/stage logs are retained.
 
 The existing acceptance covers a new order, its changed amount, and a late order;
 current revenue must be 1000, 1500 and 2200 cents, not their sum of 4700. Customer
@@ -87,6 +91,17 @@ runbook. Existing default pipeline and scheduled runner behavior are unchanged.
 
 The linked, late-history, owner-exit and profile demos share this teardown logic.
 Their commands, source processing and retained warehouse data are unchanged.
+
+Local container-removal verification, 2026-10-14: all seven local quality gates
+passed (1250 tests, 29 opt-in skips, 92.32% package coverage). Four real Docker
+smokes passed in 54.41 seconds. The new lifecycle cases exercised successful
+acceptance, failed startup after service creation, and child failure using small
+sleepers instead of a full Spark pipeline. In every case service and completed
+initializer containers and the network were absent after teardown, a marker in
+the named volume remained readable, and the same project could restart and be
+removed again without deleting that volume. This is lifecycle evidence, not a
+new full-pipeline benchmark or release-candidate proof.
+
 Exercise the actual network release without running another Spark pipeline:
 
 ```powershell

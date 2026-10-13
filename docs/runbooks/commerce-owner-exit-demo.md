@@ -28,8 +28,9 @@ Compose file, consistent public development ingestion credentials and no inherit
 session token or extra Compose profile. The parent environment is not modified. Port
 probes release their sockets before startup, so races can still cause a retained failure.
 
-After successful acceptance or startup/child failure, shutdown targets only the five
-persistent services in the generated project. No global prune, volume deletion, warehouse
+After successful acceptance or startup/child failure, scoped Compose `down` removes
+service and completed initializer containers in the generated project. No global prune,
+volume deletion, warehouse
 reset or checkpoint rewrite occurs. Existing projects, including marketplace, are not
 started or stopped. Project volumes remain available for diagnosis.
 
