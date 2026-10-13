@@ -31,6 +31,7 @@ COMMERCE_STAGES = (
     "spark-commerce-daily-gold",
 )
 CURRENT_STAGE = "spark-commerce-current-gold"
+COMMERCE_RUN_CLEANUP_GRACE_SECONDS = 35
 
 
 class CommercePipelineError(RuntimeError):

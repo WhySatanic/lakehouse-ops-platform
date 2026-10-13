@@ -112,6 +112,18 @@ Startup has a 240-second bound, the measurement child 3600 seconds, and scoped s
 termination is not whole-process-tree cleanup or an automatic orphan-stage recovery
 mechanism; inspect retained logs and this project's stage containers after a timeout.
 
+Within the measurement child, each `run-commerce-batch` wait uses the runner's
+validated `COMMERCE_RUN_TIMEOUT_SECONDS` plus the same 35-second cleanup/exit
+reserve as the scheduled cycle. The default wait is 3635 seconds, not an
+independent 1800-second cutoff that could kill a runner before its own deadline.
+Fixture landing retains its separate 1800-second wait. This reserve does not
+extend the runner's processing or checkpoint budget. The parent demo still has
+its separate 3600-second limit for the entire measurement, including both volumes;
+it can terminate the measurement sooner and does not guarantee child-tree or
+container cleanup. Its timeout remains failed evidence requiring inspection.
+Tests cover 10/3600/86400-second budgets, invalid configuration before spawning
+and unchanged landing behavior; they do not reproduce a half-hour pipeline stall.
+
 ## Compatibility
 
 The linked and owner-exit demonstrations keep their existing commands, reports,

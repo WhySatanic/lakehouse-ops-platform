@@ -15,7 +15,12 @@ from pathlib import Path
 from threading import Event, Thread
 from typing import Any
 
-from lakehouse_ops.commerce_pipeline import COMMERCE_STAGES, CURRENT_STAGE
+from lakehouse_ops.commerce_pipeline import (
+    COMMERCE_RUN_CLEANUP_GRACE_SECONDS,
+    COMMERCE_STAGES,
+    CURRENT_STAGE,
+    commerce_run_timeout_seconds,
+)
 from lakehouse_ops.ingestion.commerce_fixture import (
     CommerceFixtureConfig,
     generate_commerce_fixture,
@@ -139,12 +144,14 @@ def memory_reports(log: str) -> list[dict[str, Any]]:
 
 
 def execute(args: list[str], output: Path, label: str) -> dict[str, Any]:
+    timeout = (commerce_run_timeout_seconds() + COMMERCE_RUN_CLEANUP_GRACE_SECONDS
+               if args and args[0] == "run-commerce-batch" else 1800)
     with (output / f"{label}.stdout.json").open("w") as stdout, (
         output / f"{label}.stderr.log"
     ).open("w") as stderr:
         subprocess.run(
             [sys.executable, "-m", "lakehouse_ops.cli", *args],
-            stdout=stdout, stderr=stderr, check=True, timeout=1800,
+            stdout=stdout, stderr=stderr, check=True, timeout=timeout,
         )
     return json.loads((output / f"{label}.stdout.json").read_text())
 
