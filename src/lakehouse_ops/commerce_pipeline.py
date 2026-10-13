@@ -29,6 +29,7 @@ COMMERCE_STAGES = (
     "spark-commerce-customer-scd2",
     "spark-commerce-daily-gold",
 )
+CURRENT_STAGE = "spark-commerce-current-gold"
 
 
 class CommercePipelineError(RuntimeError):
@@ -52,6 +53,8 @@ def run_compose_stage(
     }
     if service == "bronze-input-sync":
         environment["COMMERCE_SYNC_SCOPE"] = "selected"
+    if service == "spark-commerce-customer-scd2" and "customer_history_mode" in batch:
+        environment["COMMERCE_CUSTOMER_HISTORY_MODE"] = batch["customer_history_mode"]
     command = ["docker", "compose", "--profile", "catalog", "--profile", "compute",
                "run", "--rm", "--no-deps"]
 
@@ -138,12 +141,16 @@ def _run_commerce_batch(
     last = clock()
     planning_seconds = last - started
     batch = plan["batches"][0]
+    resolve_options = getattr(planner, "execution_options", None)
+    options = resolve_options(batch) if resolve_options else {}
+    batch = {**batch, **options}
+    stages = (*COMMERCE_STAGES, CURRENT_STAGE) if options else COMMERCE_STAGES
     batch_id = batch["batch_id"]
     if journal:
         journal.record("planning", "selected", batch=batch)
     completed = []
     stage_seconds: dict[str, float] = {}
-    for service in COMMERCE_STAGES:
+    for service in stages:
         if journal:
             journal.record(service, "started")
         run_stage(service, batch)

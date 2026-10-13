@@ -15,14 +15,13 @@ from typing import Any, Protocol
 import boto3
 
 from lakehouse_ops.commerce_change_scenario import generate_change_scenario
-from lakehouse_ops.commerce_pipeline import COMMERCE_STAGES, run_commerce_batch, run_compose_stage
+from lakehouse_ops.commerce_pipeline import CURRENT_STAGE, run_commerce_batch, run_compose_stage
 from lakehouse_ops.commerce_run_journal import CommerceRunJournal
 from lakehouse_ops.commerce_runner_lock import commerce_runner_lock
 from lakehouse_ops.ingestion.commerce_batches import CommerceBatchPlanner
 from lakehouse_ops.ingestion.commerce_s3_landing import CommerceS3LandingZone
 from lakehouse_ops.trino import TrinoClient
 
-CURRENT_STAGE = "spark-commerce-current-gold"
 CURRENT_TABLE = "lakehouse.gold.commerce_current_daily"
 
 
@@ -104,13 +103,10 @@ def exercise_linked_batches(
             if selected["batch_id"] != wanted_batch["batch_id"]:
                 raise ValueError("planner selected a different batch")
             run_stage(service, selected, journal=run_journal)
-            if service == COMMERCE_STAGES[-1]:
-                run_journal.record(CURRENT_STAGE, "started")
-                run_stage(CURRENT_STAGE, selected, journal=run_journal)
+            if service == CURRENT_STAGE:
                 current_sample["oracle"] = verify_snapshot(
                     query, expected, ordinal, wanted_batch["batch_id"],
                 )
-                run_journal.record(CURRENT_STAGE, "completed")
 
         sample["pipeline"] = run_commerce_batch(
             planner, query, run_stage=stage, attempts=3, journal=journal,
@@ -198,6 +194,7 @@ def main() -> int:
                 )
                 if args.late_customer_history:
                     from lakehouse_ops.commerce_history_correction import (
+                        CORRECTED_HISTORY,
                         exercise_history_correction,
                         generate_late_observation,
                     )
@@ -228,6 +225,26 @@ def main() -> int:
                     exercise_history_correction(
                         trino.query, history_stage, batch, expected, args.output, report,
                     )
+                    completion_journal = CommerceRunJournal(args.output / "run-journal.sqlite3")
+
+                    def complete_stage(service, selected):
+                        run_compose_stage(service, selected, bucket="lakehouse",
+                                          journal=completion_journal)
+                        if service == CURRENT_STAGE:
+                            verify_snapshot(trino.query, {**expected,
+                                            "customer_history": CORRECTED_HISTORY},
+                                            2, expected["batches"][-1]["batch_id"])
+
+                    report["late_batch_completion"] = run_commerce_batch(
+                        planner, trino.query, run_stage=complete_stage, journal=completion_journal,
+                    )
+                    if report["late_batch_completion"]["batch_id"] != batch["batch_id"]:
+                        raise ValueError("runner did not complete the late full snapshot")
+                    report["idle_after_correction"] = run_commerce_batch(
+                        planner, trino.query, run_stage=lambda *_: None,
+                    )
+                    if report["idle_after_correction"]["status"] != "idle":
+                        raise ValueError("late correction left a pending batch")
     except Exception as error:
         report.update(status="failed", error_type=type(error).__name__)
         print(f"linked commerce acceptance failed: {error}", file=sys.stderr)

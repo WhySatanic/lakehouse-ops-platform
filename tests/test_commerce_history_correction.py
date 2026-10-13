@@ -141,6 +141,13 @@ def test_opt_in_driver_restores_history_mode_after_stage(tmp_path, monkeypatch, 
     ))
     monkeypatch.setattr(linked, "exercise_linked_batches",
                         lambda *a: a[-1].update(status="ready"))
+    def completed(*a, **kw):
+        if "journal" in kw:
+            manifest = json.loads((tmp_path / "proof/late-observation/manifest.json").read_text())
+            return {"status": "ready", "batch_id": manifest["batch_id"]}
+        return {"status": "idle", "batch_id": None}
+
+    monkeypatch.setattr(linked, "run_commerce_batch", completed)
     modes = []
 
     def compose(*a, **kw):

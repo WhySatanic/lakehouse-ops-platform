@@ -34,6 +34,7 @@ class CommerceBatch:
     manifest_sha256: str
     path: str
     committed_at: datetime | None = None
+    source_semantics: str | None = None
 
     def as_dict(self) -> dict[str, str]:
         return {
@@ -59,6 +60,22 @@ class CommerceBatchPlanner:
         self._bucket = bucket
         self._state_path = state_path
         self._prefix = prefix.strip("/")
+
+    def execution_options(self, selected: dict[str, str]) -> dict[str, str]:
+        """Resolve full-snapshot execution without changing the public plan format."""
+        batches = {batch.batch_id: batch for batch in self.discover()}
+        state = _load_state(self._state_path)
+        _verify_processed_content(state, batches)
+        batch = batches.get(selected["batch_id"])
+        if batch is None or batch.manifest_sha256 != selected["manifest_sha256"]:
+            raise CommerceBatchError("committed manifest changed before execution")
+        if batch.source_semantics != "full_snapshot":
+            return {}
+        # Rebuild only an explicitly declared complete snapshot older than an
+        # already completed load. It still runs every stage before checkpoint.
+        latest = max((item["batch_at"] for item in state["processed_batches"].values()),
+                     default=batch.batch_at)
+        return {"customer_history_mode": "rebuild" if batch.batch_at < latest else "forward"}
 
     def plan(
         self, *, max_batches: int, replay_batches: tuple[str, ...] = ()
@@ -309,6 +326,7 @@ class CommerceBatchPlanner:
                 if isinstance(committed_at, datetime) and committed_at.tzinfo
                 else None
             ),
+            source_semantics=manifest["config"].get("source_semantics"),
         )
 
 
