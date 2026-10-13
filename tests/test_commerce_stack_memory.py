@@ -1,5 +1,7 @@
 import json
+import os
 import subprocess
+import uuid
 
 import pytest
 
@@ -65,3 +67,89 @@ def test_failed_samples_are_not_reported_as_zero_memory(monkeypatch):
     report = sampler.report()
     assert report["status"] == "partial" and report["peak_observed_bytes"] is None
     assert report["errors"] and report["samples"] == []
+
+
+@pytest.mark.parametrize("failure", ["retired", "daemon", "still-running", "retry-fails"])
+def test_stats_exit_race_has_one_scoped_retry_and_keeps_other_failures(monkeypatch, failure):
+    core, job = "a" * 12, "b" * 12
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(command)
+        if command[1] == "ps":
+            assert command[3] == "label=com.docker.compose.project=lakehouse-ops-scale-test"
+            ids = [core, job] if len(calls) == 1 or failure == "still-running" else [core]
+            return subprocess.CompletedProcess(command, 0, "\n".join(ids))
+        if len(calls) == 2 or failure == "retry-fails":
+            stderr = ("daemon unavailable" if failure == "daemon" else
+                      f"Error response from daemon: No such container: {job}\n")
+            raise subprocess.CalledProcessError(1, command, stderr=stderr)
+        assert command[-1] == core and job not in command
+        return subprocess.CompletedProcess(command, 0, json.dumps({
+            "ID": core, "Name": "core", "MemUsage": "1MiB / 8GiB",
+        }))
+
+    monkeypatch.setattr(profile.subprocess, "run", run)
+    if failure == "retired":
+        result = profile.stack_memory_sample("lakehouse-ops-scale-test")
+        assert result["used_bytes"] == 1024**2
+        assert result["resampled_after_container_exit"] == job
+        assert len(calls) == 4
+    else:
+        with pytest.raises(subprocess.CalledProcessError):
+            profile.stack_memory_sample("lakehouse-ops-scale-test")
+        assert len(calls) == {"daemon": 2, "still-running": 3, "retry-fails": 4}[failure]
+
+
+def test_memory_sample_rejects_foreign_id_with_matching_count(monkeypatch):
+    def run(command, **kwargs):
+        if command[1] == "ps":
+            return subprocess.CompletedProcess(command, 0, "owned")
+        return subprocess.CompletedProcess(command, 0, json.dumps({
+            "ID": "foreign", "Name": "foreign", "MemUsage": "1MiB / 8GiB",
+        }))
+
+    monkeypatch.setattr(profile.subprocess, "run", run)
+    with pytest.raises(ValueError, match="changed"):
+        profile.stack_memory_sample("lakehouse-ops-scale-test")
+
+
+@pytest.mark.skipif(os.getenv("RUN_DOCKER_STACK_MEMORY_TEST") != "1",
+                    reason="requires local Docker and the existing Spark image")
+def test_real_removed_stage_is_resampled_without_foreign_containers(monkeypatch):
+    project = f"lakehouse-ops-scale-memory-{uuid.uuid4().hex}"
+    real_run = subprocess.run
+    owned = []
+    try:
+        for role in ("core", "stage"):
+            result = real_run([
+                "docker", "run", "-d", "--rm", "--pull", "never", "--network", "none",
+                "--read-only", "--memory", "64m", "--name", f"{project}-{role}",
+                "--label", f"com.docker.compose.project={project}",
+                "--entrypoint", "/bin/sh", "lakehouse-ops/spark-iceberg:3.5.9-1.11.0",
+                "-c", "sleep 60",
+            ], check=True, capture_output=True, text=True, timeout=15)
+            owned.append(result.stdout.strip())
+
+        removed = False
+
+        def run(command, **kwargs):
+            nonlocal removed
+            result = real_run(command, **kwargs)
+            if command[1] == "ps" and not removed:
+                assert set(result.stdout.split()) == {container[:12] for container in owned}
+                real_run(["docker", "stop", "--time", "1", owned[1]],
+                         check=True, capture_output=True, timeout=10)
+                removed = True
+            return result
+
+        monkeypatch.setattr(profile.subprocess, "run", run)
+        sample = profile.stack_memory_sample(project)
+        assert removed and sample["resampled_after_container_exit"] == owned[1][:12]
+        assert [row["id"] for row in sample["containers"]] == [owned[0][:12]]
+        assert sample["used_bytes"] > 0
+        print(json.dumps({"project": project, "status": "verified", **sample}))
+    finally:
+        for container in owned:
+            real_run(["docker", "rm", "-f", container],
+                     capture_output=True, timeout=10, check=False)

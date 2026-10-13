@@ -35,16 +35,37 @@ def stack_memory_sample(project: str) -> dict[str, Any]:
     """Observe only this Compose project's containers, including active one-off jobs."""
     if project != "lakehouse-ops-scale" and not project.startswith("lakehouse-ops-scale-"):
         raise ValueError("stack memory requires a dedicated scale project")
-    ids = subprocess.run(
-        ["docker", "ps", "--filter", f"label=com.docker.compose.project={project}",
-         "--format", "{{.ID}}"], check=True, capture_output=True, text=True, timeout=10,
-    ).stdout.split()
+    def discover():
+        return subprocess.run(
+            ["docker", "ps", "--filter", f"label=com.docker.compose.project={project}",
+             "--format", "{{.ID}}"], check=True, capture_output=True, text=True, timeout=10,
+        ).stdout.split()
+
+    ids = discover()
     if not ids:
         raise ValueError("no running containers in the selected project")
-    result = subprocess.run(
-        ["docker", "stats", "--no-stream", "--format", "{{json .}}", *ids],
-        check=True, capture_output=True, text=True, timeout=10,
-    )
+    retired = None
+    try:
+        result = subprocess.run(
+            ["docker", "stats", "--no-stream", "--format", "{{json .}}", *ids],
+            check=True, capture_output=True, text=True, timeout=10,
+        )
+    except subprocess.CalledProcessError as error:
+        missing = re.fullmatch(
+            r"Error response from daemon: No such container: ([0-9a-f]{12,64})",
+            (error.stderr or "").strip(),
+        )
+        if not missing or missing[1] not in ids:
+            raise
+        fresh = discover()
+        if not fresh or missing[1] in fresh:
+            raise
+        retired, ids = missing[1], fresh
+        # One retry only, on newly discovered owned IDs, never all-host stats.
+        result = subprocess.run(
+            ["docker", "stats", "--no-stream", "--format", "{{json .}}", *ids],
+            check=True, capture_output=True, text=True, timeout=10,
+        )
     containers = []
     for line in result.stdout.splitlines():
         row = json.loads(line)
@@ -56,9 +77,13 @@ def stack_memory_sample(project: str) -> dict[str, Any]:
                    "kB": 1000, "MB": 1000**2, "GB": 1000**3}
         containers.append({"id": row["ID"], "name": row["Name"],
                            "used_bytes": round(float(match[1]) * factors[match[2]])})
-    if len(containers) != len(ids) or len({row["id"] for row in containers}) != len(ids):
+    if len(containers) != len(ids) or {row["id"] for row in containers} != set(ids):
         raise ValueError("project containers changed during memory sampling")
-    return {"containers": containers, "used_bytes": sum(row["used_bytes"] for row in containers)}
+    sample = {"containers": containers,
+              "used_bytes": sum(row["used_bytes"] for row in containers)}
+    if retired is not None:
+        sample["resampled_after_container_exit"] = retired
+    return sample
 
 
 class StackMemorySampler:
@@ -90,7 +115,7 @@ class StackMemorySampler:
 
     def __exit__(self, *_):
         self.stop.set()
-        self.thread.join(timeout=25)
+        self.thread.join(timeout=45)
         if self.thread.is_alive():
             self.errors.append("memory observer did not finish within its bounded shutdown")
 
