@@ -64,9 +64,14 @@ def publish_snapshot(
             if candidate.exceptAll(target).count() or target.exceptAll(candidate).count():
                 raise ValueError("replayed snapshot differs from the current mart")
         elif action == "create":
-            candidate.writeTo(table).using("iceberg").tableProperty("format-version", "2").create()
+            # Consolidate only the validated daily aggregate, not the raw input or joins.
+            # Otherwise a few dozen rows inherit one small file per upstream partition.
+            (
+                candidate.coalesce(1).writeTo(table).using("iceberg")
+                .tableProperty("format-version", "2").create()
+            )
         else:
-            candidate.writeTo(table).overwrite(F.lit(True))
+            candidate.coalesce(1).writeTo(table).overwrite(F.lit(True))
         target = spark.table(table).select(*candidate.columns)
         if candidate.exceptAll(target).count() or target.exceptAll(candidate).count():
             raise RuntimeError("current snapshot publication post-condition failed")
