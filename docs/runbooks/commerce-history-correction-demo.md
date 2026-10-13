@@ -34,11 +34,13 @@ are unchanged. Port selection does not reserve ports until Docker starts.
    current gold using its existing stale-snapshot protection. Only this completed
    run advances the fourth checkpoint; a final ordinary attempt must be idle.
 
-The last two steps are explicit customer-only maintenance, not a fourth forward
-batch or automatic backfill. The synthetic complete late source contains other
-tables, but order/payment/product silver is not processed for it. It remains
-uncheckpointed; the forward-only runner is not supposed to silently accept it.
-The idle observation belongs to step 2, before this late source is landed.
+Steps 3 and 4 are explicit customer-only maintenance, not a completed fourth batch.
+They do not process order/payment/product silver and leave the late source
+uncheckpointed. Step 5 then processes that same complete full snapshot through
+the normal runner, including those tables, before recording its checkpoint.
+Idle is checked both before landing the late source and after its full completion.
+A new later source batch is not landed in this demonstration; continuation into
+that next batch is covered separately by planner and Spark integration tests.
 
 ## Evidence and limits
 
