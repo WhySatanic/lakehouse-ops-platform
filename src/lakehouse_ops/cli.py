@@ -22,6 +22,8 @@ from lakehouse_ops.commerce_gold_gate import (
 from lakehouse_ops.commerce_pipeline import (
     CommercePipelineError,
     commerce_query_timeout_seconds,
+    commerce_remaining_seconds,
+    commerce_run_timeout_seconds,
     run_commerce_batch,
     run_compose_stage,
 )
@@ -619,23 +621,30 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(str(error))
         try:
             query_timeout = commerce_query_timeout_seconds()
+            commerce_run_timeout_seconds()
             with commerce_runner_lock():
                 planner = CommerceBatchPlanner(
                     _create_s3_client(args), bucket=args.s3_bucket, prefix=args.s3_prefix,
                     state_path=args.state,
                 )
-                with TrinoClient(
-                    args.server, user=args.user, query_timeout=query_timeout,
-                ) as client:
-                    journal = CommerceRunJournal(Path(str(args.state) + ".runs.sqlite3"))
-                    report = run_commerce_batch(
-                        planner, client.query,
-                        run_stage=lambda service, batch: run_compose_stage(
-                            service, batch, bucket=args.s3_bucket, journal=journal,
-                        ),
-                        attempts=args.attempts, delay_seconds=args.retry_delay_seconds,
-                        journal=journal,
-                    )
+                def query(sql: str) -> list[dict[str, Any]]:
+                    remaining = commerce_remaining_seconds()
+                    with TrinoClient(
+                        args.server, user=args.user,
+                        query_timeout=(query_timeout if remaining is None
+                                       else min(query_timeout, remaining)),
+                    ) as client:
+                        return client.query(sql)
+
+                journal = CommerceRunJournal(Path(str(args.state) + ".runs.sqlite3"))
+                report = run_commerce_batch(
+                    planner, query,
+                    run_stage=lambda service, batch: run_compose_stage(
+                        service, batch, bucket=args.s3_bucket, journal=journal,
+                    ),
+                    attempts=args.attempts, delay_seconds=args.retry_delay_seconds,
+                    journal=journal,
+                )
         except (
             OSError, CommerceBatchError, CommerceGoldGateError, CommercePipelineError,
             CommerceRunnerBusyError, BotoCoreError, ClientError,
