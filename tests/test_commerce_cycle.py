@@ -22,7 +22,8 @@ def test_scheduled_cycle_notifies_even_after_pipeline_failure(
     calls: list[list[str]] = []
 
     def run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        assert kwargs == {"check": False}
+        assert kwargs["check"] is False
+        assert 0 < kwargs["timeout"] <= 86435
         calls.append(command)
         return subprocess.CompletedProcess(
             command, [runner_code, notification_code][len(calls) - 1],
@@ -58,7 +59,8 @@ def test_cycle_reports_spawn_failure_and_attempts_notification(
     calls: list[str] = []
 
     def run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        assert kwargs == {"check": False}
+        assert kwargs["check"] is False
+        assert 0 < kwargs["timeout"] <= 86435
         calls.append(command[3])
         if command[3] == failed_command:
             raise OSError("process limit reached")
