@@ -15,6 +15,11 @@ all production Spark stages and independent Trino revenue/history oracles.
 After acceptance or a startup/child failure it stops only those five named
 services in its own project. It never removes volumes, warehouses, checkpoints,
 images or logs. Partially started services are also eligible for scoped shutdown.
+After a successful stop it inspects its exact `<project>_default` network and
+releases it only when its name and Compose project label match and it has no
+attached containers. This prevents repeated demonstrations from consuming all
+Docker subnet pools. Stopped containers and volumes remain; Compose recreates
+the network when that retained project is started again. No global prune is used.
 
 The existing acceptance covers a new order, its changed amount, and a late order;
 current revenue must be 1000, 1500 and 2200 cents, not their sum of 4700. Customer
@@ -30,6 +35,9 @@ ports, command return codes and elapsed wall time. A nonzero child exit, missing
 or failed acceptance report, or failed shutdown makes the demonstration fail
 and exit 2. A successful child exit without retained acceptance is not success.
 Native Docker/Spark stderr is included in `linked.log`, alongside child stdout.
+`network_cleanup` records the released network, or `absent` when startup never
+created it. Inspection or removal failure makes the demo fail with `cleanup_error`.
+An active or differently owned network is retained, never forcibly disconnected.
 
 ## Prerequisites and isolation
 
@@ -57,6 +65,7 @@ another catalog and hiding the failure. It does not reserve ports permanently.
 
 Command waits are bounded: Docker/Spark-image/config 30 seconds each, infrastructure startup
 240 seconds (Compose readiness 180), linked acceptance 1800 and shutdown 120.
+Network inspection and removal each have a separate 30-second bound after stop.
 Compute stages receive the existing 300-second stage timeout. The repository's
 normal runner lock remains authoritative; an active runner can reject the demo.
 Outer process waiting limits are not guaranteed process-tree termination. If a
@@ -75,6 +84,28 @@ required before squash merge; release policy remains unchanged.
 
 Rollback: stop using the opt-in demo module and use the manual linked acceptance
 runbook. Existing default pipeline and scheduled runner behavior are unchanged.
+
+The linked, late-history, owner-exit and profile demos share this teardown logic.
+Their commands, source processing and retained warehouse data are unchanged.
+Exercise the actual network release without running another Spark pipeline:
+
+```powershell
+$env:LAKEOPS_RUN_DEMO_NETWORK_SMOKE = "1"
+uv run --frozen pytest tests/integration/test_commerce_demo_network_smoke.py -q -s -o addopts=
+```
+
+The smoke creates a uniquely owned network, one temporary sleeper and an empty
+volume. It refuses release while the endpoint is active, removes its own sleeper,
+releases only the empty network and verifies the volume still exists. The empty
+volume remains under the printed test-project name; no pre-existing data is changed.
+
+Local teardown verification, 2026-10-13: the real network smoke passed in 3.84
+seconds. Retained volume:
+`lakehouse-ops-linked-demo-5d50278b153e47feaac1f13db98a0b1a_data`.
+The shared quality gates passed with 1201 tests, 25 opt-in skips and 92.27% coverage;
+94 focused demo/network tests also passed. Logs and JUnit:
+`artifacts/demo-teardown/{quality-v2.log,network-smoke.log,network-smoke.xml}`.
+This proves the teardown behavior, not another full Spark run or release readiness.
 
 ## Retained local execution, 2026-10-12
 
