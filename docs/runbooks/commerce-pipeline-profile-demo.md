@@ -24,6 +24,13 @@ verification and checkpoint timings, cumulative current Iceberg files/bytes, and
 batch-scoped Trino detail/daily query statistics. Query order count and revenue must
 reconcile. Each batch then runs an idle replay with unchanged file/snapshot inventories.
 
+Both inventories include the `commerce_*` tables in bronze, silver and gold and
+`gold.dim_customers_scd2`. Customer history participates in the fresh-catalog
+guard and idle replay checks, even when no other table changes. File bytes count
+only current data files, not retained obsolete files or Iceberg metadata storage.
+Reports produced before this correction omitted the customer-history table;
+their totals and idle assertions must not be treated as complete history evidence.
+
 Each new sample additionally retains `stack_memory` and a separate
 `sample-N.stack-memory.json`. The observer polls running containers selected by the
 exact Compose project label, including core services and active one-off Spark jobs.
@@ -90,3 +97,14 @@ not shipped release assets. Fresh one-command quality verification completed all
 eight commands: 1060 passing default tests, 18 expected opt-in skips, 91.70%
 coverage and three actual Docker ownership/timeout/Spark-memory smokes. Evidence:
 `artifacts/local-pipeline-profile-demo-20261012-v2/`.
+
+## Read-only inventory regression, 2026-10-13
+
+On the retained `lakehouse-ops-scale-query-v1` stack, the old query omitted one
+customer-history data file (4850 bytes) and three snapshot IDs. The corrected
+query returns all 14 scenario tables, including that history. The other 13
+tables' file inventories and snapshot IDs were unchanged. No pipeline stage or
+warehouse write was executed for this check. Local before/after evidence:
+`artifacts/history-inventory/before-live.log` and `after-live.log`.
+This validates inventory completeness, not a new multi-volume performance run
+or completion of the audit's repeated benchmarking requirements.
