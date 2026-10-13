@@ -30,6 +30,9 @@ def test_linked_snapshot_oracles_precede_checkpoint(tmp_path: Path, failure: str
     owners = []
 
     class Planner:
+        def execution_options(self, selected):
+            return {"customer_history_mode": "forward"}
+
         def plan(self, **kwargs):
             return {"batches": batches[len(commits):][:kwargs["max_batches"]]}
 

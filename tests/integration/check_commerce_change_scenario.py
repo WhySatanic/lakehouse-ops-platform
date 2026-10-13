@@ -142,6 +142,14 @@ def main() -> None:
             ("Alice Updated", "2026-02-02T00:00:00", None, True),
         ]
         assert rebuild_customer_history(spark, corrected_source)["action"] == "replay"
+        # The ordinary load after a late rebuild must remain valid, with exactly
+        # one current version and no duplicate history or extra snapshot.
+        following = customers.withColumn("source_batch_id", F.lit("9" * 16)).withColumn(
+            "source_batch_at", F.to_timestamp(F.lit("2026-02-03T12:00:00Z")),
+        )
+        assert apply_customer_history(spark, following, batch_id="9" * 16)["rows_inserted"] == 0
+        assert spark.table(history_table).orderBy("valid_from").collect() == corrected
+        assert spark.table(f"{history_table}.snapshots").count() == history_snapshots + 1
         for invalid_source, message in (
             (corrected_source.unionByName(late_customer), "ambiguous"),
             (complete_source.unionByName(late_customer.withColumn(

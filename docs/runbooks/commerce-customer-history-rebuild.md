@@ -28,7 +28,13 @@ try {
 ```
 
 No `COMMERCE_BATCH_ID` is required in rebuild mode. The job does not advance the
-processing checkpoint and is not automatically scheduled by the normal runner.
+processing checkpoint. For a manifest explicitly declaring `source_semantics:
+full_snapshot`, the normal runner now selects rebuild when its effective timestamp
+precedes an already checkpointed batch. It processes all four silver sources and
+batch gold, then current gold (which ignores an older snapshot), verifies batch gold,
+and only then checkpoints. A partial customer-only maintenance run remains unprocessed
+until this full path completes. The next newer snapshot uses forward history again.
+Manifests without that explicit declaration keep their existing forward-only path.
 Run it only with complete retained silver history and a single writer. Empty input,
 missing required values, duplicate effective timestamps or customer/batch identities,
 missing existing customers

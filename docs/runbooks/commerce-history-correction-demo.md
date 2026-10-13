@@ -29,12 +29,18 @@ are unchanged. Port selection does not reserve ports until Docker starts.
 4. Repeat the history rebuild. Exactly one history snapshot may be added across
    correction and replay; current-revenue snapshots and processing checkpoint bytes
    must remain unchanged. Two separate maintenance runs retain ownership journals.
+5. Resume the same pending full snapshot through the normal runner. It chooses
+   retained-history rebuild, executes every source and gold stage, and publishes
+   current gold using its existing stale-snapshot protection. Only this completed
+   run advances the fourth checkpoint; a final ordinary attempt must be idle.
 
-The last two steps are explicit customer-only maintenance, not a fourth forward
-batch or automatic backfill. The synthetic complete late source contains other
-tables, but order/payment/product silver is not processed for it. It remains
-uncheckpointed; the forward-only runner is not supposed to silently accept it.
-The idle observation belongs to step 2, before this late source is landed.
+Steps 3 and 4 are explicit customer-only maintenance, not a completed fourth batch.
+They do not process order/payment/product silver and leave the late source
+uncheckpointed. Step 5 then processes that same complete full snapshot through
+the normal runner, including those tables, before recording its checkpoint.
+Idle is checked both before landing the late source and after its full completion.
+A new later source batch is not landed in this demonstration; continuation into
+that next batch is covered separately by planner and Spark integration tests.
 
 ## Evidence and limits
 
@@ -56,11 +62,16 @@ Remove-Item Env:LAKEOPS_RUN_HISTORY_CORRECTION_SMOKE
 Remove-Item Env:LAKEOPS_HISTORY_CORRECTION_DIRECTORY
 ```
 
-This read-only smoke requires six ready journal runs, exactly three processing
+For older retained demonstrations, this read-only smoke requires six ready journal runs, exactly three processing
 checkpoints, two separate maintenance runs without checkpoint events, five owned
 maintenance containers and the literal corrected history. It also compares retained
 file SHA256 values before/after inspection. It supplements, not replaces, the actual
 Spark/MinIO/Trino execution.
+
+New demonstrations additionally require a ready `late_batch_completion`, four
+checkpoints, seven journal runs and `idle_after_correction`. The two maintenance
+attempts still contain no checkpoint events. Historical evidence is accepted in
+its original scope, not relabeled as proof of the new continuation behavior.
 
 Startup is bounded by 240 seconds, the acceptance child by 2400 seconds, and stop
 by 120 seconds. Per-stage limits remain 300 seconds. Child timeout is not guaranteed
