@@ -33,14 +33,21 @@ are unchanged. Port selection does not reserve ports until Docker starts.
    retained-history rebuild, executes every source and gold stage, and publishes
    current gold using its existing stale-snapshot protection. Only this completed
    run advances the fourth checkpoint; a final ordinary attempt must be idle.
+6. Land a new complete February 4 snapshot with the same two orders and current
+   customer attributes. The normal runner must select forward history, complete
+   all nine stages and publish this batch as current. Before checkpoint, independent
+   SQL oracles require revenue 2200 cents, the same corrected three-period history,
+   and no additional customer-history snapshot. Only then record checkpoint five
+   and require another compute-free idle attempt.
 
 Steps 3 and 4 are explicit customer-only maintenance, not a completed fourth batch.
 They do not process order/payment/product silver and leave the late source
 uncheckpointed. Step 5 then processes that same complete full snapshot through
 the normal runner, including those tables, before recording its checkpoint.
 Idle is checked both before landing the late source and after its full completion.
-A new later source batch is not landed in this demonstration; continuation into
-that next batch is covered separately by planner and Spark integration tests.
+Step 6 covers continuation into a newly landed ordinary batch, not merely draining
+the earlier late batch. Its source is a new snapshot identity with unchanged state;
+it does not add a fourth customer version or claim a new revenue change.
 
 ## Evidence and limits
 
@@ -72,6 +79,11 @@ New demonstrations additionally require a ready `late_batch_completion`, four
 checkpoints, seven journal runs and `idle_after_correction`. The two maintenance
 attempts still contain no checkpoint events. Historical evidence is accepted in
 its original scope, not relabeled as proof of the new continuation behavior.
+
+Demonstrations with `next_batch_after_correction` additionally require five
+checkpoints, eight ready journal runs and `idle_after_next_batch`. The next-batch
+oracle must retain 2200 cents and the corrected history. Older four-checkpoint
+reports keep their original scope and are not proof of this next-batch step.
 
 Startup is bounded by 240 seconds, the acceptance child by 2400 seconds, and stop
 by 120 seconds. Per-stage limits remain 300 seconds. Child timeout is not guaranteed
@@ -122,3 +134,29 @@ and three actual Docker ownership/timeout/Spark-memory smokes. Evidence:
 smokes and the read-only history evidence check also passed together, without
 changing the retained history report/checkpoint/journal. JUnit:
 `artifacts/history-correction-demo-20261012-v2-main211.xml`.
+
+## Local next-batch execution, 2026-10-13
+
+Fresh project `lakehouse-ops-linked-history-demo-4ca6649fe623486eae4c53874dcdd32d`
+completed the three initial snapshots, both customer-only maintenance attempts,
+full late-batch completion, and a newly landed ordinary February 4 snapshot.
+That final batch completed all nine normal runner stages in 148.29 seconds,
+retained revenue 2200 cents and the corrected three-period history without an
+additional history snapshot, then reached compute-free idle. The retained smoke
+passed with five checkpoints and eight ready journal runs; maintenance still
+contained no checkpoint events. It did not modify report, checkpoint or journal.
+
+Retained report: `artifacts/next-batch-demo-20261013-v2/acceptance/linked.json`.
+SHA256: `53b5da8c1b103704a7addd37068aff8244d945345cd9aac2ba2fe25f57c6ea50`.
+Read-only smoke JUnit: `artifacts/next-batch/retained-smoke.xml`.
+Local quality passed all seven shared gates: 1180 tests passed, 23 opt-in skips,
+92.22% coverage. Log: `artifacts/next-batch/quality.log`.
+The complete acceptance child took 849.94 seconds. This two-order correctness
+run is not a repeated performance benchmark or release-candidate evidence.
+
+The first attempt retained in `artifacts/next-batch-demo-20261013-v1/` failed at
+startup because Docker's subnet pool was exhausted. One empty network from the
+previous completed, owned demonstration was inspected and released before retry.
+The successful run stopped all five scoped core services; its own empty network
+was subsequently released too. Stopped containers, volumes and evidence remain.
+No unrelated container, network or stored data was removed.

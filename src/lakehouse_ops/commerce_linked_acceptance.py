@@ -195,7 +195,9 @@ def main() -> int:
                 if args.late_customer_history:
                     from lakehouse_ops.commerce_history_correction import (
                         CORRECTED_HISTORY,
+                        exercise_following_batch,
                         exercise_history_correction,
+                        generate_following_observation,
                         generate_late_observation,
                     )
 
@@ -245,6 +247,22 @@ def main() -> int:
                     )
                     if report["idle_after_correction"]["status"] != "idle":
                         raise ValueError("late correction left a pending batch")
+                    latest_id = expected["batches"][-1]["batch_id"]
+                    following = generate_following_observation(
+                        args.output / "scenario" / f"batch_id={latest_id}",
+                        args.output / "following-observation",
+                    )
+                    report["following_landing"] = landing.write(
+                        args.output / "following-observation",
+                    ).as_dict()
+                    if landing.write(args.output / "following-observation").created:
+                        raise ValueError("following source replay created new objects")
+                    exercise_following_batch(
+                        planner, trino.query,
+                        lambda service, selected, *, journal: run_compose_stage(
+                            service, selected, bucket="lakehouse", journal=journal,
+                        ), following, expected, args.output, report,
+                    )
     except Exception as error:
         report.update(status="failed", error_type=type(error).__name__)
         print(f"linked commerce acceptance failed: {error}", file=sys.stderr)
