@@ -13,6 +13,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
+from lakehouse_ops.local_quality import CHECKS
+
 
 def check(root: Path, output: Path, *, run: Any = subprocess.run) -> dict[str, Any]:
     root, output = root.resolve(), output.resolve()
@@ -29,14 +31,12 @@ def check(root: Path, output: Path, *, run: Any = subprocess.run) -> dict[str, A
         ("docker", ["docker", "info", "--format", "{{.ServerVersion}}"], 30),
         ("spark-image", ["docker", "image", "inspect",
                          "lakehouse-ops/spark-iceberg:3.5.9-1.11.0"], 30),
-        ("lint", [*python, "ruff", "check", "."], 120),
-        ("access-policy", [*python, "lakehouse_ops.cli", "render-trino-access-policy",
-                           "--model", "config/access/role-policy.json", "--output",
-                           "infra/trino/access-control-rules.json", "--check"], 120),
-        ("contract", [*python, "lakehouse_ops.cli", "verify-control-plane-contract",
-                      "--contract", "config/control-plane/contract.json"], 120),
-        ("image-lock", [*python, "lakehouse_ops.cli", "verify-image-lock"], 120),
-        ("quality", [*python, "pytest", f"--junitxml={output / 'quality.xml'}"], 600),
+        *[
+            ({"tests": "quality", "trino-policy": "access-policy"}.get(name, name),
+             [*command, *([f"--junitxml={output / 'quality.xml'}"] if name == "tests" else [])],
+             600 if name == "tests" else 120)
+            for name, command in CHECKS
+        ],
         ("docker-smoke", [*python, "pytest",
                           "tests/integration/test_commerce_stage_timeout.py",
                           "tests/integration/test_spark_memory.py", "-q", "-s", "-o",
