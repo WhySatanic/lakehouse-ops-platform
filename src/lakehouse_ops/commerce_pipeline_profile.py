@@ -21,6 +21,14 @@ from lakehouse_ops.ingestion.commerce_fixture import (
 )
 from lakehouse_ops.trino import TrinoClient
 
+_INVENTORY_TABLES_SQL = (
+    "SELECT table_schema, table_name FROM lakehouse.information_schema.tables "
+    "WHERE table_schema IN ('bronze','silver','gold') "
+    "AND (table_name LIKE 'commerce_%' "
+    "OR (table_schema='gold' AND table_name='dim_customers_scd2')) "
+    "ORDER BY table_schema, table_name"
+)
+
 
 def stack_memory_sample(project: str) -> dict[str, Any]:
     """Observe only this Compose project's containers, including active one-off jobs."""
@@ -116,11 +124,7 @@ def execute(args: list[str], output: Path, label: str) -> dict[str, Any]:
 
 
 def file_inventory(client: TrinoClient) -> list[dict[str, Any]]:
-    tables = client.query(
-        "SELECT table_schema, table_name FROM lakehouse.information_schema.tables "
-        "WHERE table_schema IN ('bronze','silver','gold') "
-        "AND table_name LIKE 'commerce_%' ORDER BY table_schema, table_name"
-    )
+    tables = client.query(_INVENTORY_TABLES_SQL)
     inventory = []
     for table in tables:
         schema, name = table["table_schema"], table["table_name"]
@@ -172,11 +176,7 @@ def query_costs(
 
 
 def snapshot_inventory(client: TrinoClient) -> list[dict[str, Any]]:
-    tables = client.query(
-        "SELECT table_schema, table_name FROM lakehouse.information_schema.tables "
-        "WHERE table_schema IN ('bronze','silver','gold') "
-        "AND table_name LIKE 'commerce_%' ORDER BY table_schema, table_name"
-    )
+    tables = client.query(_INVENTORY_TABLES_SQL)
     inventory = []
     for table in tables:
         schema = table["table_schema"].replace('"', '""')
