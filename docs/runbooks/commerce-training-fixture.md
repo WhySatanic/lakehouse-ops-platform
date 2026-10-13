@@ -381,8 +381,9 @@ S3 planning and checkpoint I/O are checked at boundaries, not forcibly interrupt
 Docker cleanup and Trino cancellation may take additional bounded time. Custom
 query/stage callbacks must honor their own blocking limits; only the normal CLI
 and Compose adapter propagate the remaining budget into those operations. The
-scheduled cycle inherits the runner setting but its notification child and overall
-process wait are not yet bounded. No checkpoint or table migration is required;
+scheduled cycle uses the same setting for its runner and notification children;
+see the cycle's bounded-wait and forced-termination limits below. No checkpoint or table
+migration is required;
 raise the setting explicitly if a previously longer batch now exhausts the budget.
 
 After building the compute image, run the isolated acceptance with
@@ -477,6 +478,25 @@ Before starting either child command, the wrapper validates the bounded Trino
 verification retries and the Alertmanager URL, instance, freshness ages, and alert
 validity. A typo in those options exits 2 without launching Spark or touching S3;
 correct the configuration and rerun. This preflight does not prove service reachability.
+
+`COMMERCE_RUN_TIMEOUT_SECONDS` is also the scheduled cycle's total work budget
+(default 3600, integer 1..86400), measured with a monotonic clock. Configuration is
+validated before starting either child. The runner receives the unspent budget;
+the freshness child receives only what remains after the runner, not a new full
+timeout. If no time remains, notification is skipped and the cycle fails rather
+than reporting healthy freshness. Monitor that stderr and nonzero exit separately.
+
+The runner process wait allows an extra 35 seconds for its existing 30-second
+stage-container cleanup, journal update and exit. Thus the normal cycle's bound
+is the work budget plus this shutdown grace, not a strict work-budget wall clock.
+This outer wait also covers runner CLI setup excluded from its internal deadline.
+If even the outer wait expires, Python terminates the immediate child process.
+That is **not** proof that a Compose descendant, active Docker stage or Trino query
+was removed: stderr explicitly says container cleanup is unconfirmed. Inspect the
+retained `STATE.runs.sqlite3` and its exact recorded container before retrying;
+use the existing explicit ownership-checked cleanup procedure if needed. Do not
+assume a failed cycle rolled back Iceberg writes or left its checkpoint unchanged.
+Hard parent exits and whole-process-tree cancellation remain outside this guarantee.
 
 To opt in to a ten-minute schedule, install this crontab entry after replacing the
 checkout and log paths with absolute paths writable by the cron user:

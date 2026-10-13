@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import argparse
+import math
+import os
 import subprocess
 import sys
+import time
 from collections.abc import Sequence
 
 from lakehouse_ops.commerce_alerts import CommerceAlertError, validate_commerce_alert_options
 from lakehouse_ops.commerce_gold_gate import CommerceGoldGateError, validate_commerce_gold_retry
+from lakehouse_ops.commerce_pipeline import CommercePipelineError, commerce_run_timeout_seconds
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -29,6 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run_cycle(args: argparse.Namespace) -> int:
+    deadline = time.monotonic() + commerce_run_timeout_seconds()
     validate_commerce_gold_retry(args.attempts, args.retry_delay_seconds)
     validate_commerce_alert_options(
         server=args.alertmanager_server, instance=args.instance,
@@ -40,13 +45,25 @@ def run_cycle(args: argparse.Namespace) -> int:
         "--s3-bucket", args.s3_bucket, "--s3-endpoint-url", args.s3_endpoint_url,
         "--state", args.state,
     ]
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        print("commerce cycle time budget exhausted before runner", file=sys.stderr)
+        return 2
     runner_code = _run_command(
         [sys.executable, "-m", "lakehouse_ops.cli", "run-commerce-batch", *shared,
          "--server", args.server, "--user", args.user,
          "--attempts", str(args.attempts),
          "--retry-delay-seconds", str(args.retry_delay_seconds)],
         "run-commerce-batch",
+        # The runner may spend up to 30 seconds removing its timed-out stage.
+        # A small margin also permits its failed journal event and process exit.
+        timeout=remaining + 35,
+        environment={**os.environ, "COMMERCE_RUN_TIMEOUT_SECONDS": str(math.ceil(remaining))},
     )
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        print("commerce cycle time budget exhausted; notification skipped", file=sys.stderr)
+        return runner_code or 2
     notification_code = _run_command(
         [sys.executable, "-m", "lakehouse_ops.cli", "notify-commerce-freshness", *shared,
          "--instance", args.instance, "--alertmanager-server", args.alertmanager_server,
@@ -54,15 +71,25 @@ def run_cycle(args: argparse.Namespace) -> int:
          "--backlog-max-age-seconds", str(args.backlog_max_age_seconds),
          "--alert-valid-seconds", str(args.alert_valid_seconds)],
         "notify-commerce-freshness",
+        timeout=remaining,
     )
     # A failed pipeline must not be hidden by a successful notification. A freshness
     # breach remains visible as exit 1 when the pipeline itself succeeded or was idle.
     return runner_code or notification_code
 
 
-def _run_command(command: list[str], name: str) -> int:
+def _run_command(
+    command: list[str], name: str, *, timeout: float,
+    environment: dict[str, str] | None = None,
+) -> int:
     try:
-        return subprocess.run(command, check=False).returncode
+        return subprocess.run(command, check=False, timeout=timeout, env=environment).returncode
+    except subprocess.TimeoutExpired:
+        print(f"{name} timed out after {timeout:.3f}s", file=sys.stderr)
+        if name == "run-commerce-batch":
+            print("runner terminated; container cleanup unconfirmed; inspect its journal "
+                  "before retrying", file=sys.stderr)
+        return 2
     except OSError as error:
         print(f"{name} could not start: {error}", file=sys.stderr)
         return 2
@@ -73,7 +100,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return run_cycle(args)
-    except (CommerceAlertError, CommerceGoldGateError) as error:
+    except (CommerceAlertError, CommerceGoldGateError, CommercePipelineError) as error:
         parser.error(str(error))
 
 
