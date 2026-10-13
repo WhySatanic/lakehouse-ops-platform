@@ -77,8 +77,9 @@ def test_real_container_labels_match_prelaunch_journal(tmp_path: Path, monkeypat
 @pytest.mark.skipif(
     os.getenv("LAKEOPS_RUN_DOCKER_TIMEOUT_SMOKE") != "1", reason="requires local Docker",
 )
+@pytest.mark.parametrize("interrupted", [False, True])
 def test_real_compose_timeout_removes_owned_container(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, interrupted: bool,
 ) -> None:
     compose = tmp_path / "compose.yaml"
     compose.write_text(
@@ -95,6 +96,28 @@ def test_real_compose_timeout_removes_owned_container(
         if command[:2] == ["docker", "compose"]:
             names.append(command[-2])
             command = [*command[:2], "--file", str(compose), *command[2:]]
+            if interrupted:
+                process = subprocess.Popen(command, env=kwargs["env"], stdout=kwargs["stdout"])
+                try:
+                    deadline = time.monotonic() + 15
+                    while time.monotonic() < deadline:
+                        inspected = real_run(
+                            ["docker", "inspect", names[-1]], capture_output=True,
+                            text=True, check=False, timeout=5,
+                        )
+                        if not inspected.returncode and json.loads(inspected.stdout)[0]["State"][
+                            "Running"
+                        ]:
+                            break
+                        time.sleep(0.1)
+                    else:
+                        pytest.fail("owned sleeper never became active")
+                finally:
+                    process.kill()
+                    process.wait(timeout=5)
+                # Model subprocess.run propagating Ctrl+C after stopping its client;
+                # the live Docker stage must be stopped by the production adapter.
+                raise KeyboardInterrupt
         return real_run(command, **kwargs)
 
     monkeypatch.setenv("COMMERCE_STAGE_TIMEOUT_SECONDS", "3")
@@ -103,7 +126,10 @@ def test_real_compose_timeout_removes_owned_container(
     journal = CommerceRunJournal(tmp_path / "ownership.sqlite3")
     try:
         for _ in range(2):
-            with pytest.raises(pipeline.CommercePipelineError, match="container removed"):
+            with pytest.raises(
+                KeyboardInterrupt if interrupted else pipeline.CommercePipelineError,
+                match=None if interrupted else "container removed",
+            ):
                 pipeline.run_compose_stage(
                     "bronze-input-sync",
                     {"batch_id": "a" * 16, "manifest_sha256": "b" * 64}, bucket="unused",
@@ -120,7 +146,10 @@ def test_real_compose_timeout_removes_owned_container(
             assert db.execute(
                 "SELECT container_name,event FROM commerce_container_events ORDER BY sequence"
             ).fetchall() == [(name, event) for name in names
-                            for event in ("launch_intent", "timeout_removed")]
+                            for event in (
+                                "launch_intent",
+                                "interrupted_removed" if interrupted else "timeout_removed",
+                            )]
     finally:
         for name in names:
             real_run(

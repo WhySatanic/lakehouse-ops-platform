@@ -256,8 +256,9 @@ def test_invalid_stage_timeout_never_starts_docker(
 
 
 @pytest.mark.parametrize("cleanup", ["ok", "exit", "timeout", "missing"])
+@pytest.mark.parametrize("interrupted", [False, True])
 def test_stage_timeout_cleans_only_owned_container_and_preserves_checkpoint(
-    cleanup: str, monkeypatch: pytest.MonkeyPatch,
+    cleanup: str, interrupted: bool, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("COMMERCE_STAGE_TIMEOUT_SECONDS", "1")
     calls: list[list[str]] = []
@@ -266,6 +267,8 @@ def test_stage_timeout_cleans_only_owned_container_and_preserves_checkpoint(
         calls.append(command)
         if len(calls) == 1:
             assert kwargs["timeout"] == 1
+            if interrupted:
+                raise KeyboardInterrupt
             raise subprocess.TimeoutExpired(command, 1)
         assert command == ["docker", "rm", "--force", calls[0][-2]]
         assert kwargs["timeout"] == 30
@@ -280,7 +283,12 @@ def test_stage_timeout_cleans_only_owned_container_and_preserves_checkpoint(
     monkeypatch.setattr(pipeline.subprocess, "run", run)
     planner = Planner()
     message = "container removed" if cleanup == "ok" else "cleanup unconfirmed"
-    with pytest.raises(pipeline.CommercePipelineError, match=message):
+    expected_error = (
+        KeyboardInterrupt if interrupted and cleanup == "ok" else pipeline.CommercePipelineError
+    )
+    with pytest.raises(
+        expected_error, match=None if expected_error is KeyboardInterrupt else message,
+    ):
         pipeline.run_commerce_batch(
             planner, lambda _: pytest.fail("must not verify"),
             run_stage=lambda service, batch: pipeline.run_compose_stage(
@@ -292,8 +300,9 @@ def test_stage_timeout_cleans_only_owned_container_and_preserves_checkpoint(
     assert planner.pending
 
 
+@pytest.mark.parametrize("interrupted", [False, True])
 def test_retry_after_timeout_uses_new_container_then_commits_after_verification(
-    monkeypatch: pytest.MonkeyPatch,
+    interrupted: bool, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("COMMERCE_STAGE_TIMEOUT_SECONDS", "1")
     names: list[str] = []
@@ -302,6 +311,8 @@ def test_retry_after_timeout_uses_new_container_then_commits_after_verification(
         if command[:2] == ["docker", "compose"]:
             names.append(command[-2])
             if len(names) == 1:
+                if interrupted:
+                    raise KeyboardInterrupt
                 raise subprocess.TimeoutExpired(command, 1)
         else:
             assert command == ["docker", "rm", "--force", names[0]]
@@ -311,7 +322,10 @@ def test_retry_after_timeout_uses_new_container_then_commits_after_verification(
     def execute(service: str, batch: dict[str, str]) -> None:
         pipeline.run_compose_stage(service, batch, bucket="selected")
 
-    with pytest.raises(pipeline.CommercePipelineError, match="timed out"):
+    with pytest.raises(
+        KeyboardInterrupt if interrupted else pipeline.CommercePipelineError,
+        match=None if interrupted else "timed out",
+    ):
         pipeline.run_commerce_batch(planner, gold, run_stage=execute)
     assert planner.commits == []
     report = pipeline.run_commerce_batch(planner, gold, run_stage=execute)

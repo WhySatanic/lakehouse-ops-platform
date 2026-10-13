@@ -354,19 +354,26 @@ volume benchmark, SLA, or per-job Spark memory measurement.
 Each Compose stage has a wall-clock limit of 1800 seconds. Set
 `COMMERCE_STAGE_TIMEOUT_SECONDS` in the runner environment to an integer from 1 to
 86400 to override it. Invalid values fail before that stage starts Docker. Each attempt
-uses a unique `lakeops-commerce-<uuid>` container name. On timeout the Compose client
-is terminated and the runner force-removes only that named container, with a separate
+uses a unique `lakeops-commerce-<uuid>` container name. On timeout or a propagated
+Ctrl+C (`KeyboardInterrupt`), the runner force-removes only that named container, with a separate
 30-second cleanup limit. Logs remain on stderr and the checkpoint does not advance.
 If cleanup cannot be confirmed, the error includes the exact container name; inspect
-and stop that container before retrying. This does not roll back committed Iceberg writes,
-bound S3/Trino planning time, provide a durable run journal, or handle abrupt owner death.
+and stop that container before retrying. A successful interrupt cleanup records
+`interrupted_removed` in the existing ownership journal and re-raises the interruption;
+the run is not reported as successful. Retry uses a new stage name and still requires
+all stages and SQL verification before checkpoint. This does not roll back committed
+Iceberg writes, bound planning time, handle SIGTERM/SIGKILL, or guarantee cleanup after
+a second Ctrl+C during cleanup. The existing journal retains evidence, not rollback.
 Previously stages had no time limit; increase the setting explicitly for known long jobs.
 
 After building the compute image, run the isolated acceptance with
 `LAKEOPS_RUN_DOCKER_TIMEOUT_SMOKE=1 uv run pytest tests/integration/test_commerce_stage_timeout.py -q -o addopts=''`
 (PowerShell: set `$env:LAKEOPS_RUN_DOCKER_TIMEOUT_SMOKE='1'` first). It runs two
-three-second timeouts against a network-isolated sleeper in the existing Spark image,
-then checks that both uniquely named containers are absent. It does not execute Spark
+three-second timeouts and two modeled Ctrl+C interruptions after a network-isolated
+sleeper becomes active in the existing Spark image, then checks that all uniquely
+named containers are absent and their journal outcomes match. The interruption test
+kills the Compose client and propagates `KeyboardInterrupt`; it is not an OS signal
+delivery or scheduled-cycle deadline test. It does not execute Spark
 or claim Iceberg rollback. The serving integration job runs the same check.
 
 For transient coordinator or transport failures, opt into bounded read-only gold

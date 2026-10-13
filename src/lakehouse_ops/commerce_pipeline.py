@@ -88,7 +88,9 @@ def run_compose_stage(
             command,
             env=environment, check=True, stdout=sys.stderr, timeout=timeout,
         )
-    except subprocess.TimeoutExpired as error:
+    except (subprocess.TimeoutExpired, KeyboardInterrupt) as error:
+        interrupted = isinstance(error, KeyboardInterrupt)
+        outcome = "interrupted" if interrupted else "timed out"
         try:
             subprocess.run(
                 ["docker", "rm", "--force", container], check=True,
@@ -97,9 +99,13 @@ def run_compose_stage(
         except (OSError, subprocess.SubprocessError) as cleanup_error:
             ownership("cleanup_unconfirmed")
             raise CommercePipelineError(
-                f"commerce stage timed out: {service}; container cleanup unconfirmed: {container}"
+                f"commerce stage {outcome}: {service}; container cleanup unconfirmed: {container}"
             ) from cleanup_error
-        ownership("timeout_removed")
+        ownership("interrupted_removed" if interrupted else "timeout_removed")
+        if interrupted:
+            # Keep Ctrl+C's non-success exit and the run's failed journal event.
+            # Removing the Compose client alone does not stop its Docker stage.
+            raise
         raise CommercePipelineError(
             f"commerce stage timed out after {timeout}s: {service}; container removed: {container}"
         ) from error
