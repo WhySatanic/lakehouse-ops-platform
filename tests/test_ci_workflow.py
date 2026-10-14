@@ -2,6 +2,26 @@ import json
 from pathlib import Path
 
 
+def test_failed_ranger_startup_retains_default_worker_logs_and_container_state():
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    job = workflow.split("  ranger-integration:\n", 1)[1].split(
+        "  lakehouse-integration:\n", 1,
+    )[0]
+    step = job.split("      - name: Show Ranger logs\n", 1)[1].split(
+        "      - name:", 1,
+    )[0]
+    assert "if: failure()" in step
+    logged = step.split("logs ranger-db", 1)[1].split("for service", 1)[0].split()
+    assert {"trino-worker", "trino-worker-2"} <= set(logged)
+    assert "for service in trino-coordinator trino-worker trino-worker-2; do" in step
+    assert 'docker compose --profile query ps --all --quiet "$service"' in step
+    assert '{{json .State}}' in step and '{{.RestartCount}}' in step
+    assert 'docker inspect --format' in step and '"$container_id"' in step
+    assert job.index("      - name: Show Ranger logs\n") < job.index(
+        "      - name: Stop Ranger enforcement profiles\n",
+    )
+
+
 def test_rc_revalidates_downloaded_commerce_proof_before_packaging():
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     step = workflow.split("      - name: Build deterministic release-candidate bundle\n", 1)[1]
