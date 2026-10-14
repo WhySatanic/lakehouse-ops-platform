@@ -78,6 +78,31 @@ def build_release_candidate(
             raise ReleaseCandidateError(f"evidence digest changed: {relative_path}")
         archive_entries[f"evidence/{relative_path}"] = _read_bytes(path)
 
+    # Historical input sets remain supported. Current CI requires and revalidates
+    # this full-path evidence before building; never package a partial triplet.
+    commerce_path = "serving-evidence/commerce-history-correction-ci/acceptance"
+    commerce_root = _resolve_below(evidence_root, commerce_path)
+    if commerce_root.exists():
+        for name in ("linked.json", "checkpoint.json", "run-journal.sqlite3"):
+            relative_path = f"{commerce_path}/{name}"
+            path = _resolve_below(evidence_root, relative_path)
+            if not path.is_file():
+                raise ReleaseCandidateError(f"commerce evidence is missing: {relative_path}")
+            archive_entries[f"evidence/{relative_path}"] = _read_bytes(path)
+        commerce = _load_json_bytes(
+            archive_entries[f"evidence/{commerce_path}/linked.json"], "commerce evidence",
+        )
+        expected = {"late_customer_correction": "ready", "late_batch_completion": "ready",
+                    "late_batch_recovery": "ready", "next_batch_after_correction": "ready",
+                    "idle_after_correction": "idle", "idle_after_next_batch": "idle"}
+        if commerce.get("status") != "ready" or any(
+            not isinstance(commerce.get(key), dict) or commerce[key].get("status") != status
+            for key, status in expected.items()
+        ):
+            raise ReleaseCandidateError(
+                "commerce evidence does not contain the complete recovery path",
+            )
+
     try:
         upgrade_report = _load_object(upgrade_report_path, "Trino upgrade report")
         upgrade_plan = load_upgrade_plan(upgrade_plan_path)

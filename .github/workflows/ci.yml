@@ -1291,7 +1291,12 @@ jobs:
           digest-mismatch: error
           path: ${{ runner.temp }}/evidence
       - name: Build deterministic release-candidate bundle
+        env:
+          LAKEOPS_RUN_HISTORY_CORRECTION_SMOKE: "1"
+          LAKEOPS_HISTORY_CORRECTION_DIRECTORY: ${{ runner.temp }}/evidence/serving-evidence/commerce-history-correction-ci/acceptance
         run: |
+          uv run --frozen pytest tests/integration/test_commerce_retained_history_correction.py \
+            -q -o addopts=''
           mkdir -p artifacts
           uv run lakeops build-release-candidate \
             --evidence-root "${{ runner.temp }}/evidence" \

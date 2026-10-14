@@ -2,6 +2,18 @@ import json
 from pathlib import Path
 
 
+def test_rc_revalidates_downloaded_commerce_proof_before_packaging():
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    step = workflow.split("      - name: Build deterministic release-candidate bundle\n", 1)[1]
+    step = step.split("      - name:", 1)[0]
+    assert 'LAKEOPS_RUN_HISTORY_CORRECTION_SMOKE: "1"' in step
+    assert ("${{ runner.temp }}/evidence/serving-evidence/"
+            "commerce-history-correction-ci/acceptance") in step
+    assert step.index("test_commerce_retained_history_correction.py") < step.index(
+        "lakeops build-release-candidate",
+    )
+
+
 def test_catalog_compute_builds_keep_checksums_and_enable_bounded_endpoint_fallback():
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert workflow.count("--attempts 3 --maven-central-fallback") == 3
