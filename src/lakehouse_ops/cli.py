@@ -570,6 +570,7 @@ def main(argv: list[str] | None = None) -> int:
             bucket=args.s3_bucket,
             prefix=args.s3_prefix,
             state_path=args.state,
+            manifest_read_workers=8,
         )
         try:
             if args.command == "plan-commerce-batches":
@@ -587,7 +588,8 @@ def main(argv: list[str] | None = None) -> int:
         if not args.s3_bucket:
             parser.error("--s3-bucket is required")
         planner = CommerceBatchPlanner(
-            _create_s3_client(args), bucket=args.s3_bucket, prefix=args.s3_prefix
+            _create_s3_client(args), bucket=args.s3_bucket, prefix=args.s3_prefix,
+            manifest_read_workers=8,
         )
         try:
             report = planner.check_source_freshness(max_age_seconds=args.max_age_seconds)
@@ -603,6 +605,7 @@ def main(argv: list[str] | None = None) -> int:
             bucket=args.s3_bucket,
             prefix=args.s3_prefix,
             state_path=args.state,
+            manifest_read_workers=8,
         )
         try:
             report = planner.check_backlog_freshness(max_age_seconds=args.max_age_seconds)
@@ -625,7 +628,7 @@ def main(argv: list[str] | None = None) -> int:
             with commerce_runner_lock():
                 planner = CommerceBatchPlanner(
                     _create_s3_client(args), bucket=args.s3_bucket, prefix=args.s3_prefix,
-                    state_path=args.state,
+                    state_path=args.state, manifest_read_workers=8,
                 )
                 def query(sql: str) -> list[dict[str, Any]]:
                     remaining = commerce_remaining_seconds()
@@ -657,7 +660,7 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--s3-bucket is required")
         planner = CommerceBatchPlanner(
             _create_s3_client(args), bucket=args.s3_bucket, prefix=args.s3_prefix,
-            state_path=args.state,
+            state_path=args.state, manifest_read_workers=8,
         )
         try:
             report = notify_commerce_freshness(
@@ -680,6 +683,7 @@ def main(argv: list[str] | None = None) -> int:
             bucket=args.s3_bucket,
             prefix=args.s3_prefix,
             state_path=args.state,
+            manifest_read_workers=8,
         )
         try:
             with TrinoClient(args.server, user=args.user) as client:

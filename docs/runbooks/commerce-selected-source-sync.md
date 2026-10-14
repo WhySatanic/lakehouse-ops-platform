@@ -51,6 +51,57 @@ oracles, replay and idle behavior. Use an empty output directory each time.
 
 This optimization bounds transferred source data, not total pipeline runtime or
 memory. It is not a cross-job CI cache, automatic source cleanup or release evidence.
+
+## Bounded manifest discovery
+
+The existing commerce CLI, linked demo and recovery drivers now read committed
+manifests in groups of at most eight using their low-level Boto3 S3 client. The client
+is created before worker threads. Custom Python clients remain serial by default;
+only explicitly thread-safe clients should opt into `manifest_read_workers`.
+This follows the [Boto3 client sharing constraints](https://docs.aws.amazon.com/boto3/latest/guide/clients.html).
+No new CLI option, service, image or state migration is required. Reverting the
+constructor opt-in to one restores serial discovery without changing checkpoint data.
+
+Discovery still lists and validates **every** manifest on every invocation, including
+already processed batches. It preserves chronological selection, processed content
+checks, the 1 MiB body limit, stream closure and checkpoint guards. It does not cache
+ETags or skip old metadata. Only one bounded group is submitted at a time; a failed
+group cannot enqueue the remaining history. A one-manifest queue avoids a thread pool.
+
+### Same-data local comparison, 2026-10-14
+
+One retained isolated MinIO volume contains genuine conditionally landed fixtures in
+four separate pending queues, with 1/10/100/1000 manifests. Each fixture has 100 orders,
+10 customers and 5 products. No checkpoint is fabricated and no data is regenerated.
+Three paired repetitions per queue alternate serial/eight-worker order on one service
+and shared client. Both modes select the same hash-bound oldest batch and perform
+exactly N manifest GETs for planning, 2N for planning plus execution-option resolution.
+
+| Pending manifests | Serial median, seconds | Eight-worker median, seconds |
+|---:|---:|---:|
+| 1 | 0.009152 | 0.009399 |
+| 10 | 0.058048 | 0.045221 |
+| 100 | 0.503673 | 0.382261 |
+| 1000 | 4.754573 | 3.409553 |
+
+These timings exclude fixture landing and memory tracing. At 1000 pending manifests
+the measured median reduction is 28.3%, not a whole-pipeline speedup. A separate
+tracemalloc-enabled comparison has median Python traced peaks of 126811/173018 bytes
+at 10 manifests and 2933176/2833391 bytes at 1000 (serial/eight workers). Those are
+parser/client heap observations, not process RSS, Spark or full-stack memory; the
+instrumented timings are slower and are not mixed into the table.
+
+Raw timing evidence: `artifacts/history-planning-ab-timing-20261014.json`, SHA256
+`7a9bf9439e81a6ad1e197183ddcdff89476feb14c9084513cff9ce5892f0190f`.
+Separate traced observations: `artifacts/history-planning-ab-20261014.json`, SHA256
+`ae546a1158aae7e43a730e1cf08010b5f79923b83d617b2699a96b4ce76408b6`.
+The recorded `source_sha` identifies base `5764863`; discovery used the then-uncommitted
+bounded-read implementation in this change. These local measurement files are not
+source attestations or clean-checkout RC assets. Three subsequent real CLI plans on
+the 1000-manifest queue retained the same selection with no checkpoint creation.
+This measures pending landing discovery with reused connections, not controlled
+OS/image cold starts or growth of completed Iceberg table history. No Spark/SQL
+workload or recovery-at-scale result is claimed by this experiment.
 No mandatory CI check is removed. Existing CI time is also spent on alert delivery,
 recovery and other integration scenarios; fewer mirrored files do not establish a
 measured whole-CI speedup.

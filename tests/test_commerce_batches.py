@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
-from threading import Event
+from threading import Event, Lock, get_ident
 from typing import Any
 
 import pytest
@@ -19,6 +19,130 @@ from lakehouse_ops.ingestion.commerce_batches import (
 )
 
 MISSING_SCHEMA = object()
+
+
+def test_custom_client_stays_serial_unless_explicitly_opted_in(tmp_path):
+    callers = []
+
+    class SerialClient(FakeS3Client):
+        def get_object(self, **kwargs):
+            callers.append(get_ident())
+            return super().get_object(**kwargs)
+
+    client = SerialClient()
+    for number in range(1, 17):
+        client.add_manifest(f"{number:016x}", "2026-01-01T00:00:00Z")
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=tmp_path / "state.json")
+    assert planner.plan(max_batches=1)["committed_batches"] == 16
+    assert callers == [get_ident()] * 16
+
+
+def test_invalid_parallel_group_does_not_enqueue_remaining_history(tmp_path):
+    calls, bodies = [], []
+    lock = Lock()
+
+    class TrackingClient(FakeS3Client):
+        def get_object(self, **kwargs):
+            response = super().get_object(**kwargs)
+            with lock:
+                calls.append(kwargs["Key"])
+                bodies.append(response["Body"])
+            return response
+
+    client = TrackingClient()
+    for number in range(1, 25):
+        client.add_manifest(f"{number:016x}", "2026-01-01T00:00:00Z")
+    client.objects["landing/source=commerce/batch_id=0000000000000001/manifest.json"][1][
+        "commit-marker"
+    ] = "false"
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=tmp_path / "state.json",
+                                   manifest_read_workers=2)
+    with pytest.raises(CommerceBatchError, match="invalid commerce commit marker"):
+        planner.plan(max_batches=1)
+    assert 1 <= len(calls) <= 2
+    assert all(key.endswith(("0000000000000001/manifest.json", "0000000000000002/manifest.json"))
+               for key in calls)
+    assert all(body.closed for body in bodies)
+    assert not (tmp_path / "state.json").exists()
+
+
+@pytest.mark.parametrize("workers", [0, 9, True, 1.5])
+def test_manifest_read_concurrency_is_bounded(workers, tmp_path):
+    with pytest.raises(CommerceBatchError, match="manifest_read_workers"):
+        CommerceBatchPlanner(FakeS3Client(), bucket="lakehouse",
+                             state_path=tmp_path / "state.json", manifest_read_workers=workers)
+
+
+def test_opted_in_manifest_reads_overlap_with_bounded_workers_and_sorted_output(tmp_path):
+    ready, release = Event(), Event()
+    lock = Lock()
+    active = peak = calls = 0
+
+    class BlockingClient(FakeS3Client):
+        def get_object(self, **kwargs):
+            nonlocal active, peak, calls
+            with lock:
+                active += 1
+                calls += 1
+                peak = max(peak, active)
+                if active == 2:
+                    ready.set()
+            try:
+                assert release.wait(3), "manifest readers did not overlap"
+                return super().get_object(**kwargs)
+            finally:
+                with lock:
+                    active -= 1
+
+    client = BlockingClient()
+    for number in range(24, 0, -1):
+        client.add_manifest(f"{number:016x}", "2026-01-01T00:00:00Z")
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=tmp_path / "state.json",
+                                   manifest_read_workers=2)
+    with ThreadPoolExecutor(max_workers=1) as owner:
+        future = owner.submit(planner.discover)
+        try:
+            assert ready.wait(2), "serial discovery did not overlap independent HTTP reads"
+        finally:
+            release.set()
+        discovered = future.result(timeout=3)
+    assert peak == 2 and calls == 24 and active == 0
+    assert [batch.batch_id for batch in discovered] == [f"{n:016x}" for n in range(1, 25)]
+    assert not (tmp_path / "state.json").exists()
+
+
+@pytest.mark.parametrize("corruption", ["marker", "checksum", "body"])
+def test_parallel_discovery_revalidates_all_manifests_and_closes_bodies(tmp_path, corruption):
+    bodies = []
+    lock = Lock()
+
+    class TrackingClient(FakeS3Client):
+        def get_object(self, **kwargs):
+            response = super().get_object(**kwargs)
+            with lock:
+                bodies.append(response["Body"])
+            return response
+
+    client = TrackingClient()
+    for number in range(1, 17):
+        client.add_manifest(f"{number:016x}", "2026-01-01T00:00:00Z")
+    state = tmp_path / "state.json"
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state,
+                                   manifest_read_workers=4)
+    assert planner.plan(max_batches=1)["committed_batches"] == 16
+    assert all(body.closed for body in bodies)
+    key = "landing/source=commerce/batch_id=0000000000000010/manifest.json"
+    payload, metadata = client.objects[key]
+    if corruption == "body":
+        payload += b"changed"
+    else:
+        metadata = {**metadata, "commit-marker" if corruption == "marker" else "sha256": "bad"}
+    client.objects[key] = payload, metadata
+    bodies.clear()
+    with pytest.raises(CommerceBatchError, match="invalid commerce commit marker"):
+        planner.plan(max_batches=1)
+    assert bodies and all(body.closed for body in bodies)
+    assert not state.exists()
 
 
 class FakeS3Client:
@@ -458,30 +582,40 @@ def test_rejects_invalid_committed_table_inventory(
     assert not state.exists()
 
 
+@pytest.mark.parametrize("workers", [1, 8])
 def test_rejects_changed_manifest_after_checkpoint(
-    client: FakeS3Client, tmp_path: Path
+    client: FakeS3Client, tmp_path: Path, workers: int,
 ) -> None:
     state_path = tmp_path / "state.json"
-    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state_path)
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state_path,
+                                   manifest_read_workers=workers)
     planner.commit("aaaaaaaaaaaaaaaa")
+    before = state_path.read_bytes()
     client.add_manifest("aaaaaaaaaaaaaaaa", "2026-01-02T00:00:00Z")
 
     with pytest.raises(CommerceBatchError, match="changed after processing"):
         planner.plan(max_batches=1)
+    with pytest.raises(CommerceBatchError, match="changed after processing"):
+        planner.commit("bbbbbbbbbbbbbbbb")
+    assert state_path.read_bytes() == before
 
 
+@pytest.mark.parametrize("workers", [1, 8])
 def test_rejects_missing_processed_commit_marker(
-    client: FakeS3Client, tmp_path: Path
+    client: FakeS3Client, tmp_path: Path, workers: int,
 ) -> None:
     state_path = tmp_path / "state.json"
-    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state_path)
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state_path,
+                                   manifest_read_workers=workers)
     planner.commit("aaaaaaaaaaaaaaaa")
+    before = state_path.read_bytes()
     del client.objects[
         "landing/source=commerce/batch_id=aaaaaaaaaaaaaaaa/manifest.json"
     ]
 
     with pytest.raises(CommerceBatchError, match="commit marker is missing"):
         planner.plan(max_batches=1)
+    assert state_path.read_bytes() == before
 
 
 @pytest.mark.parametrize(
@@ -517,6 +651,7 @@ def test_rejects_corrupt_checkpoint(client: FakeS3Client, tmp_path: Path) -> Non
         planner.plan(max_batches=1)
 
 
+@pytest.mark.parametrize("workers", [1, 8])
 @pytest.mark.parametrize(
     ("change", "message"),
     [
@@ -527,10 +662,11 @@ def test_rejects_corrupt_checkpoint(client: FakeS3Client, tmp_path: Path) -> Non
     ],
 )
 def test_rejects_corrupt_processed_checkpoint_metadata_without_changing_it(
-    client: FakeS3Client, tmp_path: Path, change: str, message: str,
+    client: FakeS3Client, tmp_path: Path, change: str, message: str, workers: int,
 ) -> None:
     state_path = tmp_path / "state.json"
-    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state_path)
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state_path,
+                                   manifest_read_workers=workers)
     planner.commit("aaaaaaaaaaaaaaaa")
     state = json.loads(state_path.read_text(encoding="utf-8"))
     processed = state["processed_batches"]["aaaaaaaaaaaaaaaa"]
