@@ -250,8 +250,8 @@ def measure_idle_replay(
 
 
 def profile(output: Path, *, orders: list[int], endpoint: str, server: str) -> dict[str, Any]:
-    if len(orders) != 2 or not 100 <= orders[0] < orders[1]:
-        raise ValueError("requires two ascending order volumes >= 100")
+    if len(orders) != 2 or not 100 <= orders[0] <= orders[1]:
+        raise ValueError("requires two ascending or equal order volumes >= 100")
     project = os.environ.get("COMPOSE_PROJECT_NAME", "")
     if project != "lakehouse-ops-scale" and not project.startswith("lakehouse-ops-scale-"):
         raise ValueError("requires a dedicated COMPOSE_PROJECT_NAME=lakehouse-ops-scale-<name>")
@@ -259,12 +259,17 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str) -> d
         raise ValueError("requires empty output directory")
     output.mkdir(parents=True, exist_ok=True)
     report: dict[str, Any] = {
-        "status": "running", "scope": "two_volume_sequential_warm_stack",
+        "status": "running", "scope": (
+            "same_volume_fresh_then_warm_catalog" if orders[0] == orders[1]
+            else "two_volume_sequential_warm_stack"
+        ),
         "project": project, "samples": [], "recovery": "idle_checkpoint_replay_only",
         "source_semantics": "full_snapshot",
         "limitations": ["not isolated per-volume capacity", "no crash recovery injection",
                         "sampled stack memory excludes host/VM overhead and inactive file cache",
-                        "discrete samples can miss short memory peaks"],
+                        "discrete samples can miss short memory peaks",
+                        "fresh catalog is not proof of cold images or host/OS caches",
+                        "each Spark stage starts a new process even on the warm stack"],
     }
     try:
         with TrinoClient(server, user="lakehouse-performance") as client:
@@ -340,6 +345,9 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str) -> d
                 idle = measure_idle_replay(client, command, output, f"{label}-idle")
                 report["samples"].append({
                     "orders": volume, "batch_id": fixture.batch_id, "config": asdict(config),
+                    "prior_completed_batches": index,
+                    "catalog_state": ("fresh_commerce_catalog" if index == 0
+                                      else "one_completed_prior_batch"),
                     "run": run, "memory": memory, "cumulative_current_files": files,
                     "stack_memory": stack_observation,
                     "query_id": query.query_id, "query_stats": asdict(query.stats),

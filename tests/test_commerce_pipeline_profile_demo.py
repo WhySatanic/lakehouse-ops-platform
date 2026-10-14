@@ -25,7 +25,7 @@ def test_entrypoint_selects_profile_and_passes_volumes(tmp_path, monkeypatch, ca
     assert json.loads(capsys.readouterr().out) == {"status": status}
 
 
-@pytest.mark.parametrize("orders", [(99, 1000), (100, 100), (1000, 100), (100, 100001), (100,)])
+@pytest.mark.parametrize("orders", [(99, 1000), (100, 99), (1000, 100), (100, 100001), (100,)])
 def test_invalid_volume_does_not_create_output_or_start_docker(tmp_path, orders):
     with pytest.raises(ValueError, match="ascending"):
         demo(tmp_path, tmp_path / "absent", scenario="profile", orders=orders)
@@ -47,7 +47,8 @@ def test_missing_memory_overlay_does_not_create_output(tmp_path):
     assert not (tmp_path / "absent").exists()
 
 
-@pytest.mark.parametrize("orders", [(200, 2000), (10000, 100000)])
+@pytest.mark.parametrize("orders", [(200, 2000), (10000, 100000), (1000, 1000),
+                                  (10000, 10000), (100000, 100000)])
 def test_custom_volumes_reach_only_measurement_child(tmp_path, orders):
     module = tmp_path / "src/lakehouse_ops/commerce_pipeline_profile.py"
     module.parent.mkdir(parents=True)
@@ -73,8 +74,12 @@ def test_custom_volumes_reach_only_measurement_child(tmp_path, orders):
             }]))
         return SimpleNamespace(returncode=0)
 
-    assert demo(tmp_path, output, run=run, scenario="profile",
-                orders=orders)["status"] == "ready"
+    report = demo(tmp_path, output, run=run, scenario="profile", orders=orders)
+    assert report["status"] == "ready"
+    assert report["scope"] == (
+        "same_volume_fresh_then_warm_reference_stack" if orders[0] == orders[1]
+        else "two_volume_pipeline_fresh_reference_stack"
+    )
     assert len(children) == 1
 
 
