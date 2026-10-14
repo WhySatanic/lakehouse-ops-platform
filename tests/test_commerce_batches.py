@@ -443,6 +443,65 @@ def test_commit_cannot_skip_an_earlier_unprocessed_batch(
     assert planner.commit("bbbbbbbbbbbbbbbb")["created"] is True
 
 
+def test_active_batch_blocks_unrelated_commit_and_detects_changed_manifest(tmp_path):
+    client = FakeS3Client()
+    client.add_manifest("c" * 16, "2026-02-03T00:00:00Z")
+    state = tmp_path / "state.json"
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state)
+    selected = planner.plan(max_batches=1)["batches"][0]
+    planner.begin(selected)
+    assert not state.exists()
+    client.add_manifest("b" * 16, "2026-02-02T00:00:00Z")
+    with pytest.raises(CommerceBatchError, match="cannot skip"):
+        planner.commit("b" * 16)
+    client.add_manifest("c" * 16, "2026-02-04T00:00:00Z")
+    with pytest.raises(CommerceBatchError, match="active batch"):
+        planner.plan(max_batches=1)
+    with pytest.raises(CommerceBatchError, match="active batch"):
+        planner.begin(selected)
+    assert not state.exists()
+
+
+def test_new_arrival_before_begin_is_replanned_without_starting_old_selection(tmp_path):
+    client = FakeS3Client()
+    client.add_manifest("c" * 16, "2026-02-03T00:00:00Z")
+    state = tmp_path / "state.json"
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state)
+    selected = planner.plan(max_batches=1)["batches"][0]
+    client.add_manifest("b" * 16, "2026-02-02T00:00:00Z")
+    with pytest.raises(CommerceBatchError, match="no longer next"):
+        planner.begin(selected)
+    assert not state.exists()
+    assert not Path(f"{state}.active.json").exists()
+    assert planner.plan(max_batches=1)["batches"][0]["batch_id"] == "b" * 16
+
+
+@pytest.mark.parametrize("content", ["{", "[]", '{"schema_version":1,"batch":[]}'])
+def test_corrupt_active_batch_fails_closed(tmp_path, content):
+    planner = CommerceBatchPlanner(FakeS3Client(), bucket="lakehouse",
+                                   state_path=tmp_path / "state.json")
+    (tmp_path / "state.json.active.json").write_text(content)
+    with pytest.raises(CommerceBatchError, match="active batch"):
+        planner.plan(max_batches=1)
+
+
+def test_completed_checkpoint_with_leftover_intent_does_not_replay_compute(tmp_path):
+    client = FakeS3Client()
+    client.add_manifest("a" * 16, "2026-02-01T00:00:00Z")
+    state = tmp_path / "state.json"
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state)
+    planner.begin(planner.plan(max_batches=1)["batches"][0])
+    active = Path(f"{state}.active.json")
+    intent = active.read_bytes()
+    planner.commit("a" * 16)
+    # Model a process exit between checkpoint replacement and intent cleanup.
+    active.write_bytes(intent)
+    assert planner.plan(max_batches=1)["batches"] == []
+    client.add_manifest("b" * 16, "2026-02-02T00:00:00Z")
+    planner.begin(planner.plan(max_batches=1)["batches"][0])
+    assert json.loads(active.read_text())["batch"]["batch_id"] == "b" * 16
+
+
 def test_explicit_replay_is_bounded_and_does_not_move_checkpoint(
     client: FakeS3Client, tmp_path: Path
 ) -> None:
