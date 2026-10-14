@@ -5,15 +5,19 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from test_commerce_batches import FakeS3Client
+from test_commerce_late_queue import add_snapshot
 
 from lakehouse_ops.commerce_change_scenario import generate_change_scenario
 from lakehouse_ops.commerce_journal_inspection import inspect_journal
 from lakehouse_ops.commerce_linked_acceptance import (
     CURRENT_STAGE,
+    exercise_inflight_arrival,
     exercise_linked_batches,
     utc_timestamp,
 )
 from lakehouse_ops.commerce_pipeline import COMMERCE_STAGES
+from lakehouse_ops.ingestion.commerce_batches import CommerceBatchPlanner
 
 
 @pytest.mark.parametrize("failure", [None, "oracle", "current_stage", "replay_snapshot",
@@ -155,3 +159,159 @@ def test_main_rejects_unrelated_project_before_artifacts(tmp_path: Path, monkeyp
 
 def test_timestamp_oracle_does_not_hide_subsecond_changes():
     assert utc_timestamp("2026-02-01 00:00:00.123000 UTC") == "2026-02-01T00:00:00.123000Z"
+
+
+@pytest.mark.parametrize("failure", [None, "stage", "replay_snapshot", "oracle", "gold",
+                                     "partial_checkpoint", "following_history"])
+def test_inflight_drill_uses_persisted_retry_before_late_rebuild(tmp_path, failure):
+    generate_change_scenario(tmp_path / "scenario")
+    expected = json.loads((tmp_path / "scenario" / "expected.json").read_text())
+    first, late, newer = expected["batches"]
+    following = {"batch_id": "f" * 16, "batch_at": "2026-02-04T00:00:00Z"}
+    s3 = FakeS3Client()
+    for batch in (first, newer):
+        add_snapshot(s3, batch["batch_id"], batch["batch_at"])
+    checkpoint = tmp_path / "checkpoint.json"
+    factories, stages, modes = [], [], []
+    history, snapshots, current, selected = [], 0, None, None
+    c_publications = 0
+
+    def planner():
+        instance = CommerceBatchPlanner(s3, bucket="lakehouse", state_path=checkpoint)
+        factories.append(instance)
+        return instance
+
+    def land_late():
+        assert len(json.loads(checkpoint.read_text())["processed_batches"]) == 1
+        assert stages[-1][1] == "spark-commerce-customer-scd2"
+        add_snapshot(s3, late["batch_id"], late["batch_at"])
+        if failure == "partial_checkpoint":
+            checkpoint.write_text('{}')
+
+    def land_following():
+        assert len(json.loads(checkpoint.read_text())["processed_batches"]) == 3
+        add_snapshot(s3, following["batch_id"], following["batch_at"])
+        return following
+
+    def stage(service, batch, *, journal):
+        nonlocal history, snapshots, current, selected, c_publications
+        selected = batch
+        stages.append((batch["batch_id"], service, journal.run_id))
+        for event in ("launch_intent", "completed"):
+            journal.record_container(service, f"owned-{len(stages)}", event, batch=batch,
+                                     project_hint="lakehouse-ops-linked-unit")
+        if service == COMMERCE_STAGES[0]:
+            modes.append((batch["batch_id"], batch["customer_history_mode"]))
+        if service == "spark-commerce-customer-scd2":
+            if batch["batch_id"] == first["batch_id"]:
+                history = [{**expected["customer_history"][0], "valid_to": None}]
+                snapshots += 1
+            elif batch["batch_id"] == newer["batch_id"]:
+                c_publications += 1
+                if failure == "stage":
+                    raise OSError("unexpected publication failure")
+                history = [
+                    {**expected["customer_history"][0], "valid_to": newer["batch_at"]},
+                    {**expected["customer_history"][1], "valid_from": newer["batch_at"]},
+                ]
+                snapshots += int(c_publications == 1 or failure == "replay_snapshot")
+            elif batch["batch_id"] == late["batch_id"]:
+                history = expected["customer_history"]
+                snapshots += 1
+            elif failure == "following_history":
+                snapshots += 1
+        if service == CURRENT_STAGE and batch["batch_id"] != late["batch_id"]:
+            current = batch
+
+    def query(sql):
+        if "$snapshots" in sql:
+            return [{"snapshots": snapshots}]
+        if "SELECT customer_id" in sql:
+            return [{**row, "customer_id": "C00000001", "is_current": row["valid_to"] is None}
+                    for row in history]
+        if "FROM lakehouse.gold.commerce_current_daily" in sql:
+            days = ({"2026-01-31": 1000} if current["batch_id"] == first["batch_id"]
+                    else expected["latest_daily_revenue_cents"])
+            return [{"order_day": day, "captured_revenue_cents":
+                     0 if failure == "oracle" and c_publications == 2 else cents,
+                     "order_count": 1, "source_batch_id": current["batch_id"]}
+                    for day, cents in days.items()]
+        if "SELECT order_id" in sql:
+            return expected["latest_orders"]
+        revenue = (1000 if selected["batch_id"] == first["batch_id"] else
+                   1500 if selected["batch_id"] == late["batch_id"] else 2200)
+        return [{"days": 0 if failure == "gold" and selected["batch_id"] == late["batch_id"]
+                 else 1, "orders": 1, "captured_revenue_cents": revenue, "invalid_days": 0}]
+
+    report = {}
+    if failure:
+        messages = {"stage": "unexpected publication failure",
+                    "replay_snapshot": "C history replay added",
+                    "oracle": "current gold differs", "gold": "commerce gold batch is not ready",
+                    "partial_checkpoint": "partially published C advanced",
+                    "following_history": "unchanged following customer"}
+        with pytest.raises((ValueError, RuntimeError, OSError), match=messages[failure]):
+            exercise_inflight_arrival(planner, query, stage, expected, tmp_path, report,
+                                      land_late, land_following)
+        assert report.get("status") != "ready"
+        assert report["inflight_recovery"]["status"] != "ready"
+        runs = inspect_journal(tmp_path / "run-journal.sqlite3")["runs"]
+        assert runs[0]["checkpoint_completed_events"] == 0
+        return
+    exercise_inflight_arrival(planner, query, stage, expected, tmp_path, report,
+                              land_late, land_following)
+    sample = report["inflight_recovery"]
+    assert report["status"] == sample["status"] == "ready"
+    assert sample["checkpoint_before_failure_sha256"] == sample["checkpoint_after_failure_sha256"]
+    assert len(factories) == 2 and factories[0] is not factories[1]
+    assert modes == [(batch["batch_id"], mode) for batch, mode in (
+        (first, "forward"), (newer, "forward"), (newer, "forward"),
+        (late, "rebuild"), (following, "forward"),
+    )]
+    assert sample["idle"]["status"] == "idle"
+    assert snapshots == 3
+    assert [item["status"] for item in sample["attempts"]] == [
+        "ready", "injected_failure", "ready", "ready", "ready",
+    ]
+    runs = inspect_journal(tmp_path / "run-journal.sqlite3")["runs"]
+    assert len(runs) == 5
+    assert sum(run["checkpoint_completed_events"] for run in runs) == 4
+    failed = [run for run in runs if run["outcome"] == "failed"]
+    assert len(failed) == 1 and failed[0]["checkpoint_completed_events"] == 0
+    from integration.test_commerce_retained_history_correction import _check_retained_inflight
+
+    retained = tmp_path / "linked.json"
+    retained.write_text(json.dumps(report))
+    _check_retained_inflight(tmp_path)
+    for corruption in ("order", "gold", "history", "checkpoint_hash", "run_id"):
+        altered = json.loads(json.dumps(report))
+        sample = altered["inflight_recovery"]
+        if corruption == "order":
+            sample["attempts"][2], sample["attempts"][3] = (
+                sample["attempts"][3], sample["attempts"][2],
+            )
+        elif corruption == "gold":
+            sample["attempts"][3]["batch_gold_oracle"]["captured_revenue_cents"] = 2200
+        elif corruption == "history":
+            sample["published_C_history"][1]["valid_from"] = late["batch_at"]
+        elif corruption == "checkpoint_hash":
+            sample["checkpoint_sha256"] = "0" * 64
+        else:
+            sample["attempts"][1]["run_id"] = sample["attempts"][2]["run_id"]
+        retained.write_text(json.dumps(altered))
+        with pytest.raises(AssertionError):
+            _check_retained_inflight(tmp_path)
+    retained.write_text(json.dumps(report))
+
+
+def test_main_rejects_mixed_inflight_and_maintenance_before_artifacts(tmp_path, monkeypatch):
+    from lakehouse_ops.commerce_linked_acceptance import main
+
+    monkeypatch.setattr("sys.argv", ["linked", "--output", str(tmp_path / "evidence"),
+                                    "--s3-endpoint-url", "http://localhost:19400",
+                                    "--server", "http://localhost:18400",
+                                    "--late-customer-history", "--inflight-late-arrival"])
+    with pytest.raises(SystemExit) as error:
+        main()
+    assert error.value.code == 2
+    assert not (tmp_path / "evidence").exists()

@@ -32,6 +32,48 @@ Conditional landing replay creates no new objects. Final current-mart replay mus
 add no snapshot, and the final checkpoint-driven runner must be idle without compute.
 See [linked acceptance](commerce-linked-acceptance.md) for exact semantics.
 
+## Late arrival during an unfinished publication
+
+The same demo can reproduce the in-flight queue recovery path on a fresh stack:
+
+```powershell
+uv run --frozen python -m lakehouse_ops.commerce_linked_demo `
+  --inflight-late-arrival --output artifacts/commerce-inflight-demo
+```
+
+It initially lands only A (February 1) and C (February 3). After A completes,
+C publishes one real Iceberg SCD2 commit. Independent Trino SQL verifies the
+Alice/Alice Updated periods ending/starting on February 3 and exactly one current
+version. The callback then lands full snapshot B (February 2) in MinIO and raises
+a dedicated caught exception before C's batch gold/current gold/checkpoint.
+C's failed attempt must leave checkpoint bytes unchanged.
+
+A fresh planner reads the persisted active intent and retries C through all nine
+normal stages. C's history replay must add no snapshot. Only its verified completion
+records C's checkpoint; B then runs all nine stages with retained-history rebuild.
+That rebuild must add exactly one history commit, moving Alice Updated's boundary
+back to February 2. B's batch-scoped revenue is 1500 cents; the newer current result
+must remain C's two orders / 2200 cents, not regress to B. A new ordinary February 4
+snapshot then completes in forward mode, publishes its own current identity without
+adding customer history, and leaves the runner compute-free idle.
+
+`acceptance/linked.json` retains `inflight_recovery`: five distinct journal attempts
+(four complete and one injected failure), published C's literal history, snapshot
+counts, per-completion batch/current/history SQL results, before/after failure
+checkpoint SHA256, final four completed identities and idle. The existing demo's
+scoped teardown and retained-data rules apply unchanged. Normal linked and manual
+history-correction commands retain their original scenarios. The in-flight option
+cannot be combined with manual maintenance, profiling or owner-exit drills.
+
+This opt-in two-order correctness drill needs the active-intent queue fix. It tests
+a caught failure after actual SCD2 publication, not process death, concurrent writers,
+arbitrary partial-table recovery, repeated performance measurements or RC evidence.
+Serving CI executes this same command alongside the unchanged normal history-correction
+demo, then rechecks the retained report/checkpoint/journal read-only. Both paths' evidence
+is uploaded even when a step fails. This reuses the existing 60-minute serving job;
+the established normal path took about 25 minutes in the fix PRs. CI evidence alone
+does not replace the release policy's clean-checkout RC bundle and attestation.
+
 The command retains `demo.json`, Docker/config/start/acceptance/stop logs and the
 complete `acceptance/` directory with checkpoints, SQLite journal, source snapshots,
 stage logs and `linked.json`. `demo.json` contains the unique project, selected

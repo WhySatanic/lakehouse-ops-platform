@@ -443,6 +443,13 @@ required isolated Spark/Iceberg acceptance checks real history publication, stab
 newer replay, literal corrected periods and the resumed queue. Shared-warehouse
 concurrent writers and orphan-container recovery remain outside this guarantee.
 
+The existing linked demo also has an opt-in `--inflight-late-arrival` path: actual
+MinIO B arrival after C's SCD2 publication, a caught C failure, persisted-intent C
+retry, B rebuild, following ordinary batch and idle. It verifies literal Trino
+history/current/batch results before checkpoint and retains all five attempts.
+Serving CI executes and rechecks the same opt-in command alongside the unchanged
+normal history-correction path. This is not a new orchestration wrapper or RC proof.
+
 An opt-in [late customer correction drill](runbooks/commerce-late-customer-correction.md)
 extends linked acceptance with an earlier-effective observation arriving after the three
 snapshots. It runs real S3/bronze/customer-silver ingestion and the existing history rebuild,

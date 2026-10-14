@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -15,7 +16,13 @@ from typing import Any, Protocol
 import boto3
 
 from lakehouse_ops.commerce_change_scenario import generate_change_scenario
-from lakehouse_ops.commerce_pipeline import CURRENT_STAGE, run_commerce_batch, run_compose_stage
+from lakehouse_ops.commerce_gold_gate import check_commerce_gold
+from lakehouse_ops.commerce_pipeline import (
+    COMMERCE_STAGES,
+    CURRENT_STAGE,
+    run_commerce_batch,
+    run_compose_stage,
+)
 from lakehouse_ops.commerce_run_journal import CommerceRunJournal
 from lakehouse_ops.commerce_runner_lock import commerce_runner_lock
 from lakehouse_ops.ingestion.commerce_batches import CommerceBatchPlanner
@@ -40,6 +47,24 @@ def utc_timestamp(value: str | None) -> str | None:
     return parsed.isoformat() + "Z"
 
 
+def verify_customer_history(query, wanted):
+    history = query(
+        "SELECT customer_id, full_name, CAST(valid_from AS varchar) AS valid_from, "
+        "CAST(valid_to AS varchar) AS valid_to, is_current "
+        "FROM lakehouse.gold.dim_customers_scd2 ORDER BY valid_from"
+    )
+    actual = []
+    for row in history:
+        if row["customer_id"] != "C00000001" or row["is_current"] != (row["valid_to"] is None):
+            raise ValueError("customer history identity or current flag differs")
+        actual.append({"full_name": row["full_name"], **{
+            key: utc_timestamp(row[key]) for key in ("valid_from", "valid_to")
+        }})
+    if actual != wanted:
+        raise ValueError("customer history differs from literal period oracle")
+    return actual
+
+
 def verify_snapshot(
     query: Callable[[str], list[dict[str, Any]]], expected: dict[str, Any], index: int,
     batch_id: str,
@@ -54,23 +79,10 @@ def verify_snapshot(
             or sum(row["order_count"] for row in daily) != (2 if index == 2 else 1)
             or any(row["source_batch_id"] != batch_id for row in daily)):
         raise ValueError("current gold differs from literal snapshot oracle")
-    history = query(
-        "SELECT customer_id, full_name, CAST(valid_from AS varchar) AS valid_from, "
-        "CAST(valid_to AS varchar) AS valid_to, is_current "
-        "FROM lakehouse.gold.dim_customers_scd2 ORDER BY valid_from"
-    )
-    actual = []
-    for row in history:
-        if row["customer_id"] != "C00000001" or row["is_current"] != (row["valid_to"] is None):
-            raise ValueError("customer history identity or current flag differs")
-        actual.append({"full_name": row["full_name"], **{
-            key: utc_timestamp(row[key]) for key in ("valid_from", "valid_to")
-        }})
     wanted = expected["customer_history"] if index else [
         {**expected["customer_history"][0], "valid_to": None},
     ]
-    if actual != wanted:
-        raise ValueError("customer history differs from literal period oracle")
+    actual = verify_customer_history(query, wanted)
     if index == 2:
         orders = query("SELECT order_id, total_cents FROM lakehouse.silver.commerce_orders "
                        f"WHERE source_batch_id = '{batch_id}' ORDER BY order_id")
@@ -143,6 +155,125 @@ def exercise_linked_batches(
                   scope="three_full_snapshots_reference_stack")
 
 
+def exercise_inflight_arrival(
+    new_planner: Callable[[], CommerceBatchPlanner],
+    query: Callable[[str], list[dict[str, Any]]], run_stage: LinkedStageRunner,
+    expected: dict[str, Any], output: Path, report: dict[str, Any],
+    land_late: Callable[[], None], land_following: Callable[[], dict[str, str]],
+) -> None:
+    """Recover C's published history before processing B that arrived during C."""
+    class InflightDrillFailure(RuntimeError):
+        pass
+
+    first, late, newer = expected["batches"]
+    checkpoint = output / "checkpoint.json"
+    history_sql = ('SELECT count(*) AS snapshots FROM lakehouse.gold.'
+                   '"dim_customers_scd2$snapshots"')
+    interim = {**expected, "customer_history": [
+        {**expected["customer_history"][0], "valid_to": newer["batch_at"]},
+        {**expected["customer_history"][1], "valid_from": newer["batch_at"]},
+    ]}
+    sample: dict[str, Any] = {"status": "running", "attempts": [],
+                              "failure_boundary": "after_C_history_before_gold_checkpoint"}
+    report["inflight_recovery"] = sample
+    following = None
+    history_before_following = None
+    planner = new_planner()
+    if [item["batch_id"] for item in planner.plan(max_batches=3)["batches"]] != [
+        first["batch_id"], newer["batch_id"],
+    ]:
+        raise ValueError("in-flight drill requires only A and C landed initially")
+
+    def attempt(batch, mode, oracle_expected, ordinal, current_id, *, inject=False):
+        journal = CommerceRunJournal(output / "run-journal.sqlite3")
+        item = {"batch_id": batch["batch_id"], "run_id": journal.run_id, "status": "running"}
+        sample["attempts"].append(item)
+
+        def stage(service, selected):
+            if (selected["batch_id"] != batch["batch_id"]
+                    or selected.get("customer_history_mode") != mode):
+                raise ValueError("in-flight queue selected a wrong batch or history mode")
+            run_stage(service, selected, journal=journal)
+            if inject and service == "spark-commerce-customer-scd2":
+                sample["published_C_history"] = verify_customer_history(
+                    query, interim["customer_history"],
+                )
+                sample["history_after_publication"] = query(history_sql)
+                if sample["history_after_publication"][0]["snapshots"] != (
+                    sample["history_after_A"][0]["snapshots"] + 1
+                ):
+                    raise ValueError("C did not publish exactly one atomic history commit")
+                land_late()
+                raise InflightDrillFailure("B landed after C history publication")
+            if service == CURRENT_STAGE:
+                item["oracle"] = verify_snapshot(
+                    query, oracle_expected, ordinal, current_id,
+                )
+                item["batch_gold_oracle"] = check_commerce_gold(query, batch["batch_id"]).as_dict()
+                wanted_revenue = expected["snapshot_revenue_cents"][
+                    0 if batch["batch_id"] == first["batch_id"] else
+                    1 if batch["batch_id"] == late["batch_id"] else 2
+                ]
+                if item["batch_gold_oracle"]["captured_revenue_cents"] != wanted_revenue:
+                    raise ValueError("batch gold differs from literal in-flight revenue oracle")
+                if (batch["batch_id"] == newer["batch_id"] and not inject
+                        and query(history_sql) != sample["history_after_publication"]):
+                    raise ValueError("C history replay added a snapshot")
+                if (batch["batch_id"] == late["batch_id"]
+                        and query(history_sql)[0]["snapshots"] != (
+                        sample["history_after_publication"][0]["snapshots"] + 1
+                        )):
+                    raise ValueError("late rebuild did not publish exactly one history commit")
+                if (following is not None and batch["batch_id"] == following["batch_id"]
+                        and query(history_sql) != history_before_following):
+                    raise ValueError("unchanged following customer added a history snapshot")
+        try:
+            item["pipeline"] = run_commerce_batch(
+                planner, query, run_stage=stage, attempts=3, journal=journal,
+            )
+        except InflightDrillFailure:
+            item["status"] = "injected_failure"
+            raise
+        if (item["pipeline"]["status"] != "ready" or "oracle" not in item
+                or item["pipeline"]["completed_stages"] != [*COMMERCE_STAGES, CURRENT_STAGE]):
+            raise ValueError("in-flight batch did not finish all stages and SQL before checkpoint")
+        item["status"] = "ready"
+
+    attempt(first, "forward", expected, 0, first["batch_id"])
+    sample["history_after_A"] = query(history_sql)
+    before = checkpoint.read_bytes()
+    sample["checkpoint_before_failure_sha256"] = hashlib.sha256(before).hexdigest()
+    try:
+        attempt(newer, "forward", interim, 2, newer["batch_id"], inject=True)
+    except InflightDrillFailure:
+        pass
+    else:
+        raise ValueError("in-flight failure boundary was not reached")
+    after = checkpoint.read_bytes()
+    sample["checkpoint_after_failure_sha256"] = hashlib.sha256(after).hexdigest()
+    if after != before:
+        raise ValueError("partially published C advanced checkpoint")
+    planner = new_planner()  # Recover from persisted intent, not the failed instance's memory.
+    attempt(newer, "forward", interim, 2, newer["batch_id"])
+    attempt(late, "rebuild", expected, 2, newer["batch_id"])
+    history_before_following = query(history_sql)
+    following = land_following()
+    attempt(following, "forward", expected, 2, following["batch_id"])
+
+    def no_compute(*_):
+        raise ValueError("in-flight idle started compute")
+
+    sample["idle"] = run_commerce_batch(planner, query, run_stage=no_compute)
+    if sample["idle"]["status"] != "idle":
+        raise ValueError("in-flight queue did not reach idle")
+    processed = json.loads(checkpoint.read_text())["processed_batches"]
+    if set(processed) != {batch["batch_id"] for batch in (first, newer, late, following)}:
+        raise ValueError("in-flight checkpoint does not contain exactly the four complete batches")
+    sample.update(status="ready", completed_batches=list(processed),
+                  checkpoint_sha256=hashlib.sha256(checkpoint.read_bytes()).hexdigest())
+    report.update(status="ready", scope="inflight_late_arrival_reference_stack")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
@@ -150,7 +281,11 @@ def main() -> int:
     parser.add_argument("--server", required=True)
     parser.add_argument("--late-customer-history", action="store_true",
                         help="After the three batches, run a manual late history correction drill")
+    parser.add_argument("--inflight-late-arrival", action="store_true",
+                        help="Land B during C publication, fail C, then verify retry/B/next/idle")
     args = parser.parse_args()
+    if args.inflight_late_arrival and args.late_customer_history:
+        parser.error("choose either in-flight arrival or the manual history correction drill")
     if not os.environ.get("COMPOSE_PROJECT_NAME", "").startswith("lakehouse-ops-linked"):
         parser.error("requires a dedicated lakehouse-ops-linked Compose project")
     if args.output.exists() and any(args.output.iterdir()):
@@ -174,6 +309,8 @@ def main() -> int:
             landing = CommerceS3LandingZone(s3, bucket="lakehouse")
             report["landing"] = []
             for batch in expected["batches"]:
+                if args.inflight_late_arrival and batch == expected["batches"][1]:
+                    continue
                 root = args.output / "scenario" / f"batch_id={batch['batch_id']}"
                 first = landing.write(root)
                 if landing.write(root).created != 0:
@@ -186,13 +323,46 @@ def main() -> int:
                 (args.output / "stages.log").open("w", encoding="utf-8") as log,
                 redirect_stderr(log),
             ):
-                exercise_linked_batches(
-                    planner, trino.query,
-                    lambda service, batch, *, journal: run_compose_stage(
-                        service, batch, bucket="lakehouse", journal=journal,
-                    ),
-                    expected, args.output, report,
-                )
+                if args.inflight_late_arrival:
+                    from lakehouse_ops.commerce_history_correction import (
+                        generate_following_observation,
+                    )
+
+                    def land_late():
+                        late_id = expected["batches"][1]["batch_id"]
+                        root = args.output / "scenario" / f"batch_id={late_id}"
+                        report["inflight_late_landing"] = landing.write(root).as_dict()
+                        if landing.write(root).created:
+                            raise ValueError("in-flight late source replay created new objects")
+
+                    def land_following():
+                        latest = expected["batches"][-1]["batch_id"]
+                        following = generate_following_observation(
+                            args.output / "scenario" / f"batch_id={latest}",
+                            args.output / "following-observation",
+                        )
+                        report["following_landing"] = landing.write(
+                            args.output / "following-observation",
+                        ).as_dict()
+                        return following
+
+                    exercise_inflight_arrival(
+                        lambda: CommerceBatchPlanner(s3, bucket="lakehouse",
+                                                     state_path=args.output / "checkpoint.json",
+                                                     manifest_read_workers=8),
+                        trino.query,
+                        lambda service, batch, *, journal: run_compose_stage(
+                            service, batch, bucket="lakehouse", journal=journal,
+                        ), expected, args.output, report, land_late, land_following,
+                    )
+                else:
+                    exercise_linked_batches(
+                        planner, trino.query,
+                        lambda service, batch, *, journal: run_compose_stage(
+                            service, batch, bucket="lakehouse", journal=journal,
+                        ),
+                        expected, args.output, report,
+                    )
                 if args.late_customer_history:
                     from lakehouse_ops.commerce_history_correction import (
                         exercise_following_batch,

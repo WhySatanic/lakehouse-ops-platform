@@ -66,10 +66,15 @@ def release_demo_network(project: str, root: Path, env: dict[str, str], run: Any
 
 
 def demo(root: Path, output: Path, *, run: Any = subprocess.run,
-         scenario: str = "linked", orders: tuple[int, int] | None = None) -> dict[str, Any]:
+         scenario: str = "linked", orders: tuple[int, int] | None = None,
+         inflight_late_arrival: bool = False) -> dict[str, Any]:
     if scenario not in SCENARIOS:
         raise ValueError("unsupported reference-stack scenario")
     module, retained, prefix, scope, timeout = SCENARIOS[scenario]
+    if inflight_late_arrival:
+        if scenario != "linked":
+            raise ValueError("in-flight arrival is only supported for the linked scenario")
+        scope = "inflight_late_arrival_fresh_reference_stack"
     if scenario == "profile":
         orders = (100, 1000) if orders is None else orders
         if len(orders) != 2 or not 100 <= orders[0] <= orders[1] <= 100_000:
@@ -133,6 +138,7 @@ def demo(root: Path, output: Path, *, run: Any = subprocess.run,
                            f"http://localhost:{env['MINIO_API_PORT']}", "--server",
                            f"http://localhost:{env['TRINO_HTTP_PORT']}"] +
                 (["--late-customer-history"] if scenario == "linked-history" else []) +
+                (["--inflight-late-arrival"] if inflight_late_arrival else []) +
                 (["--orders", *(str(value) for value in orders)] if orders else []), timeout)
         acceptance = json.loads((output / f"acceptance/{retained}").read_text())
         if acceptance.get("status") != "ready":
@@ -157,9 +163,10 @@ def demo(root: Path, output: Path, *, run: Any = subprocess.run,
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--inflight-late-arrival", action="store_true")
     args = parser.parse_args()
     try:
-        report = demo(Path.cwd(), args.output)
+        report = demo(Path.cwd(), args.output, inflight_late_arrival=args.inflight_late_arrival)
     except ValueError as error:
         parser.error(str(error))
     print(json.dumps(report, sort_keys=True))

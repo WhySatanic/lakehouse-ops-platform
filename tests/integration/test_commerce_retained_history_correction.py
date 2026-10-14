@@ -18,6 +18,74 @@ from lakehouse_ops.commerce_recovery import verify_recovery_audit
 from lakehouse_ops.commerce_run_journal import CommerceRunJournal
 
 
+@pytest.mark.skipif(not os.environ.get("LAKEOPS_INFLIGHT_DIRECTORY"),
+                    reason="requires retained real in-flight reference-stack evidence")
+def test_retained_inflight_queue_has_four_complete_batches_and_one_failed_publication():
+    _check_retained_inflight(Path(os.environ["LAKEOPS_INFLIGHT_DIRECTORY"]).resolve())
+
+
+def _check_retained_inflight(root):
+    paths = [root / name for name in ("linked.json", "checkpoint.json", "run-journal.sqlite3")]
+    before = [hashlib.sha256(path.read_bytes()).hexdigest() for path in paths]
+    report = json.loads(paths[0].read_text())
+    sample = report["inflight_recovery"]
+    expected = json.loads((root / "scenario" / "expected.json").read_text())
+    assert report["status"] == sample["status"] == "ready"
+    assert sample["checkpoint_before_failure_sha256"] == sample["checkpoint_after_failure_sha256"]
+    assert sample["checkpoint_sha256"] == before[1]
+    processed = json.loads(paths[1].read_text())["processed_batches"]
+    assert len(processed) == 4 and set(processed) == set(sample["completed_batches"])
+    assert not (root / "checkpoint.json.active.json").exists()
+    assert sample["idle"]["status"] == "idle" and not sample["idle"]["completed_stages"]
+    attempts = sample["attempts"]
+    first, late, newer = expected["batches"]
+    assert [item["batch_id"] for item in attempts[:4]] == [
+        first["batch_id"], newer["batch_id"], newer["batch_id"], late["batch_id"],
+    ]
+    assert len(attempts) == 5 and len({item["run_id"] for item in attempts}) == 5
+    assert [item["status"] for item in attempts] == [
+        "ready", "injected_failure", "ready", "ready", "ready",
+    ]
+    assert sample["history_after_publication"][0]["snapshots"] == (
+        sample["history_after_A"][0]["snapshots"] + 1
+    )
+    assert sample["published_C_history"] == [
+        {**expected["customer_history"][0], "valid_to": newer["batch_at"]},
+        {**expected["customer_history"][1], "valid_from": newer["batch_at"]},
+    ]
+    runs = {run["run_id"]: run for run in inspect_journal(paths[2])["runs"]}
+    assert set(runs) == {item["run_id"] for item in attempts}
+    with sqlite3.connect(f"{paths[2].as_uri()}?mode=ro", uri=True) as connection:
+        containers = connection.execute(
+            "SELECT run_id, container_name, event, service FROM commerce_container_events "
+            "ORDER BY sequence",
+        ).fetchall()
+    for index, item in enumerate(attempts):
+        run = runs[item["run_id"]]
+        failed = index == 1
+        assert run["outcome"] == ("failed" if failed else "ready")
+        assert run["checkpoint_completed_events"] == (0 if failed else 1)
+        assert run["batch_id"] == item["batch_id"]
+        assert run["manifest_sha256"] == processed[item["batch_id"]]["manifest_sha256"]
+        services = COMMERCE_STAGES[:7] if failed else (*COMMERCE_STAGES, CURRENT_STAGE)
+        owned = [row for row in containers if row[0] == item["run_id"]]
+        assert len(owned) == len(services) * 2 and len({row[1] for row in owned}) == len(services)
+        for event in ("launch_intent", "completed"):
+            assert [row[3] for row in owned if row[2] == event] == list(services)
+        if failed:
+            assert run["phase"] == COMMERCE_STAGES[6]
+            assert run["error_type"] == "InflightDrillFailure"
+        else:
+            assert item["pipeline"]["completed_stages"] == list(services)
+            assert item["batch_gold_oracle"]["captured_revenue_cents"] == (
+                1000 if index == 0 else 1500 if index == 3 else 2200
+            )
+            assert item["oracle"]["captured_revenue_cents"] == (1000 if index == 0 else 2200)
+            if index >= 3:
+                assert item["oracle"]["customer_history"] == expected["customer_history"]
+    assert [hashlib.sha256(path.read_bytes()).hexdigest() for path in paths] == before
+
+
 @pytest.mark.skipif(os.environ.get("LAKEOPS_RUN_HISTORY_CORRECTION_SMOKE") != "1",
                     reason="requires retained real history-correction evidence")
 def test_retained_correction_has_two_ready_maintenance_runs_and_no_checkpoint():

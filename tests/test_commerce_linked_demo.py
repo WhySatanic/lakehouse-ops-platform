@@ -24,9 +24,11 @@ def checkout(root):
                                     "linked", "stop", "network-inspect", "network-release",
                                     "timeout", "launch", "bad_report", "absent_report",
                                     "malformed_report"])
-@pytest.mark.parametrize("scenario", ["linked", "owner-exit", "linked-history", "profile"])
+@pytest.mark.parametrize("scenario,inflight", [("linked", False), ("linked", True),
+                                              ("owner-exit", False), ("linked-history", False),
+                                              ("profile", False)])
 def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Path, failure,
-                                                                  monkeypatch, scenario):
+                                                                  monkeypatch, scenario, inflight):
     checkout(tmp_path)
     output = tmp_path / "evidence"
     commands, projects = [], []
@@ -79,6 +81,7 @@ def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Pa
                                 "profile": 3600}[scenario]
             assert kwargs["timeout"] == expected_timeout
             assert ("--late-customer-history" in command) == (scenario == "linked-history")
+            assert ("--inflight-late-arrival" in command) == inflight
             if scenario == "profile":
                 assert command[-3:] == ["--orders", "100", "1000"]
             else:
@@ -100,7 +103,7 @@ def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Pa
                     (acceptance / retained).write_text("{invalid")
         return SimpleNamespace(returncode=1 if failure == name else 0)
 
-    report = demo(tmp_path, output, run=run, scenario=scenario)
+    report = demo(tmp_path, output, run=run, scenario=scenario, inflight_late_arrival=inflight)
     assert report["status"] == ("ready" if failure is None else "failed")
     assert len(set(projects)) == 1
     assert ("stop" in commands) == (failure not in ("docker", "spark-image", "config"))
@@ -141,14 +144,27 @@ def test_no_existing_output_or_unrelated_root_mutation(tmp_path: Path):
 
 
 @pytest.mark.parametrize("status,code", [("ready", 0), ("failed", 2)])
-def test_entrypoint_returns_demo_outcome(tmp_path: Path, monkeypatch, capsys, status, code):
+@pytest.mark.parametrize("inflight", [False, True])
+def test_entrypoint_returns_demo_outcome(tmp_path: Path, monkeypatch, capsys,
+                                        status, code, inflight):
     from lakehouse_ops import commerce_linked_demo
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr("sys.argv", ["demo", "--output", "evidence"])
-    monkeypatch.setattr(commerce_linked_demo, "demo", lambda *_: {"status": status})
+    monkeypatch.setattr("sys.argv", ["demo", "--output", "evidence"] +
+                        (["--inflight-late-arrival"] if inflight else []))
+    def invoke(*_, **kwargs):
+        assert kwargs["inflight_late_arrival"] == inflight
+        return {"status": status}
+    monkeypatch.setattr(commerce_linked_demo, "demo", invoke)
     assert commerce_linked_demo.main() == code
     assert json.loads(capsys.readouterr().out) == {"status": status}
+
+
+@pytest.mark.parametrize("scenario", ["linked-history", "profile", "owner-exit"])
+def test_inflight_option_cannot_mutate_other_demo_scenarios(tmp_path, scenario):
+    with pytest.raises(ValueError, match="only supported for the linked"):
+        demo(tmp_path, tmp_path / "absent", scenario=scenario, inflight_late_arrival=True)
+    assert not (tmp_path / "absent").exists()
 
 
 def test_entrypoint_rejects_unrelated_root(tmp_path: Path, monkeypatch):
