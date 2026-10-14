@@ -42,9 +42,13 @@ output and behavior remain unchanged.
 The scenario requires an empty output directory, fresh commerce catalog,
 one source batch and no competing writer. It creates a deterministic 100-order
 fixture, conditionally lands it, and runs the actual eight production stages twice.
-The private module accepts `--orders 1000` to choose 100 through 10000 orders;
+The private module accepts `--orders 1000` to choose 100 through 100000 orders;
 customers, products and anomaly counts remain fixed. Use a fresh dedicated project
 and empty artifact directory for each volume, not a reset checkpoint or reused catalog.
+The default remains 100. Opt-in `--orders 100000` uses the same interruption, retry,
+audit and checkpoint path, not a new workload implementation. Choose it only with
+sufficient local resources; the bound does not promise memory or execution capacity.
+Recorded smaller-volume measurements below do not become 100k evidence retroactively.
 
 After the first attempt writes gold, the injected exception must leave the checkpoint
 absent and the same hash-bound batch pending. All commerce table rows are read through
@@ -213,3 +217,69 @@ sampling is optional and has overhead; this is not an A/B observer-cost experime
 There is no new CLI, wrapper, dependency, image or release scheme. Omit the memory
 overlay to retain the previous output; incomplete observations remain `partial`,
 never zero. Existing integration CI and release policy still apply.
+
+## Three-repeat 100k recovery measurement, 2026-10-14
+
+The same private drill now accepts up to 100000 orders; default 100 and the existing
+failure boundary are unchanged. Tests reject 99, 100001 and non-integers before
+creating artifacts, and cover 10001/100000 with default, observed, partial and
+failed-load evidence. There is no new command, observer, schema, dependency or image.
+
+Three sequential fresh dedicated projects used `--orders 100000` and the canonical
+memory overlay. Measurement source `305f609f1dd0ad0e0dc6bd6584082e7ed899e747` stayed
+immutable through all runs. Main `afe47ce` was integrated only afterwards; that
+completed-history documentation change does not alter this recovery path.
+Docker reported 16637538304 bytes; no competing containers were observed during
+accepted measurements. Ten customers, five products and anomaly counts stayed fixed.
+
+| Repeat | Interrupted attempt, s | Retry, s | Audit before/after, s | Idle, s | Stack sampled peak, MiB | Largest Spark peak, MiB |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 125.974355 | 117.819813 | 12.294542 / 9.845136 | 0.013608 | 4013.75 | 1562.03 |
+| 2 | 120.075270 | 115.931719 | 11.934079 / 9.665488 | 0.008104 | 4139.54 | 1363.29 |
+| 3 | 124.123990 | 117.984724 | 12.052010 / 9.847851 | 0.007458 | 3862.96 | 1163.87 |
+
+Median interrupted/retry time is 124.124/117.820 seconds. The first attempt uses a
+fresh commerce catalog; retry uses the same published data and warm services, not a
+new cold Spark cluster. Each Spark job starts a new process. No OS/image/VM cache or
+host CPU isolation is claimed. Median before/after SQL audit time is 12.052/9.845
+seconds, separately timed; initial fixture generation/landing and observer shutdown
+are outside the phase timers. Whole-project peaks span both attempts and audits,
+not startup, and are not per-phase cgroup maxima or host RSS.
+
+Retry stage medians: source sync 1.844 s, bronze 19.678 s, payment silver 15.995 s,
+order silver 17.361 s, product silver 14.098 s, customer silver 14.947 s, SCD2
+12.960 s and daily gold 19.749 s. Logs retain seven Spark records per attempt;
+all 42 records across the three experiments are observed, with the same seven
+distinct Spark application identities. All three stack observers have no errors.
+
+Independent JSONL reconciliation verified 100000 distinct orders and 273446528
+captured revenue cents against Trino in every round. All 14 table row hashes and
+physical file inventories remain unchanged across retry, totaling 12 files.
+Repeated fresh catalogs agree on row hashes/counts and file counts; their physical
+names differ. Snapshot totals increase from 14 to 27 through metadata-only replay,
+not duplicate data. Each attempt leaves no checkpoint before retry, then exactly one
+entry with the actual fixture manifest checksum after all eight stages/verification.
+Every subsequent replay is compute-free idle. No checkpoint was reset or fabricated.
+
+Raw reports: `artifacts/recovery-100k-v2-20261014/round-N/acceptance/recovery.json`;
+adjacent `experiment.json` records immutable source and scoped startup/drill/cleanup.
+SHA256:
+
+- Round 1: `1c5a50fc628b339c90072cbfe68cbb46a3e46bfa70ba66ce1ca92c65f1afadeb`.
+- Round 2: `276e81e64074151fce114204602c9a17f3764a6429f53db3bf691cc862a190d0`.
+- Round 3: `8df88208182770e0d49dd1008167f07de7ffd4326b774f19ceaad78bd5bc2293`.
+
+The first startup is retained separately under `artifacts/recovery-100k-20261014/`:
+an owned normal worker restarted with no live coordinator. Ownership was verified,
+the worker stopped, and a new isolated round selected before any measured data load.
+Its restart cause is unknown. Failed startup data/report were neither removed nor
+relabelled successful. Only experiment containers/networks were removed afterwards;
+all named data volumes, including failed startup, remain. No global prune, daemon
+restart or study/marketplace mutation. These are local observations, not signed RC assets.
+
+This remains ordinary batch-scoped input with a caught post-gold interruption, not
+the full-snapshot late/current-mart path, SIGKILL, failure inside an Iceberg commit,
+maintenance or production capacity. Earlier 1k/10k measurements were taken separately,
+not interleaved with these 100k rounds, so this is not a controlled cross-volume
+speedup claim. Omit the overlay to retain the previous output. The larger private
+input bound does not change the public control-plane contract or product version.
