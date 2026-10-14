@@ -3,7 +3,10 @@
 This opt-in drill extends the three linked snapshots with an observation that arrives
 after February 3 but is effective at February 1 noon. It uses real conditional MinIO
 landing, production bronze and customer silver jobs, the existing opt-in SCD2 rebuild,
-and an independent literal Trino oracle. The original forward runner is unchanged.
+and an independent literal Trino oracle. The normal full-snapshot runner selects
+retained-history rebuild for the pending late batch, then forward history for the
+following ordinary batch. The one-command path is documented in
+[history correction demo](commerce-history-correction-demo.md).
 
 ## Run
 
@@ -20,10 +23,12 @@ uv run --frozen python -m lakehouse_ops.commerce_linked_acceptance `
 The default driver still checks three snapshots, 1000/1500/2200 cents, three checkpoints,
 current-mart replay and compute-free idle. The new flag then lands a separate complete
 synthetic source fixture with a hash-bound manifest and earlier effective timestamp.
-Conditional landing replay creates no new objects. Only bronze and customer silver are
-processed for this observation; its order/payment fixture rows are not promoted to silver
-or published into current revenue. This is explicit history maintenance, not a fourth
-normal batch run or an automatically scheduled backfill.
+Conditional landing replay creates no new objects. Customer-only maintenance first
+processes bronze/customer silver and rebuilds history; it does not process the
+order/payment/product silver or complete the fourth batch. The driver subsequently
+resumes that full snapshot through the normal runner, including a failure after batch
+gold and a complete retry, before checkpointing it. Stale-snapshot protection retains
+the newer current revenue. A new ordinary fifth batch must then finish and reach idle.
 
 The rebuild reads **all** four retained silver customer observations. Its exact expected
 name/period history is:
@@ -55,11 +60,12 @@ planning/checkpointing, concurrent writers or failure inside an Iceberg commit.
 The journal remains diagnostic rather than a transaction coordinator. Retain volumes
 and reports, and stop only the experiment's scoped reference services afterwards.
 
-The compute-free idle observation is **before** landing the late fixture. Afterwards,
-that fixture remains pending in the normal planner because maintenance deliberately
-does not checkpoint it. Do not resume the normal forward pipeline on this diagnostic
-catalog: its older changed customer would be rejected. This drill is not a completed
-automatic late-batch ingestion path, and must use a disposable isolated experiment.
+Customer-only maintenance leaves the late fixture pending deliberately. The normal
+runner's rebuild selection now completes this late full snapshot, rather than forcing
+the older changed customer through forward history. Idle is checked before late
+landing, after late-batch retry and after the following ordinary batch. This remains
+a bounded single-writer acceptance on an isolated catalog, not arbitrary backfill
+planning or failure inside an Iceberg commit.
 
 Check retained real evidence without starting compute or modifying artifacts:
 
@@ -69,9 +75,12 @@ $env:LAKEOPS_RUN_HISTORY_CORRECTION_SMOKE = '1'
 uv run --frozen pytest tests/integration/test_commerce_retained_history_correction.py --no-cov
 ```
 
-This requires six ready journal attempts, three normal checkpoints and two separate
-maintenance runs with five owned/completed containers in total. Missing proof fails
-the opt-in check; default quality runs skip it rather than invent real-stack evidence.
+The checker accepts older retained evidence only in its original scope. New complete
+failure/retry evidence requires five checkpoints, eight ready journal attempts and one
+failed no-checkpoint attempt, with two separate customer-only maintenance runs and
+their five owned/completed containers. See the demo runbook for recovery invariants.
+Missing proof fails the opt-in check; default quality runs skip real-stack inspection
+rather than invent Docker evidence. Synthetic checker corruption tests run normally.
 
 See [rebuild semantics](commerce-customer-history-rebuild.md) for production-mode
 requirements and the separate Spark/Iceberg invalid-source and return-to-prior-state checks.

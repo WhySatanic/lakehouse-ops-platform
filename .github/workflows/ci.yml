@@ -54,7 +54,7 @@ jobs:
 
   serving-integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -127,14 +127,6 @@ jobs:
         run: >-
           uv run python tests/integration/check_clickhouse_serving.py
           artifacts/clickhouse-serving.json
-      - name: Upload serving evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          archive: true
-          name: serving-evidence
-          path: artifacts/clickhouse-serving.json
-          if-no-files-found: error
-          overwrite: true
       - name: Show serving logs
         if: failure()
         run: >-
@@ -145,6 +137,33 @@ jobs:
         run: >-
           docker compose --profile catalog --profile compute --profile serving
           down --volumes
+      - name: Prepare pinned query images for reference demo
+        run: docker compose --profile query pull trino-coordinator trino-worker
+      - name: Run complete late-correction recovery path
+        run: >-
+          uv run --frozen python -m lakehouse_ops.commerce_history_correction_demo
+          --output artifacts/commerce-history-correction-ci
+          > artifacts/commerce-history-correction-ci.stdout.json
+      - name: Verify retained late-correction recovery evidence
+        env:
+          LAKEOPS_RUN_HISTORY_CORRECTION_SMOKE: "1"
+          LAKEOPS_HISTORY_CORRECTION_DIRECTORY: artifacts/commerce-history-correction-ci/acceptance
+        run: >-
+          uv run --frozen pytest tests/integration/test_commerce_retained_history_correction.py
+          -q -o addopts='' --junitxml=artifacts/commerce-history-correction-retained.xml
+      - name: Upload serving evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          archive: true
+          name: serving-evidence
+          path: |
+            artifacts/clickhouse-serving.json
+            artifacts/commerce-history-correction-ci/
+            artifacts/commerce-history-correction-ci.stdout.json
+            artifacts/commerce-history-correction-retained.xml
+          if-no-files-found: error
+          overwrite: true
 
   ranger-integration:
     runs-on: ubuntu-latest

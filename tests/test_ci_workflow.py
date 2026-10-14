@@ -89,3 +89,32 @@ def test_quality_ci_retains_commerce_fixture_scale_evidence() -> None:
     assert "--output-root artifacts/commerce-fixture-scale-data" in quality
     assert "artifacts/commerce-fixture-scale.json" in quality
     assert "name: commerce-fixture-scale" in quality
+
+
+def test_serving_ci_runs_complete_correction_retry_path_after_scoped_shutdown() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    job = workflow.split("  serving-integration:\n", maxsplit=1)[1].split(
+        "  ranger-integration:\n", maxsplit=1,
+    )[0]
+    timeout = next(line for line in job.splitlines() if "timeout-minutes:" in line)
+    assert int(timeout.split(":", maxsplit=1)[1]) >= 60
+    assert "docker compose --profile query pull trino-coordinator trino-worker" in job
+    assert job.index("      - name: Stop serving profiles\n") < job.index(
+        "      - name: Prepare pinned query images for reference demo\n",
+    ) < job.index("      - name: Run complete late-correction recovery path\n")
+    assert job.index("      - name: Stop serving profiles\n") < job.index(
+        "      - name: Run complete late-correction recovery path\n",
+    ) < job.index("      - name: Verify retained late-correction recovery evidence\n")
+    checked = job.index("      - name: Verify retained late-correction recovery evidence\n")
+    assert checked < job.index("      - name: Upload serving evidence\n")
+    assert job.count("python -m lakehouse_ops.commerce_history_correction_demo") == 1
+    assert "--output artifacts/commerce-history-correction-ci" in job
+    assert "LAKEOPS_RUN_HISTORY_CORRECTION_SMOKE: \"1\"" in job
+    assert ("LAKEOPS_HISTORY_CORRECTION_DIRECTORY: "
+            "artifacts/commerce-history-correction-ci/acceptance") in job
+    assert "tests/integration/test_commerce_retained_history_correction.py" in job
+    upload = job.split("      - name: Upload serving evidence\n", maxsplit=1)[1]
+    assert "if: always()" in upload
+    assert "artifacts/clickhouse-serving.json" in upload
+    assert "artifacts/commerce-history-correction-ci/" in upload
+    assert "artifacts/commerce-history-correction-retained.xml" in upload
