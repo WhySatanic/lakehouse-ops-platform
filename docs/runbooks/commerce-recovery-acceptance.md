@@ -78,7 +78,7 @@ before starting the dedicated stack and keep it set for the drill. Each attempt
 emits seven `spark_container_memory` records in `stages.log`: bronze plus the six
 Spark silver/gold jobs. The eighth production stage is the non-Spark current-mart
 publication. Compare individual container peaks, not the sum of sequential peaks.
-The observations exclude MinIO, Hive Metastore, Trino and remote executors; they
+These Spark-only records exclude MinIO, Hive Metastore, Trino and remote executors; they
 are neither total host memory nor capacity measurements. Do not treat missing
 or unavailable memory observations as zero usage.
 
@@ -139,3 +139,77 @@ Retained local reports:
   `da645cbecb3b0ef278535db0e307b7ce2b107e9a37a9ad32a445dcca4378fae2`.
 - `artifacts/commerce-recovery-scale-1000-20261012-v1/recovery.json`, SHA256
   `6fbc69c7cecdacb58045a063904d63044fe12e2303ed4b7602ac0c14ed5d2338`.
+
+## Three-repeat 1k/10k recovery measurement, 2026-10-14
+
+Six sequential fresh-catalog experiments used the existing recovery command and
+canonical memory overlay, source `f22828098dfb41ab4fbc533caf658e21e5c4b410`.
+That local commit contains the observer integration on base `5764863`; the published
+change subsequently integrates main `ba58455` without changing the recovery boundary.
+Each experiment has a unique `lakehouse-ops-recovery-measured-<orders>-r<repeat>-20261014`
+project and automatic free ports. Docker reported 16637534208 bytes available.
+Order was 1k/10k, 10k/1k, 1k/10k, with one stack at a time, the same pinned images,
+10 customers, 5 products and fixed anomaly counts. A previously owned normal worker
+restarted during the first stack's startup; its ownership and absent coordinator
+were verified and it was stopped before the measured recovery phase. No competing
+containers were observed during the measured phases. Its restart cause is unknown.
+
+The first attempt starts with a fresh commerce catalog; the retry uses that same
+published dataset and warm services. Neither is a controlled cold OS/image/VM run.
+Each Spark stage starts a new process, including on retry. Startup, initial checks,
+fixture landing and observer shutdown are excluded from the phase timers. Stack
+memory spans both attempts and audits, not startup; no per-attempt stack peak is
+inferred from the combined observation. Values below are three-sample medians.
+
+| Orders | Fresh interrupted attempt, s | Warm retry, s (range) | Audit before/after, s | Idle, s | Stack sampled peak, MiB | Largest Spark peak, MiB |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1000 | 115.468 | 109.817 (108.965 to 112.846) | 6.523 / 4.449 | 0.007930 | 3649.77 | 1021.51 |
+| 10000 | 116.771 | 111.191 (110.217 to 113.795) | 7.066 / 4.900 | 0.008388 | 3609.08 | 1078.39 |
+
+Retry stage medians, including Compose launch/cleanup, are retained separately:
+
+| Stage | 1k, s | 10k, s |
+|---|---:|---:|
+| Selected source sync | 1.509 | 1.518 |
+| Bronze | 16.713 | 17.924 |
+| Payment silver | 15.391 | 15.734 |
+| Order silver | 16.388 | 15.891 |
+| Product silver | 13.917 | 14.000 |
+| Customer silver | 14.347 | 14.336 |
+| Customer SCD2 | 12.359 | 12.319 |
+| Batch daily gold | 18.935 | 19.141 |
+
+All six reports were independently checked against the generated JSONL: exactly
+1000/10000 distinct orders and 2733643/27461573 captured revenue cents, matching
+Trino verification. Each retained no checkpoint before retry, one hash-bound entry
+after all eight stages and verification, and a compute-free idle. All 14 table row
+hashes and physical inventories stayed unchanged across retry, totaling 12 files.
+Within each volume the row hashes/counts and file counts also agree across repeats;
+physical file names differ between fresh catalogs. Snapshot totals increased from
+14 to 27 through metadata-only replay commits, not duplicate data. Each log has
+14 observed Spark reports, and every whole-project observer reported `observed`
+with no errors. SQL audit timing is separate from the retry timer.
+
+Reports remain under `artifacts/recovery-measured-20261014/<orders>-r<repeat>/acceptance/`.
+Each adjacent `experiment.json` records source SHA, project, ports and startup,
+drill and scoped cleanup results. SHA256 of the six `recovery.json` files:
+
+| Sample | SHA256 |
+|---|---|
+| 1000-r1 | `5ba59e198abc4d61debe09346bfc59ceec193b178e16f598aecab24da4eab265` |
+| 1000-r2 | `3911a39f572773d63ab18473c3bc8ce3d54522227185c09fe10c379eaf5ee33e` |
+| 1000-r3 | `4353cb1cb8f80f8afe5f0cc0a2f3cf524582d4ee141f5ad6f85fd05bbfa60168` |
+| 10000-r1 | `f80863f75e16f7eeed6dfeafad8c044501baeda1413e32ff62c0fcd2592bafb6` |
+| 10000-r2 | `8c12c3c4aca28fc182ec4164fe1b9b0d2210b1dd54e66b913149afcc246de452` |
+| 10000-r3 | `717d54f2cb6725882ca00cf59cbd4f3deb4b60e0cc5be651cc7fd7ef1679c509` |
+
+Only the six experiment stacks/networks were removed afterwards; all 36 named
+volumes and local evidence remain. No global prune or unrelated project shutdown.
+This measures the caught post-gold boundary with ordinary batch-scoped input, not
+the full-snapshot current-mart/late-correction path, SIGKILL, in-commit recovery,
+100k recovery, maintenance or completed multi-batch Iceberg history growth.
+The nearby timings do not establish capacity or throughput improvement. Full-stack
+sampling is optional and has overhead; this is not an A/B observer-cost experiment.
+There is no new CLI, wrapper, dependency, image or release scheme. Omit the memory
+overlay to retain the previous output; incomplete observations remain `partial`,
+never zero. Existing integration CI and release policy still apply.
