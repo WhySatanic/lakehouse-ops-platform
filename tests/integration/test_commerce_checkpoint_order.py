@@ -9,6 +9,7 @@ import boto3
 import pytest
 
 from lakehouse_ops.commerce_change_scenario import generate_change_scenario
+from lakehouse_ops.commerce_pipeline import CommercePipelineError, run_commerce_batch
 from lakehouse_ops.ingestion.commerce_batches import CommerceBatchError, CommerceBatchPlanner
 from lakehouse_ops.ingestion.commerce_fixture import (
     CommerceFixtureConfig,
@@ -102,3 +103,53 @@ def test_real_minio_related_snapshots_land_replay_and_plan_in_order(tmp_path: Pa
     replay = planner.plan(max_batches=1, replay_batches=(scenario["batches"][1]["batch_id"],))
     assert replay["mode"] == "replay"
     assert replay["batches"][0]["batch_id"] == scenario["batches"][1]["batch_id"]
+
+
+@pytest.mark.skipif(
+    os.getenv("LAKEOPS_RUN_S3_SMOKE") != "1", reason="requires an initialized local MinIO"
+)
+def test_real_minio_expired_checkpoint_read_preserves_state_and_retries(tmp_path, monkeypatch):
+    client = boto3.client(
+        "s3", endpoint_url=os.getenv("LAKEOPS_S3_ENDPOINT_URL", "http://localhost:9000"),
+        aws_access_key_id=os.getenv("MINIO_ROOT_USER", "lakeops"),
+        aws_secret_access_key=os.getenv("MINIO_ROOT_PASSWORD", "lakeops-development-only"),
+        region_name="us-east-1",
+    )
+    bucket = os.getenv("LAKEHOUSE_BUCKET", "lakehouse")
+    prefix = f"smoke/commerce-budget-{uuid4().hex}"
+    scenario = generate_change_scenario(tmp_path / "scenario")
+    landing = CommerceS3LandingZone(client, bucket=bucket, prefix=prefix)
+    for batch in scenario["batches"][:2]:
+        landing.write(Path(batch["path"]))
+    state = tmp_path / "checkpoint.json"
+    planner = CommerceBatchPlanner(client, bucket=bucket, prefix=prefix, state_path=state)
+    planner.commit(scenario["batches"][0]["batch_id"])
+    before = state.read_bytes()
+    now = [0.0]
+    armed = False
+    list_objects = client.list_objects_v2
+
+    def listing(**kwargs):
+        result = list_objects(**kwargs)
+        if armed:
+            now[0] = 2.0
+        return result
+
+    def query(_):
+        nonlocal armed
+        armed = True
+        return [{"days": 1, "orders": 1, "captured_revenue_cents": 1500, "invalid_days": 0}]
+
+    monkeypatch.setattr(client, "list_objects_v2", listing)
+    monkeypatch.setenv("COMMERCE_RUN_TIMEOUT_SECONDS", "1")
+    with pytest.raises(CommercePipelineError, match="run time budget exhausted"):
+        run_commerce_batch(planner, query, run_stage=lambda *_: None, clock=lambda: now[0])
+    assert state.read_bytes() == before
+    armed = False
+    now[0] = 0.0
+    assert run_commerce_batch(
+        planner, lambda _: [{"days": 1, "orders": 1, "captured_revenue_cents": 1500,
+                             "invalid_days": 0}],
+        run_stage=lambda *_: None, clock=lambda: now[0],
+    )["status"] == "ready"
+    assert planner.plan(max_batches=1)["batches"] == []
