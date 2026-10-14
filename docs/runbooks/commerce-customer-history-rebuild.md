@@ -53,6 +53,10 @@ its checkpoint when moving or restoring an unfinished run. Use the existing runn
 lock and exclusive writer ownership; this does not recover still-running orphan
 containers or coordinate independent checkpoints sharing a warehouse.
 
+Queue order and late/full-snapshot classification compare UTC instants, including
+mixed zero/nonzero fractional seconds. For example, `00:00:00Z` precedes
+`00:00:00.500000Z`. Existing manifest hashes, plan timestamp strings and checkpoint
+timestamps retain their original normalized format; no checkpoint migration is needed.
 Run it only with complete retained silver history and a single writer. Empty input,
 missing required values, duplicate effective timestamps or customer/batch identities,
 missing existing customers

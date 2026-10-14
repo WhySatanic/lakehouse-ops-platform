@@ -83,9 +83,10 @@ class CommerceBatchPlanner:
             return {}
         # Rebuild only an explicitly declared complete snapshot older than an
         # already completed load. It still runs every stage before checkpoint.
-        latest = max((item["batch_at"] for item in state["processed_batches"].values()),
-                     default=batch.batch_at)
-        return {"customer_history_mode": "rebuild" if batch.batch_at < latest else "forward"}
+        effective_at = _effective_at(batch.batch_at)
+        latest = max((_effective_at(item["batch_at"])
+                      for item in state["processed_batches"].values()), default=effective_at)
+        return {"customer_history_mode": "rebuild" if effective_at < latest else "forward"}
 
     def plan(
         self, *, max_batches: int, replay_batches: tuple[str, ...] = ()
@@ -343,7 +344,7 @@ class CommerceBatchPlanner:
                 for offset in range(0, len(keys), workers):
                     group = keys[offset:offset + workers]
                     batches.extend(readers.map(lambda entry: self._read_manifest(*entry), group))
-        return sorted(batches, key=lambda batch: (batch.batch_at, batch.batch_id))
+        return sorted(batches, key=lambda batch: (_effective_at(batch.batch_at), batch.batch_id))
 
     def _read_manifest(self, batch_id: str, key: str, committed_at: object) -> CommerceBatch:
         response = self._client.get_object(Bucket=self._bucket, Key=key)
@@ -397,6 +398,10 @@ class CommerceBatchPlanner:
             ),
             source_semantics=manifest["config"].get("source_semantics"),
         )
+
+
+def _effective_at(batch_at: str) -> datetime:
+    return datetime.fromisoformat(batch_at.replace("Z", "+00:00"))
 
 
 def _valid_table_inventory(tables: object) -> bool:
