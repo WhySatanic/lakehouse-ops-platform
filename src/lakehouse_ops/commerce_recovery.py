@@ -60,6 +60,22 @@ def audit_tables(query: Callable[[str], list[dict[str, Any]]]) -> list[dict[str,
     return audit
 
 
+def verify_recovery_audit(
+    before: list[dict[str, Any]], after: list[dict[str, Any]],
+) -> None:
+    """Allow empty MERGE metadata commits, never changed rows/files or lost history."""
+    if not before:
+        raise ValueError("gold publication produced no audit evidence")
+    def published(audits: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [{key: value for key, value in item.items() if key != "snapshots"}
+                for item in audits]
+
+    if published(before) != published(after):
+        raise ValueError("retry changed published rows or Iceberg files")
+    if any(new["snapshots"] < old["snapshots"] for old, new in zip(before, after, strict=True)):
+        raise ValueError("retry removed Iceberg snapshot history")
+
+
 def exercise_recovery(
     planner: CommerceBatchPlanner,
     query: Callable[[str], list[dict[str, Any]]],
@@ -117,14 +133,7 @@ def exercise_recovery(
     evidence.update(published_after_retry=after, retry=retry)
     # Iceberg may commit an empty MERGE snapshot. Data and physical files must
     # remain identical, but snapshot count is observational, not an invariant.
-    def published(audits: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return [{key: value for key, value in item.items() if key != "snapshots"}
-                for item in audits]
-
-    if published(before) != published(after):
-        raise ValueError("retry changed published rows or Iceberg files")
-    if any(new["snapshots"] < old["snapshots"] for old, new in zip(before, after, strict=True)):
-        raise ValueError("retry removed Iceberg snapshot history")
+    verify_recovery_audit(before, after)
     def idle_stage(*_: Any) -> None:
         raise ValueError("idle replay started compute")
 

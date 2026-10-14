@@ -194,9 +194,9 @@ def main() -> int:
                 )
                 if args.late_customer_history:
                     from lakehouse_ops.commerce_history_correction import (
-                        CORRECTED_HISTORY,
                         exercise_following_batch,
                         exercise_history_correction,
+                        exercise_late_batch_completion,
                         generate_following_observation,
                         generate_late_observation,
                     )
@@ -227,21 +227,12 @@ def main() -> int:
                     exercise_history_correction(
                         trino.query, history_stage, batch, expected, args.output, report,
                     )
-                    completion_journal = CommerceRunJournal(args.output / "run-journal.sqlite3")
-
-                    def complete_stage(service, selected):
-                        run_compose_stage(service, selected, bucket="lakehouse",
-                                          journal=completion_journal)
-                        if service == CURRENT_STAGE:
-                            verify_snapshot(trino.query, {**expected,
-                                            "customer_history": CORRECTED_HISTORY},
-                                            2, expected["batches"][-1]["batch_id"])
-
-                    report["late_batch_completion"] = run_commerce_batch(
-                        planner, trino.query, run_stage=complete_stage, journal=completion_journal,
+                    exercise_late_batch_completion(
+                        planner, trino.query,
+                        lambda service, selected, *, journal: run_compose_stage(
+                            service, selected, bucket="lakehouse", journal=journal,
+                        ), batch, expected, args.output, report,
                     )
-                    if report["late_batch_completion"]["batch_id"] != batch["batch_id"]:
-                        raise ValueError("runner did not complete the late full snapshot")
                     report["idle_after_correction"] = run_commerce_batch(
                         planner, trino.query, run_stage=lambda *_: None,
                     )
