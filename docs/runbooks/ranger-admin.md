@@ -149,6 +149,17 @@ Keep it on a trusted local machine. Ranger provides centralized authorization he
 local Trino endpoint still trusts the supplied user header. This is enforcement evidence,
 not a production authentication boundary.
 
+## Startup failure evidence
+
+If Compose reports an unhealthy Trino worker, retain that worker's log and container
+state before teardown. A coordinator reaching `SERVER STARTED` does not establish
+worker readiness. Ranger CI's existing failure-log step includes both default workers
+and inspects only the coordinator and worker IDs returned by this Compose project.
+The state records health-check output, exit code, `OOMKilled`, and restart count;
+it does not dump environment variables or credentials. Missing containers are skipped.
+This evidence distinguishes startup failures before the authorization matrix runs;
+it does not bypass readiness, extend health budgets, or prove an unexplained failure fixed.
+
 ## Upgrade from 0.44.0
 
 No Iceberg, metastore, or Ranger database migration is required. Version 0.45.0 adds two
