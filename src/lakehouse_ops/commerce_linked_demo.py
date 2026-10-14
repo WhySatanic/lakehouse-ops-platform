@@ -72,8 +72,8 @@ def demo(root: Path, output: Path, *, run: Any = subprocess.run,
     module, retained, prefix, scope, timeout = SCENARIOS[scenario]
     if scenario == "profile":
         orders = (100, 1000) if orders is None else orders
-        if len(orders) != 2 or not 100 <= orders[0] < orders[1] <= 10_000:
-            raise ValueError("requires two ascending order volumes between 100 and 10000")
+        if len(orders) != 2 or not 100 <= orders[0] < orders[1] <= 100_000:
+            raise ValueError("requires two ascending order volumes between 100 and 100000")
     elif orders is not None:
         raise ValueError("order volumes are only supported for the profile scenario")
     root, output = root.resolve(), output.resolve()

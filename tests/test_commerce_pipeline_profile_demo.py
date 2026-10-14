@@ -25,7 +25,7 @@ def test_entrypoint_selects_profile_and_passes_volumes(tmp_path, monkeypatch, ca
     assert json.loads(capsys.readouterr().out) == {"status": status}
 
 
-@pytest.mark.parametrize("orders", [(99, 1000), (100, 100), (1000, 100), (100, 10001), (100,)])
+@pytest.mark.parametrize("orders", [(99, 1000), (100, 100), (1000, 100), (100, 100001), (100,)])
 def test_invalid_volume_does_not_create_output_or_start_docker(tmp_path, orders):
     with pytest.raises(ValueError, match="ascending"):
         demo(tmp_path, tmp_path / "absent", scenario="profile", orders=orders)
@@ -47,7 +47,8 @@ def test_missing_memory_overlay_does_not_create_output(tmp_path):
     assert not (tmp_path / "absent").exists()
 
 
-def test_custom_volumes_reach_only_measurement_child(tmp_path):
+@pytest.mark.parametrize("orders", [(200, 2000), (10000, 100000)])
+def test_custom_volumes_reach_only_measurement_child(tmp_path, orders):
     module = tmp_path / "src/lakehouse_ops/commerce_pipeline_profile.py"
     module.parent.mkdir(parents=True)
     module.touch()
@@ -58,7 +59,7 @@ def test_custom_volumes_reach_only_measurement_child(tmp_path):
     def run(command, **kwargs):
         if command[1] == "-m":
             assert command[2] == "lakehouse_ops.commerce_pipeline_profile"
-            assert command[-3:] == ["--orders", "200", "2000"]
+            assert command[-3:] == ["--orders", *(str(value) for value in orders)]
             children.append(command)
             acceptance = output / "acceptance"
             acceptance.mkdir()
@@ -73,7 +74,7 @@ def test_custom_volumes_reach_only_measurement_child(tmp_path):
         return SimpleNamespace(returncode=0)
 
     assert demo(tmp_path, output, run=run, scenario="profile",
-                orders=(200, 2000))["status"] == "ready"
+                orders=orders)["status"] == "ready"
     assert len(children) == 1
 
 
