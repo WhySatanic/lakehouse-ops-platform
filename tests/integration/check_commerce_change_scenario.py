@@ -62,7 +62,8 @@ def main() -> None:
             )
             payments = spark.read.json(str(root / "payments.jsonl"))
             rejects = spark.createDataFrame([], "reject_id string, order_id string")
-            daily_frame = summarize(orders, payments, rejects)
+            # A tiny aggregate must not inherit one output file per upstream Spark partition.
+            daily_frame = summarize(orders, payments, rejects).repartition(8, "order_day")
             identity = load_snapshot_identity(
                 root,
                 batch_id=batch["batch_id"],
@@ -81,6 +82,10 @@ def main() -> None:
             publication = publish_snapshot(spark, daily_frame, identity)
             assert publication["action"] == ("create" if not revenue else "replace")
             daily = spark.table(TABLE).collect()
+            files = spark.table(f"{TABLE}.files").collect()
+            assert len(files) == 1, f"small current mart has {len(files)} data files"
+            assert files[0].record_count == len(daily)
+            assert spark.table(f"{TABLE}.snapshots").count() == len(revenue) + 1
             revenue.append(sum(row.captured_revenue_cents for row in daily))
             if len(revenue) == 1:
                 initial_frame, initial_identity = daily_frame, identity
@@ -178,9 +183,11 @@ def main() -> None:
         )["history_rows"] == 4
         assert spark.table(history_table).filter("is_current").first().full_name == "Alice"
         snapshot_count = spark.table(f"{TABLE}.snapshots").count()
+        file_paths = spark.table(f"{TABLE}.files").select("file_path").collect()
         assert publish_snapshot(spark, daily_frame, identity)["action"] == "replay"
         assert publish_snapshot(spark, initial_frame, initial_identity)["status"] == "ignored_stale"
         assert spark.table(f"{TABLE}.snapshots").count() == snapshot_count
+        assert spark.table(f"{TABLE}.files").select("file_path").collect() == file_paths
         try:
             publish_snapshot(
                 spark, daily_frame.withColumn("captured_revenue_cents", F.lit(0)), identity
@@ -205,6 +212,7 @@ def main() -> None:
         )
         assert spark.table(TABLE).count() == 1
         assert spark.table(TABLE).first().captured_revenue_cents == 1500
+        assert spark.table(f"{TABLE}.files").count() == 1
         check_atomic_history(spark, customers)
         print(
             json.dumps(
@@ -213,6 +221,7 @@ def main() -> None:
                     "scope": "current_snapshot_iceberg_acceptance",
                     "replay_and_stale_snapshot": "verified",
                     "removed_day": "verified",
+                    "current_mart_file_layout": "one_file_create_replace_replay_verified",
                     "customer_history": "literal_oracle_verified",
                     "atomic_forward_history": "failure_boundaries_and_replay_verified",
                     "customer_versions_inserted": history_insertions,
