@@ -42,9 +42,13 @@ output and behavior remain unchanged.
 The scenario requires an empty output directory, fresh commerce catalog,
 one source batch and no competing writer. It creates a deterministic 100-order
 fixture, conditionally lands it, and runs the actual eight production stages twice.
-The private module accepts `--orders 1000` to choose 100 through 10000 orders;
+The private module accepts `--orders 1000` to choose 100 through 100000 orders;
 customers, products and anomaly counts remain fixed. Use a fresh dedicated project
 and empty artifact directory for each volume, not a reset checkpoint or reused catalog.
+The default remains 100. Opt-in `--orders 100000` uses the same interruption, retry,
+audit and checkpoint path, not a new workload implementation. Choose it only with
+sufficient local resources; the bound does not promise memory or execution capacity.
+Recorded smaller-volume measurements below do not become 100k evidence retroactively.
 
 After the first attempt writes gold, the injected exception must leave the checkpoint
 absent and the same hash-bound batch pending. All commerce table rows are read through

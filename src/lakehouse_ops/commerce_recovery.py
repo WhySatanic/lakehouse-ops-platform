@@ -162,8 +162,8 @@ def main() -> int:
     parser.add_argument("--server", required=True)
     parser.add_argument("--orders", type=int, default=100)
     args = parser.parse_args()
-    if not 100 <= args.orders <= 10_000:
-        parser.error("--orders must be between 100 and 10000")
+    if not 100 <= args.orders <= 100_000:
+        parser.error("--orders must be between 100 and 100000")
     project = os.environ.get("COMPOSE_PROJECT_NAME", "")
     if not project.startswith("lakehouse-ops-recovery"):
         parser.error("requires a dedicated lakehouse-ops-recovery Compose project")

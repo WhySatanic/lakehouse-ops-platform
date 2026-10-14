@@ -184,7 +184,7 @@ def test_phase_timing_includes_interruption_and_excludes_external_audits(tmp_pat
     }
 
 
-@pytest.mark.parametrize("orders", ["99", "10001", "not-an-integer"])
+@pytest.mark.parametrize("orders", ["99", "100001", "not-an-integer"])
 def test_order_bounds_rejected_before_creating_artifacts(tmp_path: Path, monkeypatch, orders):
     from lakehouse_ops.commerce_recovery import main
 
@@ -199,7 +199,7 @@ def test_order_bounds_rejected_before_creating_artifacts(tmp_path: Path, monkeyp
     assert not output.exists()
 
 
-@pytest.mark.parametrize("orders", [100, 1000, 10000])
+@pytest.mark.parametrize("orders", [100, 1000, 10000, 10001, 100000])
 @pytest.mark.parametrize("memory", [None, "observed", "partial", "failed-load"])
 def test_main_uses_selected_volume_and_retains_it_in_report(tmp_path, monkeypatch, orders, memory):
     import json
