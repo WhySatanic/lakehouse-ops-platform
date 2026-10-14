@@ -123,8 +123,10 @@ whole-process-tree cleanup; inspect the owned stage containers and logs afterwar
 
 This bounded single-writer scenario requires complete retained silver history. It
 does not demonstrate distributed exactly-once execution, interruption inside an
-Iceberg commit, arbitrary source retention, automatic correction planning, release
-readiness or production capacity. It does not replace mandatory CI or release evidence.
+Iceberg commit, arbitrary source retention, general CDC/backfill planning, release
+readiness or production capacity. Normal-runner correction selection is bounded to
+explicitly declared complete snapshots and retained customer silver history.
+It does not replace mandatory CI or release evidence.
 The injected failure is a caught exception after a successful stage subprocess,
 not process death, power loss, active-container interruption or an internal Iceberg
 commit failure. The separate owner-exit and atomic-SCD2 tests retain their own,
