@@ -7,7 +7,7 @@ uv run --frozen python -m lakehouse_ops.commerce_pipeline_profile_demo `
   --output artifacts/commerce-pipeline-profile-demo --orders 100 1000
 ```
 
-Use a new empty output directory. The optional volumes must be ascending integers
+Use a new empty output directory. The optional volumes must be ascending or equal integers
 between 100 and 100000. The default is 100 and 1000. Invalid volumes, a missing
 memory overlay or an unrelated checkout are rejected before services start.
 
@@ -17,6 +17,40 @@ raise container memory limits. Check available Docker VM memory first and run
 only one measurement stack at a time; a permitted input size is not a capacity
 guarantee. Failed or partial runs remain diagnostic evidence, not measurements
 to include in a successful comparison. Keep the default small run for setup.
+For a matched fresh/warm pair, pass the same volume twice:
+
+```powershell
+uv run --frozen python -m lakehouse_ops.commerce_pipeline_profile_demo `
+  --output artifacts/profile-1k-matched-round-1 --orders 1000 1000
+```
+
+Repeat with new output directories for at least three independent pairs at each
+volume, then do the same at 10000 and, with sufficient resources, 100000.
+Each invocation starts fresh owned services and
+an empty commerce catalog; its second sample keeps those services and exactly one
+completed prior batch. Both samples run all nine normal runner stages, rather than
+timing an idle replay as a warm load. Two chronological full-snapshot manifests have
+distinct batch identities. At equal volumes, IDs, amounts, reference dimensions,
+quality cases and row counts match; order/payment timestamps shift forward one day
+with the second snapshot. Source JSONL is therefore not byte-identical. Row/revenue
+oracles, file/snapshot-stable idle checks and project-only memory sampling are unchanged.
+
+The private profile report records `catalog_state` and `prior_completed_batches`
+for every sample. Equal volumes use `same_volume_fresh_then_warm_catalog` in the
+child report and `same_volume_fresh_then_warm_reference_stack` in the demo report;
+ascending volumes retain the previous scopes and default behavior. The standalone
+profile requires an empty commerce catalog but does not itself start services.
+
+Here "fresh" (or cold) means fresh scoped services/catalog with locally available
+images, not a cold image download or a flushed host/OS cache. "Warm" means those
+same services with one prior batch, not a reused Spark session: each Spark stage
+still starts a new process. Runner times exclude stack startup and the additional
+post-run SQL/inventory checks; startup is separately timed in `demo.json`. The
+first/second order is fixed and retained history is a deliberate difference. These
+pairs do not isolate JVM/cache effects from one-batch history, measure arbitrary
+history growth, or establish production capacity. Keep study/foreign projects
+unchanged, run pairs serially, and record competing host load rather than claiming
+an otherwise idle machine. Warehouse volumes remain retained after scoped teardown.
 
 This private module wraps the existing [full pipeline measurement](commerce-pipeline-scale.md)
 in the same scoped lifecycle as the linked demo. It creates a unique
@@ -476,3 +510,112 @@ fragmented snapshots are not rewritten by replay. A subsequent newer full snapsh
 gets the compact layout. Rollback restores the prior writer distribution for
 future publications without deleting existing files or warehouse volumes. The
 100k, longer-history, independent cold/warm and crash-recovery gaps remain open.
+
+## Matched fresh/warm pairs at 1k and 10k
+
+On 2026-10-14 (Europe/Moscow), three serial pairs per volume ran at source
+`8f6266b348934b8b2d1c2a3701c6a0769fcb652d`, based on main `04dd322` with the compact
+current-mart writer. Each pair used the original command above with `--orders 1000
+1000` or `--orders 10000 10000`, a fresh output directory and a fresh owned stack.
+The later rebase onto `7f24a1b` changes only the demo's already-reviewed upper bound
+from 10000 to 100000; the measured runner, profile child, fixture generator, Spark
+jobs and Compose configuration are unchanged. These are not matched 100k results.
+
+All twelve loads completed the normal nine stages and eight observed Spark memory
+records. Every project memory report was `observed`, with no sampling errors. Detail,
+batch daily and current daily SQL matched the independent input and literal totals:
+1000 orders / 2733643 cents, or 10000 orders / 27461573 cents. Each load's idle rerun
+changed no files or snapshots. Fresh/warm batch IDs are `84cdb288a85b0a3f` /
+`9c14d7c692dba5ba` at 1k and `18ae3bdf50f64d6c` / `944f877f4c6a3e18` at 10k.
+Full-snapshot dates are February 1/2, with the timestamp difference described above.
+
+Raw runner seconds (excluding stack startup and post-run profile queries):
+
+| Pair | 1k fresh | 1k warm | 10k fresh | 10k warm |
+|---|---:|---:|---:|---:|
+| 1 | 133.485372 | 127.994144 | 132.262903 | 135.913095 |
+| 2 | 128.583505 | 129.116945 | 134.630255 | 132.065582 |
+| 3 | 137.428028 | 131.270202 | 134.254008 | 129.480372 |
+| Median | 133.485372 | 129.116945 | 134.254008 | 132.065582 |
+
+Medians across the three comparable observations per state:
+
+| Observation | 1k fresh | 1k warm | 10k fresh | 10k warm |
+|---|---:|---:|---:|---:|
+| Observed project peak MiB | 3576.56 | 3672.09 | 3686.01 | 3770.93 |
+| Largest individual Spark peak MiB | 998.58 | 1012.85 | 1051.62 | 1024.65 |
+| Idle child seconds | 2.058343 | 1.956578 | 1.917178 | 1.946245 |
+| Current data files | 13 | 24 | 13 | 24 |
+| Current data-file bytes | 224126 | 437910 | 1774799 | 3537926 |
+
+"Current data files" here means the full current inventory across the fifteen
+commerce/SCD2 tables, not just the current mart or retained obsolete/metadata files.
+The current mart remains one file: fresh/warm 5467/5464 bytes at 1k, 5486/5494 at 10k.
+File counts/bytes above were identical in all three observations for each state.
+History adds batch-scoped files, not cumulative current revenue; two batches do not
+establish longer-history growth or maintenance cost. Spark values use `peak_bytes`
+from cgroup reports; project values use the maximum sampled simultaneous sum.
+
+Per-stage median seconds include each Compose/Spark process startup:
+
+| Stage | 1k fresh | 1k warm | 10k fresh | 10k warm |
+|---|---:|---:|---:|---:|
+| Input sync | 1.960 | 1.913 | 2.003 | 2.030 |
+| Bronze | 18.883 | 17.892 | 20.012 | 18.371 |
+| Payment silver | 15.389 | 15.419 | 16.033 | 16.284 |
+| Order silver | 16.644 | 16.171 | 16.345 | 16.924 |
+| Product silver | 13.671 | 14.419 | 14.138 | 14.339 |
+| Customer silver | 14.772 | 14.695 | 14.656 | 15.032 |
+| Customer SCD2 | 13.638 | 12.474 | 12.821 | 12.600 |
+| Batch daily gold | 19.440 | 18.965 | 18.824 | 19.838 |
+| Current daily gold | 16.889 | 17.417 | 17.207 | 18.040 |
+
+Single fixed-order detail/daily/current SQL wall-time medians were 138/11/10 ms
+(1k fresh), 41/7/7 (1k warm), 245/11/10 (10k fresh), and 67/8/7 (10k warm).
+Detail physical input bytes were respectively 91584, 91579, 866314 and 865517,
+identical across repeats within each state. Queries run after runner verification
+and inventory reads, not against a guaranteed cold query cache. These are ordered
+observations with retained query IDs/stats, not a latency SLA or isolated cache test.
+Small shifted-date byte differences are not evidence of a pruning improvement.
+
+Raw reports remain in `artifacts/profile-matched-1k-20261014/round-N/acceptance`
+and `artifacts/profile-matched-10k-20261014/round-N/acceptance`; `demo.json` beside
+each acceptance directory separately retains startup/teardown timings and ports.
+SHA256 for `profile.json` in round order:
+
+- 1k/1: `4ca31206985d4f381822790cd36a748a1f8ad97a71f3419f064b9b95219fd4d5`.
+- 1k/2: `6edf5069992029ee2c2915594ee20464adc9ff29687580a6f0cda486114baa27`.
+- 1k/3: `e24cde50849b6cc2cafe8267ffc50d5c5ab9f8b47262dcd9cfeaaaf7db3d22b0`.
+- 10k/1: `775ebc82eb77baad59b3b61a7bf79c92a6918ad959637b1ab884a8a374dca182`.
+- 10k/2: `50600bac41b621e7437493293b8ede5ddab38d073109f364a3be312251a64d00`.
+- 10k/3: `72b442aece4f8252ff0853044b6b354e0271a35a1b56d0fa9ef0048872b22cc0`.
+
+Current-mart query IDs, fresh then warm, in round order:
+
+- 1k/1: `20261014_001736_00021_hmzei` / `20261014_002002_00106_hmzei`.
+- 1k/2: `20261014_002331_00021_2r87a` / `20261014_002558_00106_2r87a`.
+- 1k/3: `20261014_002934_00021_uvgts` / `20261014_003206_00106_uvgts`.
+- 10k/1: `20261014_003748_00021_s6e3k` / `20261014_004023_00106_s6e3k`.
+- 10k/2: `20261014_004401_00021_wnj2s` / `20261014_004632_00106_wnj2s`.
+- 10k/3: `20261014_005008_00021_3uhmt` / `20261014_005235_00106_3uhmt`.
+
+Project suffixes (all `lakehouse-ops-scale-demo-`) were
+`8343eae03022460ead04d122b55dfd62`, `df914b2e831743089347e9f0f1bb0d19`,
+`ff82332ec72a4a648189e73a9de62b33` at 1k, then
+`e621348db8754608bc6a2e5d5dd1b795`, `e52912b87bb74032b28c48eca53588d9`,
+`b7c3639b341e4709a3cd7de25d2b9cc3` at 10k. Fresh inspection after every pair
+confirmed zero owned containers/networks and six retained warehouse volumes.
+The three running study SQL containers kept the same IDs; other projects were not
+started/stopped. No global prune, image pull/build or cache flush was performed.
+
+The Docker VM had about 15.5 GiB total memory. Free Windows physical RAM before
+the three 1k pairs was 7690388/6228644/6074940 KiB; before 10k it was
+6941180/5478384/5314436 KiB. VM available memory before 10k was
+14405004/14356560/14338708 KiB. Study SQL services and ordinary host applications
+remained competing load; no local tests or second lakehouse measurement ran in
+parallel. Images/OS caches were uncontrolled. Warming is not reliably faster
+(1k pair 2 and 10k pair 1 were slower warm), and all Spark jobs remain new processes.
+This closes the same-volume comparison gap for 1k/10k under the declared conditions,
+not matched 100k, arbitrary history growth, crash recovery, host memory or capacity.
+No public CLI/schema/configuration migration is required; ascending/default commands
+are unchanged. Rollback can omit equal volumes and use the prior ascending profile.

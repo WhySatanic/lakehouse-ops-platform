@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -28,7 +29,7 @@ def test_execute_retains_failed_process_logs(tmp_path: Path, monkeypatch: pytest
     assert (tmp_path / "failed.stderr.log").read_text() == "failed stage"
 
 
-@pytest.mark.parametrize("volumes", [[99, 100], [100, 100], [100]])
+@pytest.mark.parametrize("volumes", [[99, 100], [100, 99], [100]])
 def test_invalid_volume_does_not_start_pipeline(tmp_path: Path, volumes):
     with pytest.raises(ValueError, match="ascending"):
         profile.profile(tmp_path, orders=volumes, endpoint="unused", server="unused")
@@ -42,8 +43,9 @@ def test_default_project_is_rejected(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 @pytest.mark.parametrize("failure", [None, "memory", "idle", "existing", "second-run",
                                     "missing-current", "current-revenue", "wrong-sql-revenue"])
+@pytest.mark.parametrize("volumes", [[100, 1000], [100, 100]])
 def test_two_volume_evidence_or_retained_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure, volumes,
 ):
     monkeypatch.setenv("COMPOSE_PROJECT_NAME", "lakehouse-ops-scale-test")
     running = failure == "existing"
@@ -88,12 +90,11 @@ def test_two_volume_evidence_or_retained_failure(
         if failure == "second-run" and label == "sample-2":
             raise subprocess.CalledProcessError(2, args)
         running = True
-        selected_volume = 100 if label == "sample-1" else 1000
         fixture = next((output / label).iterdir())
-        batch = json.loads((fixture / "manifest.json").read_text())["batch_id"]
-        assert json.loads((fixture / "manifest.json").read_text())["config"][
-            "source_semantics"
-        ] == "full_snapshot"
+        manifest = json.loads((fixture / "manifest.json").read_text())
+        batch = manifest["batch_id"]
+        selected_volume = manifest["config"]["orders"]
+        assert manifest["config"]["source_semantics"] == "full_snapshot"
         observations = [{"app_name": str(i), "kind": "spark_container_memory",
                          "status": "unavailable" if failure == "memory" else "observed"}
                         for i in range(8)]
@@ -125,19 +126,44 @@ def test_two_volume_evidence_or_retained_failure(
     monkeypatch.setattr(profile, "StackMemorySampler", Sampler)
     if failure:
         with pytest.raises((ValueError, subprocess.CalledProcessError)):
-            profile.profile(tmp_path, orders=[100, 1000], endpoint="unused", server="unused")
+            profile.profile(tmp_path, orders=volumes, endpoint="unused", server="unused")
         assert json.loads((tmp_path / "profile.json").read_text())["status"] == "failed"
         if failure == "second-run":
             evidence = json.loads((tmp_path / "profile.json").read_text())
             assert len(evidence["samples"]) == 1
             assert evidence["samples"][0]["orders"] == 100
     else:
-        result = profile.profile(tmp_path, orders=[100, 1000], endpoint="unused", server="unused")
+        result = profile.profile(tmp_path, orders=volumes, endpoint="unused", server="unused")
         assert result["status"] == "ready"
-        assert [s["orders"] for s in result["samples"]] == [100, 1000]
+        assert [s["orders"] for s in result["samples"]] == volumes
+        assert result["scope"] == (
+            "same_volume_fresh_then_warm_catalog" if volumes[0] == volumes[1]
+            else "two_volume_sequential_warm_stack"
+        )
+        first, second = result["samples"]
+        assert first["batch_id"] != second["batch_id"]
+        assert first["config"]["batch_at"] < second["config"]["batch_at"]
+        assert [s["prior_completed_batches"] for s in result["samples"]] == [0, 1]
+        assert [s["catalog_state"] for s in result["samples"]] == [
+            "fresh_commerce_catalog", "one_completed_prior_batch",
+        ]
+        if volumes[0] == volumes[1]:
+            assert first["input_expected"] == second["input_expected"]
+            fixtures = [next((tmp_path / label).iterdir()) for label in ("sample-1", "sample-2")]
+            for table in ("customers", "products", "orders", "payments"):
+                rows = [[json.loads(line) for line in (fixture / f"{table}.jsonl").read_text(
+                    encoding="utf-8",
+                ).splitlines()] for fixture in fixtures]
+                for earlier, later in zip(*rows, strict=True):
+                    for timestamp in ("event_at", "ingested_at", "paid_at"):
+                        if timestamp in earlier:
+                            assert datetime.fromisoformat(later.pop(timestamp)) - (
+                                datetime.fromisoformat(earlier.pop(timestamp))
+                            ) == timedelta(days=1)
+                    assert earlier == later
         assert result["samples"][0]["idle_replay"] == "verified"
         assert result["samples"][0]["cumulative_current_files"][0]["bytes"] == 1024
-        assert result["samples"][1]["query_costs"]["detail"]["rows"][0]["orders"] == 1000
+        assert result["samples"][1]["query_costs"]["detail"]["rows"][0]["orders"] == volumes[1]
         assert result["samples"][0]["idle_replay_observation"]["status"] == "verified"
 
 
