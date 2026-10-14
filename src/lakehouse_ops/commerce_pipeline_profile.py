@@ -38,8 +38,9 @@ _INVENTORY_TABLES_SQL = (
 
 def stack_memory_sample(project: str) -> dict[str, Any]:
     """Observe only this Compose project's containers, including active one-off jobs."""
-    if project != "lakehouse-ops-scale" and not project.startswith("lakehouse-ops-scale-"):
-        raise ValueError("stack memory requires a dedicated scale project")
+    if (project not in ("lakehouse-ops-scale", "lakehouse-ops-recovery")
+            and not project.startswith(("lakehouse-ops-scale-", "lakehouse-ops-recovery-"))):
+        raise ValueError("stack memory requires a dedicated scale or recovery project")
     def discover():
         return subprocess.run(
             ["docker", "ps", "--filter", f"label=com.docker.compose.project={project}",

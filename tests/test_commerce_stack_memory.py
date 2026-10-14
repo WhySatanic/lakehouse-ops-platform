@@ -11,14 +11,15 @@ from lakehouse_ops import commerce_pipeline_profile as profile
 
 @pytest.mark.parametrize(("usage", "expected"), [("1GiB", 1024**3), ("2.5MiB", 2621440),
                                                 ("3MB", 3000000), ("0B", 0)])
-def test_project_memory_includes_core_and_one_off_containers(monkeypatch, usage, expected):
+@pytest.mark.parametrize("project", ["lakehouse-ops-scale-test", "lakehouse-ops-recovery-test"])
+def test_project_memory_includes_core_and_one_off_containers(monkeypatch, usage, expected, project):
     calls = []
 
     def run(command, **kwargs):
         assert kwargs["check"] and kwargs["timeout"] == 10
         calls.append(command)
         if command[1] == "ps":
-            assert command[3] == "label=com.docker.compose.project=lakehouse-ops-scale-test"
+            assert command[3] == f"label=com.docker.compose.project={project}"
             return subprocess.CompletedProcess(command, 0, "core\nspark\n")
         assert command[-2:] == ["core", "spark"]
         body = "\n".join(json.dumps({"ID": name, "Name": name, "MemUsage": usage + " / 8GiB"})
@@ -26,9 +27,17 @@ def test_project_memory_includes_core_and_one_off_containers(monkeypatch, usage,
         return subprocess.CompletedProcess(command, 0, body)
 
     monkeypatch.setattr(profile.subprocess, "run", run)
-    result = profile.stack_memory_sample("lakehouse-ops-scale-test")
+    result = profile.stack_memory_sample(project)
     assert result["used_bytes"] == expected * 2
     assert len(result["containers"]) == 2 and len(calls) == 2
+
+
+@pytest.mark.parametrize("project", ["", "lakehouse-ops", "bigdata-stack", "marketplace-demo"])
+def test_memory_observer_rejects_unscoped_and_protected_projects(monkeypatch, project):
+    monkeypatch.setattr(profile.subprocess, "run", lambda *_args, **_kw:
+                        pytest.fail("must reject project before any Docker call"))
+    with pytest.raises(ValueError, match="dedicated"):
+        profile.stack_memory_sample(project)
 
 
 def test_empty_project_never_runs_unscoped_docker_stats(monkeypatch):

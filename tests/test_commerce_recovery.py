@@ -200,8 +200,10 @@ def test_order_bounds_rejected_before_creating_artifacts(tmp_path: Path, monkeyp
 
 
 @pytest.mark.parametrize("orders", [100, 1000, 10000])
-def test_main_uses_selected_volume_and_retains_it_in_report(tmp_path: Path, monkeypatch, orders):
+@pytest.mark.parametrize("memory", [None, "observed", "partial", "failed-load"])
+def test_main_uses_selected_volume_and_retains_it_in_report(tmp_path, monkeypatch, orders, memory):
     import json
+    import os
     from contextlib import nullcontext
     from types import SimpleNamespace
 
@@ -209,6 +211,34 @@ def test_main_uses_selected_volume_and_retains_it_in_report(tmp_path: Path, monk
 
     output = tmp_path / "evidence"
     selected = []
+    observer_events = []
+    observation = {"status": "partial" if memory == "partial" else "observed",
+                   "peak_observed_bytes": None if memory == "partial" else 42,
+                   "errors": ["sampling failed"] if memory == "partial" else []}
+
+    class Observer:
+        def __init__(self, project):
+            assert memory is not None and project == "lakehouse-ops-recovery-test"
+
+        def __enter__(self):
+            observer_events.append("started")
+            return self
+
+        def __exit__(self, *exc):
+            observer_events.append("closed")
+
+        def report(self):
+            assert observer_events == ["started", "closed"]
+            return observation
+
+    monkeypatch.setattr(recovery, "StackMemorySampler", Observer, raising=False)
+    if memory is None:
+        monkeypatch.delenv("COMPOSE_FILE", raising=False)
+    else:
+        monkeypatch.setenv("COMPOSE_FILE", os.pathsep.join(
+            ("compose.yaml", "compose.spark-memory.yaml"),
+        ))
+        monkeypatch.setenv("COMPOSE_PATH_SEPARATOR", os.pathsep)
 
     def fixture(path, config):
         selected.append(config.orders)
@@ -226,8 +256,22 @@ def test_main_uses_selected_volume_and_retains_it_in_report(tmp_path: Path, monk
     monkeypatch.setattr(recovery, "generate_commerce_fixture", fixture)
     monkeypatch.setattr(recovery, "CommerceS3LandingZone", lambda *_args, **_kw:
                         SimpleNamespace(write=lambda _: None))
-    monkeypatch.setattr(recovery, "exercise_recovery", lambda *_args, **_kw: {"status": "ready"})
-    assert recovery.main() == 0
+    def exercise(*_args, **_kw):
+        if memory == "failed-load":
+            raise RuntimeError("failed recovery load")
+        return {"status": "ready"}
+
+    monkeypatch.setattr(recovery, "exercise_recovery", exercise)
+    assert recovery.main() == (2 if memory == "failed-load" else 0)
     assert selected == [orders]
     report = json.loads((output / "recovery.json").read_text())
-    assert report == {"status": "ready", "fixture_orders": orders}
+    expected = {"status": "failed" if memory == "failed-load" else "ready",
+                "fixture_orders": orders}
+    if memory is not None:
+        expected["stack_memory"] = observation
+        assert observer_events == ["started", "closed"]
+    else:
+        assert observer_events == []
+    if memory == "failed-load":
+        expected["error_type"] = "RuntimeError"
+    assert report == expected
