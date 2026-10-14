@@ -51,6 +51,11 @@ def test_rc_revalidates_downloaded_commerce_proof_before_packaging():
     assert 'LAKEOPS_RUN_HISTORY_CORRECTION_SMOKE: "1"' in step
     assert ("${{ runner.temp }}/evidence/serving-evidence/"
             "commerce-history-correction-ci/acceptance") in step
+    assert ("LAKEOPS_INFLIGHT_DIRECTORY: ${{ runner.temp }}/evidence/serving-evidence/"
+            "commerce-inflight-ci/acceptance") in step
+    for node in ("test_retained_correction_has_two_ready_maintenance_runs_and_no_checkpoint",
+                 "test_retained_inflight_queue_has_four_complete_batches_and_one_failed_publication"):
+        assert f"test_commerce_retained_history_correction.py::{node}" in step
     assert step.index("test_commerce_retained_history_correction.py") < step.index(
         "lakeops build-release-candidate",
     )

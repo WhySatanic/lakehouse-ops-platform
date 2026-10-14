@@ -9,8 +9,10 @@ The archive contains:
 
 - the release-readiness attestation and both public contracts;
 - every digest-verified cross-profile evidence report;
-- the complete commerce correction/recovery `linked.json`, final checkpoint and
-  SQLite run journal from the same workflow's serving evidence;
+- the complete commerce correction/recovery and in-flight late-arrival `linked.json`,
+  final checkpoint and SQLite run journal from the same workflow's serving evidence;
+- the in-flight fixture's `scenario/expected.json`, required to independently recheck
+  the archived recovery proof using the same retained acceptance checker;
 - the pinned Trino upgrade plan and four-phase upgrade/rollback report;
 - a deterministic manifest with the source revision and SHA-256 of every member.
 
@@ -18,19 +20,28 @@ The builder rechecks every digest recorded by the attestation, validates the att
 source revision and readiness-contract digest, and reruns the Trino upgrade/rollback
 validator. Archive metadata is normalized, so identical inputs produce identical bytes.
 Before packaging, current CI reruns the existing retained commerce acceptance checks
-on the downloaded report/checkpoint/journal. These checks correlate the failed attempt
+on both downloaded report/checkpoint/journal triplets. These checks correlate the failed attempt
 without checkpoint, successful retry, following normal batch, idle result and literal
 SQL/history oracles. The builder refuses a partial commerce triplet or a report without
-the complete correction/recovery/next/idle path. All three files become ordinary members
+the complete correction/recovery/next/idle path. The in-flight triplet also retains actual
+B arrival after C publication, failed C without checkpoint, persisted-intent C retry,
+B rebuild, following ordinary D and compute-free idle. The builder rejects incomplete
+in-flight attempt sequences; the existing retained acceptance checker additionally
+checks the SQL oracles, snapshot counts, checkpoint hashes and durable ownership.
+CI selects both retained test nodes explicitly, so a missing checker or missing directory
+fails before packaging rather than silently skipping the new path.
+All seven files become ordinary members
 of the existing SHA-bound archive manifest and existing provenance; no second bundle,
 public command, report schema or version is introduced.
 
-Historical evidence roots without the commerce directory remain reproducible through
+Historical evidence roots without either commerce directory remain reproducible through
 the existing build command. Their old archives do not prove this full commerce path.
 Offline archive verification checks bytes and revision, not a rerun of Spark or SQL;
 semantic acceptance belongs to the same-run CI check before packaging. A local rebuild
 of downloaded older inputs is a packaging rehearsal, not a new clean-checkout RC or
 newly signed evidence. No release should be inferred from that rebuild.
+The in-flight CI producer and retained checker require the reference-stack acceptance
+introduced in #250. Merge that increment before enabling this RC integration on main.
 CI then verifies the two downloadable assets through the same public command available to
 release consumers. On `main`, GitHub OIDC and Sigstore also bind all three final assets to
 the repository, signer workflow, source SHA, and source ref. The retained Sigstore bundle
