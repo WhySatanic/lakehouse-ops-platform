@@ -16,6 +16,10 @@ observability, and performance experiments.
 > clean-checkout release evidence are exercised by CI. External runtime and build-base
 > images are pinned by manifest digest and checked against a versioned lock.
 
+The supported Data Engineering walkthrough is the synthetic commerce path below:
+load, change, late correction, caught failure, retry, next batch and idle. Weather,
+Ranger, observability and maintenance commands remain available as separate profiles.
+
 The optional observability profile exposes Prometheus readiness and live table signals,
 plus provisioned Grafana readiness, Trino workload, maintenance, and freshness
 dashboards. See
@@ -46,7 +50,7 @@ repository makes those concerns executable and measurable.
 
 ```mermaid
 flowchart LR
-    API["Open data APIs"] --> INGEST["Python ingestion"]
+    API["Synthetic commerce / optional open APIs"] --> INGEST["Python ingestion"]
     INGEST --> S3["MinIO / S3 landing zone"]
     S3 --> SPARK["Apache Spark"]
     SPARK --> ICEBERG["Apache Iceberg tables"]
@@ -71,61 +75,84 @@ dedicated read-only MinIO identity to query the Spark-written silver and reject 
 tables in place. Its executable evidence reconciles row counts, duplicate keys, and the
 selected survivor without importing the data into ClickHouse native storage.
 
-## First working slice
+## Supported commerce walkthrough
 
-The `lakeops` CLI fetches a bounded weather forecast, validates the columnar response,
-and writes the original payload to an idempotent, checksum-addressed landing path.
-Writes are atomic so a failed process cannot expose a partial object.
+Use Python 3.12 or newer, `uv`, and a running local Docker with Compose. From the
+repository root, prepare the reference images once. These commands build/pull the
+reviewed images but do not start an existing stack:
 
-For relational SQL and pipeline practice, the deterministic
-[commerce fixture](docs/runbooks/commerce-training-fixture.md) generates linked customers,
-products, orders, and payments with exact counts of NULLs, duplicates, late events, and
-invalid payments. It uses only synthetic local data and verifies checksums on rerun.
-The opt-in [commerce recovery acceptance](docs/runbooks/commerce-recovery-acceptance.md)
-injects a caught interruption after real gold publication, then verifies a safe retry
-and idle checkpoint replay using full row hashes and Iceberg file inventories.
-Generated batches can be landed in MinIO with conditional writes. The table files are
-uploaded first and the verified manifest is published last as the batch commit marker.
-The same runbook shows how to plan a bounded incremental batch, checkpoint it only after
-downstream success, and request an explicit replay without moving normal progress. The
-selected batch can be merged idempotently into four raw Iceberg bronze tables without
-discarding the fixture's intentional duplicate order rows. A bounded payment silver step
-retains invalid amounts as queryable reject evidence and reconciles every selected row.
-An order silver step keeps one deterministic survivor, retains duplicate evidence, checks
-selected-batch references, and marks late events without rejecting them.
-Product silver validates identifiers, descriptions, and positive pricing while preserving
-invalid or duplicate rows as queryable evidence.
-Customer silver preserves intentional NULL emails as valid completeness evidence while
-rejecting malformed non-NULL emails, missing required values, and duplicate identities.
-Customer history tracks changed names and email completeness as deterministic Iceberg
-SCD2 versions, with one current row and guarded forward-only effective periods.
-An opt-in [history rebuild](docs/runbooks/commerce-customer-history-rebuild.md) handles
-late effective-time observations from complete retained silver history with one atomic
-Iceberg replacement and snapshot-stable replay; default forward mode is unchanged.
-
-The opt-in [one-command commerce demo](docs/runbooks/commerce-linked-demo.md) starts
-a fresh scoped MinIO/Hive Metastore/Trino stack, runs three linked snapshots through
-Spark and literal revenue/history oracles, verifies replay and idle behavior, then
-stops only its own services while retaining all data, journals and logs:
-
-```bash
-uv run --frozen python -m lakehouse_ops.commerce_linked_demo \
-  --output artifacts/commerce-linked-demo
+```powershell
+uv sync --frozen --dev
+docker compose --file compose.yaml --profile catalog --profile compute build minio hive-metastore spark-bronze spark-silver
+docker compose --file compose.yaml --profile catalog --profile query pull metastore-db trino-coordinator trino-worker
 ```
 
-Docker and the reference images must already be available. This bounded demonstration
-does not replace separate crash-recovery, capacity or release-candidate evidence.
+Run the complete small correctness scenario, using a new empty output directory:
 
-To run the same three loads followed by explicit late-effective customer history
-maintenance, use the [late history demonstration](docs/runbooks/commerce-history-correction-demo.md):
-
-```bash
-uv run --frozen python -m lakehouse_ops.commerce_history_correction_demo \
-  --output artifacts/commerce-history-correction-demo
+```powershell
+uv run --frozen python -m lakehouse_ops.commerce_history_correction_demo --output artifacts/commerce-history-correction-demo
 ```
 
-The maintenance verifies a literal three-period history and unchanged revenue/checkpoint;
-it does not automatically checkpoint the late source as a fourth forward batch.
+No API key, cloud account or external source data is needed. The command starts its
+own MinIO, PostgreSQL-backed Hive Metastore, Trino coordinator and worker on selected
+free ports. It uses the normal commerce runner and production Spark jobs, not a
+second demo pipeline. Required `serving-integration` CI runs this same command.
+The [scenario runbook](docs/runbooks/commerce-history-correction-demo.md) gives
+the exact failure boundary, stage ownership, time limits and retained checks.
+
+| Step | Required result before progress is recorded |
+|---|---|
+| Load, change, late order/payment | Three complete snapshots produce 1000, 1500, then 2200 captured cents; three checkpoints. |
+| Late customer maintenance and replay | Alice, Alice Corrected, Alice Updated have contiguous periods and exactly one current version; checkpoint stays at three. |
+| Caught failure after late batch gold | Current revenue stays 2200; no checkpoint is added. |
+| Retry the same late full snapshot | All nine normal stages complete; canonical rows/files are unchanged across retry; only then checkpoint four. |
+| Next ordinary full snapshot, then idle | All nine stages complete with 2200 cents and the same history; checkpoint five, then no compute. |
+
+Snapshots replace current business state: the final captured revenue is **2200
+cents**, not the sum of earlier snapshots (4700). Trino checks the current daily
+mart and the customer's effective periods independently before accepting progress.
+The final daily result is 700 cents on January 1 and 1500 on January 31. For example,
+the current-state query used by the walkthrough is:
+
+```sql
+SELECT order_day, captured_revenue_cents, order_count, source_batch_id
+FROM lakehouse.gold.commerce_current_daily
+ORDER BY order_day;
+```
+
+`demo.json` must be `ready`, including successful shutdown. Inspect
+`acceptance/linked.json`, `acceptance/checkpoint.json`, `acceptance/stages.log` and
+`acceptance/run-journal.sqlite3` for SQL oracles, five processed batches and nine
+attempts (eight ready, one intentional failure). The two customer-only maintenance
+attempts do not record checkpoints. The runbook includes a read-only retained-evidence
+check after shutdown; the demo does not leave a running SQL endpoint behind.
+
+Forward SCD2 closes and inserts in one Iceberg commit. For an explicitly declared
+`full_snapshot` older than completed work, the same runner selects an atomic
+[history rebuild](docs/runbooks/commerce-customer-history-rebuild.md), still runs
+every required source/gold stage, and protects the newer current mart from stale
+publication. Customer-only maintenance is never acknowledged as a complete load.
+This path requires complete retained customer silver history and one writer.
+Arbitrary CDC/deletes, distributed exactly-once and failure inside an Iceberg commit
+are not demonstrated; the injected failure is a caught stage-boundary exception.
+
+On success or failure the demo stops/removes only its own containers and empty
+network, retaining named volumes and local evidence. It neither builds nor pulls
+images while running, resets data, nor prunes Docker. To repeat the fresh scenario,
+choose another empty output directory; do not erase an earlier checkpoint or volume.
+If startup or cleanup fails, inspect the recorded project and logs before retrying.
+Free-port probing is not a reservation, and timeouts do not guarantee child process-tree
+termination. Run only one measurement/demo stack at a time and keep foreign stacks intact.
+
+The standalone [commerce fixture](docs/runbooks/commerce-training-fixture.md) and
+compatible `lakeops` commands remain available for manual loading and SQL practice.
+Their default manifests are not full snapshots; do not relabel a published manifest
+or infer a `--source-semantics` CLI flag. The smaller
+[three-load demo](docs/runbooks/commerce-linked-demo.md) remains available with its
+original behavior. Neither local demonstration alone nor a roadmap checkbox is
+release approval; the [release policy](docs/release-policy.md) still applies.
+
+## Commerce measurements and separate recovery drills
 
 For a fresh scoped measurement of two full pipeline volumes, including Spark memory,
 Iceberg files, Trino query statistics and idle replay, use the
@@ -136,7 +163,18 @@ uv run --frozen python -m lakehouse_ops.commerce_pipeline_profile_demo \
   --output artifacts/commerce-pipeline-profile-demo --orders 100 1000
 ```
 
-The second sample shares a warm stack; this is not production capacity or crash recovery.
+The default stays 100/1000. For comparable fresh/warm loads, use equal volumes and
+new output directories for at least three pairs at 1k, 10k and, with sufficient
+resources, 100k. Each load completes all nine stages with the same data oracles.
+Fresh means a fresh catalog/services with available images, not a flushed OS cache;
+warm includes one prior completed batch and new Spark processes. See the retained
+[whole-pipeline measurements](docs/runbooks/commerce-pipeline-profile-demo.md),
+[completed-history growth](docs/runbooks/commerce-pipeline-scale.md) and
+[measured manifest-planning A/B](docs/runbooks/commerce-selected-source-sync.md).
+Stage timing, whole-stack/Spark container memory, current files, SQL and replay are
+separate from production capacity. The
+[caught recovery measurements](docs/runbooks/commerce-recovery-acceptance.md) retain
+their precise completed-gold failure boundary and unchanged row/file checks.
 
 For forced runner termination after completed gold and a verified retry on another
 fresh stack, use the [one-command owner-exit demo](docs/runbooks/commerce-owner-exit-demo.md):
@@ -148,6 +186,12 @@ uv run --frozen python -m lakehouse_ops.commerce_owner_exit_demo \
 
 This retains the interrupted journal and checks unchanged rows/files before the final
 idle run. It does not simulate failure inside an active Spark or Iceberg transaction.
+
+## Weather and operational profiles
+
+The compatible `lakeops` weather path fetches a bounded forecast, validates the
+columnar response, and writes an idempotent, checksum-addressed landing payload.
+Atomic local writes prevent partial objects from becoming visible.
 
 ```bash
 uv sync --dev

@@ -8,9 +8,12 @@ new expansion tracks rather than ending development.
 The accepted [2026-10-12 repository audit](repository-audit-2026-10-12.md) determines
 the next delivery order: integrity and continuation after late correction, one shared
 runner/demo/CI path, repeated whole-pipeline measurements, then a reproducible release.
-Its acceptance criteria take precedence over expanding optional profiles. Atomic SCD2
-publication is only part of the first milestone; ordinary queue continuation after a
-late correction must also pass before that milestone is considered complete.
+Its acceptance criteria take precedence over expanding optional profiles. The supported
+[commerce walkthrough](../README.md#supported-commerce-walkthrough) now covers atomic
+SCD2 publication, late full-snapshot correction, a caught failure, complete retry,
+the next ordinary batch and compute-free idle. Partial customer-only maintenance
+does not checkpoint a load. General CDC, in-commit crash recovery and production
+capacity remain outside this bounded single-writer acceptance.
 
 ## Phase 1 — reliable foundation
 
@@ -278,8 +281,11 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
   - [x] Provide an opt-in current daily mart for explicitly declared complete snapshots,
     with atomic data/provenance publication, correction and late-arrival acceptance,
     replay without another Iceberg snapshot, stale-input protection and removed-day checks.
-    This first version uses full-result replacement and one writer; bounded partition
-    recomputation and historical SCD2 correction remain planned.
+    Current publication uses full-result replacement and one writer. The normal runner
+    chooses atomic retained-history rebuild for older explicitly complete snapshots,
+    runs all nine stages before checkpoint and protects the newer current mart.
+    Bounded partition recomputation and correction from incomplete retained history
+    remain planned.
 - [ ] Schedule the pipeline with retries, freshness checks, and actionable notifications.
   - [x] Provide an opt-in cron cycle that runs one bounded batch attempt and then
     submits source and backlog freshness observations, including after run failure.
@@ -301,20 +307,26 @@ retained evidence at the notification boundary, not only a valid Prometheus expr
   - [x] Retain two-size, checksum-verified source-fixture generation time, Python heap
     peak, and JSONL byte-growth evidence in CI, separate from Spark capacity claims.
   - [x] Provide opt-in per-container Spark cgroup-v2 memory observations with a real
-    Parquet write/read smoke test. Full commerce multi-volume capacity and recovery
-    measurements remain planned; see [memory diagnostics](runbooks/spark-container-memory.md).
+    Parquet write/read smoke test. This smoke alone is not a commerce capacity or
+    recovery measurement; see [memory diagnostics](runbooks/spark-container-memory.md).
   - [x] Execute the full commerce runner at two small volumes with stage timing,
     Spark container memory, cumulative files, batch-scoped detail/daily Trino query
     costs and verified idle replay. Retain explicit warm-stack/query-order limits;
-    see [two-volume measurement](runbooks/commerce-pipeline-scale.md). Crash recovery
-    at scale, maintenance and production capacity remain unmeasured.
+    see [pipeline measurements](runbooks/commerce-pipeline-profile-demo.md), which retain
+    three fresh/warm full-snapshot pairs at each of 1k/10k/100k orders. Separate
+    [completed-history measurements](runbooks/commerce-pipeline-scale.md) retain
+    three independent ten-completed-batch cohorts at 1k orders. Each full snapshot
+    completes nine stages with whole-project and Spark container memory, current files,
+    literal SQL reconciliation and stable idle checks. These are not OS-cold runs,
+    arbitrary history depth, total retained warehouse bytes or production capacity.
   - [x] Provide a [one-command full pipeline measurement](runbooks/commerce-pipeline-profile-demo.md)
     with fresh scoped services, automatic ports and memory overlay, two configurable
     bounded volumes, retained logs and scoped shutdown. The second sample remains
     warm; this does not add forced-exit recovery or production capacity evidence.
-  - [x] Measure caught-exception recovery after gold at 100/1000 orders on separate
-    fresh catalogs, with interrupted/retry/audit/idle timing, Spark container memory
-    and unchanged row/file evidence. See [recovery observations](runbooks/commerce-recovery-acceptance.md).
+  - [x] Measure caught-exception recovery after gold on separate fresh catalogs,
+    including three repetitions each at 1k/10k orders with interrupted/retry/audit/idle
+    timing, whole-project and Spark container memory and unchanged row/file evidence.
+    See [recovery observations](runbooks/commerce-recovery-acceptance.md).
     This does not measure SIGKILL or failure inside a transaction, maintenance or capacity.
   - [x] Retain repeated read-only detail/mart queries at two completed fixture volumes,
     with excluded warm-up, balanced alternating order, raw query IDs and metric ranges,
@@ -345,8 +357,9 @@ attempts; unit checks cover failed cleanup, unchanged checkpoint and a verified 
 The opt-in [forced owner-exit acceptance](runbooks/commerce-owner-exit.md) kills a
 spawned runner only after its gold stage has returned, retains the incomplete journal,
 reacquires the OS lock without removing its file, and checks rows/files across retry.
-Termination inside an active Spark stage or Iceberg commit and orphan-stage cleanup
-remain separate work; this bounded drill is not automatic production crash recovery.
+Timeout and catchable runner interruption remove the owned active stage container.
+Uncatchable owner death inside active Spark or an Iceberg commit and automatic orphan
+recovery remain separate work; this bounded drill is not production crash recovery.
 
 Forced-owner-exit diagnostics support bounded fixture volumes and retained monotonic
 interrupted/retry/audit/idle phase times, with the existing opt-in Spark memory overlay.
@@ -392,11 +405,11 @@ Real MinIO verification compares exact bytes on fresh volumes and repeated runs;
 full linked acceptance covers the unchanged Spark path. This bounds source transfer
 without claiming a measured whole-CI speedup or removing mandatory scenarios.
 
-Next correction acceptance foundation: a deterministic three-snapshot commerce scenario
+The correction acceptance foundation is a deterministic three-snapshot commerce scenario
 with a literal latest-order/daily-revenue/customer-history oracle, compatible S3 landing,
 conditional replay, chronological planning and hash-bound checkpoint smoke checks.
-This establishes test inputs for bounded late-data correction; the existing batch-scoped
-gold mart and forward-only customer history are not relabelled as completed backfill.
+These complete snapshots drive the existing normal runner. The batch-scoped gold mart
+is not relabelled as current business state or general CDC/backfill.
 
 The opt-in [linked reference-stack acceptance](runbooks/commerce-linked-acceptance.md)
 drives the same three full snapshots through MinIO landing, all production commerce
@@ -407,9 +420,15 @@ general CDC or retroactive customer-history correction.
 
 The opt-in [one-command late-history demo](runbooks/commerce-history-correction-demo.md)
 adds explicit late-effective customer maintenance after those three loads on a fresh
-scoped stack. It verifies the literal corrected history, unchanged current revenue
-and checkpoint, and snapshot-stable rebuild replay. The late source stays pending;
-automatic backfill planning and a fourth forward checkpoint remain out of scope.
+scoped stack. Customer-only maintenance/replay verifies corrected history while leaving
+current revenue and checkpoint unchanged. The normal runner then resumes that pending
+complete snapshot through every required stage. A caught failure after batch gold
+must preserve checkpoint bytes and current revenue; a distinct verified retry alone
+records checkpoint four. The next ordinary full snapshot completes all nine forward
+stages, retains 2200 cents and the corrected history, records checkpoint five and
+reaches compute-free idle. Required serving CI invokes this same demo and rechecks
+its retained journal/checkpoint/oracles. The RC bundle retains and verifies that
+full-path evidence; no local run alone authorizes a release.
 
 Linked acceptance propagates the batch journal to every production/current-mart
 container and retains final mart replay as a separate attempt without a checkpoint.
@@ -420,8 +439,9 @@ An opt-in [late customer correction drill](runbooks/commerce-late-customer-corre
 extends linked acceptance with an earlier-effective observation arriving after the three
 snapshots. It runs real S3/bronze/customer-silver ingestion and the existing history rebuild,
 checks literal corrected periods and snapshot-stable replay, and preserves current revenue
-and processing checkpoint. This is manual single-writer history maintenance, not automatic
-late-batch planning or a fourth checkpoint; the default forward runner is unchanged.
+and processing checkpoint. This customer-only step is manual single-writer maintenance,
+not a completed batch. The full demo follows it with normal-runner late completion
+and the next ordinary batch; legacy non-full-snapshot batches retain their forward path.
 
 The opt-in [one-command linked demo](runbooks/commerce-linked-demo.md) wraps that
 acceptance in a fresh uniquely named local Docker stack, automatically selects
