@@ -1,8 +1,10 @@
 # Local two-volume commerce measurement
 
-This opt-in experiment runs the actual eight-stage commerce runner twice against a
-dedicated, fresh MinIO/Hive Metastore/Trino stack, with seven Spark memory observations
-per batch. It depends on the [Spark memory overlay](spark-container-memory.md).
+This opt-in experiment runs the actual nine-stage full-snapshot commerce runner twice
+against a dedicated, fresh MinIO/Hive Metastore/Trino stack, including current-gold
+publication and eight Spark memory observations per batch. It depends on the
+[Spark memory overlay](spark-container-memory.md). Historical evidence below describes
+the older eight-stage, batch-scoped path separately; it is not relabelled current proof.
 It does not start or stop services automatically and never deletes volumes.
 
 Use a new Compose project name and unused host ports. These public development
@@ -33,8 +35,10 @@ Each chronological batch has 10 customers, 5 products, and one null email, dupli
 order, late order and invalid payment. Only the order volume increases. The second
 sample uses the same warm stack and existing table history, not an isolated cold run.
 The retained `profile.json` contains runner stage/verification/checkpoint timings,
-seven container memory reports, current Iceberg file counts/bytes by table, and a
-Trino revenue query ID/result/statistics. File inventories are cumulative current
+eight container memory reports, whole-project sampled memory, current Iceberg file
+counts/bytes by table, and Trino revenue query IDs/results/statistics. The generated
+JSONL independently supplies expected order count and captured revenue for both
+batch and current-gold reconciliation. File inventories are cumulative current
 files across batches, not per-batch physical bytes or orphan-file accounting.
 
 Each new sample additionally retains `query_costs`: separate IDs, results and Trino
@@ -49,21 +53,24 @@ cache controls, percentile estimates or latency thresholds. Startup/JIT, caches,
 shared warm stack and query order can dominate elapsed time. Processed rows/bytes and
 physical input bytes are engine query statistics, not source size or total storage.
 Query peak memory is distinct from the Spark cgroup/container memory observations.
-Equality here is reconciliation against materialized data, not an independent revenue
-oracle; the linked acceptance uses a separate literal oracle.
+The current full profile also compares these SQL results with the generated input;
+older historical reports below did not contain that independent reconciliation.
 
 Each successful sample is followed by an idle runner invocation; its file inventory
 must remain unchanged. This demonstrates checkpoint replay only, not interruption,
 partial-stage recovery, compaction or exactly-once behavior under crashes. All child
 stdout/stderr logs are retained, including failures. Failed experiments preserve a
 `failed` report and completed samples; they must not be labelled capacity evidence.
-The child invocation has a 30-minute outer timeout; it is not an owner-death cleanup
+The runner child wait uses the configured run budget plus cleanup grace; it is not
+an owner-death cleanup
 mechanism. Existing per-stage timeout handling remains authoritative. Do not launch
 other writers against the measurement stack.
 
-Memory values cover individual Spark containers, not total-stack memory; see the
-memory runbook for cgroup accounting and missing-exit limitations. One run at two
-small volumes is reproducibility evidence, not a production capacity claim.
+Spark records cover individual containers. The separate `stack_memory` observation
+includes only the dedicated project's running services and Spark one-offs, excluding
+host/VM overhead and inactive Linux file cache. Sampling can miss short peaks; see
+the memory runbook for cgroup accounting and missing-exit limitations. One run at
+two small volumes is reproducibility evidence, not a production capacity claim.
 
 After the run, stop only this project's services if no further measurements need them:
 
@@ -172,3 +179,99 @@ Fresh local quality passed all seven gates: 899 tests passed, ten opt-in skips,
 90.75% coverage. Full-profile wiring is covered by two-volume unit acceptance;
 this short live check exercised the retained stack's idle path, not a new full
 two-volume Spark execution. Mandatory remote CI remains a separate merge gate.
+
+## Growth of completed full-snapshot history, 2026-10-14
+
+Three fresh dedicated projects each processed ten chronological 1000-order full
+snapshots through the existing CLI runner. This is actual completed Iceberg history,
+not a pending-manifest queue or a fabricated checkpoint. Immutable measurement
+source: `ba58455de33322eac8726debb70bc3bdc2dbd481`. Main `ca0c259` was integrated
+only after all measurements finished; its recovery-observer change does not alter
+this nine-stage path. No product command, module, flag, dependency or image was added.
+
+Each round used automatic free ports, the same pinned images, ten customers, five
+products and fixed anomaly counts, one stack at a time. Snapshot dates were January
+1 through 10, 2026. Each source had 1000 distinct orders and 2733643 captured cents.
+Literal JSONL independently reconciled detail, batch daily and current daily SQL in
+all 30 runs. Current gold still contains **1000 orders**, not the sum of ten snapshots.
+Each round ended with ten actual hash-bound checkpoint entries. All 270 stage records,
+240 observed Spark memory records, observed stack samples without errors, and 30
+compute-free idle results were checked. Idle preserved file inventories and complete
+snapshot-ID lists. This is replay evidence, not an injected crash-recovery experiment.
+
+Fresh means the first catalog state; subsequent samples use warm services and prior
+completed batches. OS/image/VM caches, host CPU load and startup/JIT are not controlled.
+Every Spark stage starts a new process. The following three-round medians retain
+observed ranges, not percentiles or a latency/capacity guarantee:
+
+| Completed snapshots | Runner, s (range) | Planning, s | Idle child, s | Sampled stack peak, MiB | Largest Spark peak, MiB | Current files | Current file bytes |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1, fresh catalog | 134.935 (133.296 to 144.951) | 0.026113 | 2.180733 | 3697.45 | 1045.42 | 13 | 224114 |
+| 5, warm history | 132.694 (127.398 to 136.512) | 0.038937 | 0.966316 | 3830.66 | 1052.95 | 57 | 1079412 |
+| 10, warm history | 132.976 (126.823 to 139.007) | 0.045813 | 1.039534 | 3934.29 | 1053.65 | 112 | 2148565 |
+
+Stage medians at those positions include Compose launch and cleanup:
+
+| Stage | First snapshot, s | Fifth, s | Tenth, s |
+|---|---:|---:|---:|
+| Selected source sync | 2.024 | 1.177 | 1.313 |
+| Bronze | 19.565 | 18.126 | 18.609 |
+| Payment silver | 15.919 | 15.625 | 16.044 |
+| Order silver | 16.738 | 16.952 | 17.108 |
+| Product silver | 14.653 | 14.349 | 14.481 |
+| Customer silver | 14.718 | 15.072 | 14.843 |
+| Customer SCD2 | 13.069 | 12.562 | 12.633 |
+| Batch daily gold | 18.521 | 18.944 | 18.680 |
+| Current daily gold | 18.276 | 18.109 | 18.071 |
+
+All 15 table file-count/byte inventories agree across the three rounds at each
+position. Eleven batch-history tables add one file per snapshot; current daily and
+customer SCD2 each retain one current file, and two reject tables remain empty.
+These are current data/delete file inventories, not all retained snapshot files,
+MinIO versions, metadata, orphan files or total disk usage. Physical names differ
+between fresh catalogs; aggregate equality is not a content-hash audit.
+
+Single detail/daily queries alternated order between neighboring snapshots. Each
+position has one query pair per round, with IDs and engine statistics retained.
+Detail processed 2998 rows and daily 31 at every position, with zero reported spill.
+This is selected-batch filtering, not an unfiltered historical aggregation:
+
+| Snapshot | Detail / daily median elapsed, ms | Detail physical input bytes | Daily physical input bytes |
+|---:|---:|---:|---:|
+| 1 | 431 / 100 | 91544 | 4249 |
+| 5 | 128 / 47 | 91613 | 4250 |
+| 10 | 108 / 52 | 91641 | 4250 |
+
+Query caches and service warm-up confound elapsed comparisons; no SQL speedup from
+growing history is claimed. In this bounded workload file count grows while planning
+remains small compared with repeated Spark launches. This does not establish scaling
+to hundreds of completed snapshots, large customer cardinality, concurrent writers,
+maintenance capacity or production throughput. No compaction was performed.
+
+To reproduce the workload on a new dedicated stack, use the existing
+`generate_commerce_fixture` API with `CommerceFixtureConfig(customers=10, products=5,
+orders=1000, null_customer_emails=1, duplicate_orders=1, late_orders=1,
+invalid_payments=1, batch_at=<chronological UTC date>)` and explicit
+`source_semantics="full_snapshot"`. The `generate-commerce-fixture` CLI's ordinary
+input defaults are not a substitute for that declaration. For each fixture call
+`land-commerce-fixture`, then `run-commerce-batch` with one retained checkpoint and
+`--user lakehouse-performance`, followed by an idle call. Use a new stack/checkpoint
+for each of three rounds; do not mark unprocessed manifests as completed or reset
+state to manufacture repeats. The existing two-volume profile remains available.
+
+Raw reports: `artifacts/completed-history-v2-20261014/round-N/history.json`, with
+adjacent fixture files, runner/idle logs and checkpoint. Their SHA256 digests:
+
+- Round 1: `39e9c386220c3964506364ef35ddada15f7ed17855118594b84319aca544abb0`.
+- Round 2: `84bfae762f8d0d362dbac8e941df6f664cd466eeb94bc4bdef25e1894a78d358`.
+- Round 3: `2e933b08643c9864964c23996d10263fb73dad3438d65e3cfd2866de81d36f1c`.
+
+Only the three experiment stacks/networks were removed; all 18 named volumes remain.
+Earlier failed startup evidence is retained separately: an unlisted diagnostic Trino
+identity was correctly denied before any load. Retrying with the existing supported
+performance identity verified both negative/positive access cases without weakening
+policy. An owned normal worker restarted during that failed startup, was verified and
+stopped before successful rounds; its cause is unknown. No competing containers were
+observed during accepted samples. Study/marketplace data and containers were untouched.
+These local reports are not RC assets or signed source attestations. Existing CI,
+release policy and capability limits remain applicable; there is no version change.
