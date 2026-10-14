@@ -180,7 +180,8 @@ def main() -> int:
                     raise ValueError("conditional source replay created new objects")
                 report["landing"].append(first.as_dict())
             planner = CommerceBatchPlanner(s3, bucket="lakehouse",
-                                           state_path=args.output / "checkpoint.json")
+                                           state_path=args.output / "checkpoint.json",
+                                           manifest_read_workers=8)
             with (
                 (args.output / "stages.log").open("w", encoding="utf-8") as log,
                 redirect_stderr(log),

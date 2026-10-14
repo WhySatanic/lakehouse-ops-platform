@@ -264,6 +264,13 @@ def test_plan_and_commit_commerce_batch_commands(
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
 ) -> None:
+    original_planner = cli.CommerceBatchPlanner
+
+    def bounded_s3_planner(*args, **kwargs):
+        assert kwargs.get("manifest_read_workers") == 8
+        return original_planner(*args, **kwargs)
+
+    monkeypatch.setattr(cli, "CommerceBatchPlanner", bounded_s3_planner)
     fixture = cli.generate_commerce_fixture(
         tmp_path / "fixture",
         cli.CommerceFixtureConfig(

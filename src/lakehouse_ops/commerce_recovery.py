@@ -185,7 +185,8 @@ def main() -> int:
             ))
             CommerceS3LandingZone(s3, bucket="lakehouse").write(fixture.path)
             state = args.output / "checkpoint.json"
-            planner = CommerceBatchPlanner(s3, bucket="lakehouse", state_path=state)
+            planner = CommerceBatchPlanner(s3, bucket="lakehouse", state_path=state,
+                                           manifest_read_workers=8)
             with (
                 (args.output / "stages.log").open("w", encoding="utf-8") as log,
                 redirect_stderr(log),

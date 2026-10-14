@@ -6,6 +6,7 @@ import math
 import os
 import re
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -53,13 +54,19 @@ class CommerceBatchPlanner:
         bucket: str,
         state_path: Path = Path("data/state/commerce-batches.json"),
         prefix: str = "landing",
+        manifest_read_workers: int = 1,
     ) -> None:
         if not bucket:
             raise ValueError("bucket must not be empty")
+        if type(manifest_read_workers) is not int or not 1 <= manifest_read_workers <= 8:
+            raise CommerceBatchError("manifest_read_workers must be an integer between 1 and 8")
         self._client = client
         self._bucket = bucket
         self._state_path = state_path
         self._prefix = prefix.strip("/")
+        # Opt in only for a thread-safe low-level client created before discovery.
+        # Custom clients retain serial reads unless explicitly opted in.
+        self._manifest_read_workers = manifest_read_workers
 
     def execution_options(self, selected: dict[str, str]) -> dict[str, str]:
         """Resolve full-snapshot execution without changing the public plan format."""
@@ -270,10 +277,17 @@ class CommerceBatchPlanner:
                 raise CommerceBatchError("S3 listing returned a repeated continuation token")
             seen_tokens.add(continuation)
 
-        batches = [
-            self._read_manifest(batch_id, key, committed_at)
-            for batch_id, key, committed_at in keys
-        ]
+        if self._manifest_read_workers == 1 or len(keys) < 2:
+            batches = [self._read_manifest(*entry) for entry in keys]
+        else:
+            batches = []
+            workers = self._manifest_read_workers
+            with ThreadPoolExecutor(max_workers=workers) as readers:
+                # Bound both active reads and submitted futures. An invalid group
+                # cannot enqueue the remaining history before its error propagates.
+                for offset in range(0, len(keys), workers):
+                    group = keys[offset:offset + workers]
+                    batches.extend(readers.map(lambda entry: self._read_manifest(*entry), group))
         return sorted(batches, key=lambda batch: (batch.batch_at, batch.batch_id))
 
     def _read_manifest(self, batch_id: str, key: str, committed_at: object) -> CommerceBatch:

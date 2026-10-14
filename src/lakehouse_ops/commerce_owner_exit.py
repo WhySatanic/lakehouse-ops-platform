@@ -77,6 +77,7 @@ def owner(connection: Any, output: Path, endpoint: str, server: str) -> None:
         s3 = boto3.client("s3", endpoint_url=endpoint, region_name="us-east-1")
         planner = CommerceBatchPlanner(
             s3, bucket="lakehouse", state_path=output / "checkpoint.json",
+            manifest_read_workers=8,
         )
         journal = CommerceRunJournal(output / "journal.sqlite3")
 
@@ -143,7 +144,8 @@ def main() -> int:
             report["published_before_retry"] = before
             if not before:
                 raise ValueError("completed publication has no tables")
-            planner = CommerceBatchPlanner(s3, bucket="lakehouse", state_path=state)
+            planner = CommerceBatchPlanner(s3, bucket="lakehouse", state_path=state,
+                                           manifest_read_workers=8)
             journal = CommerceRunJournal(args.output / "journal.sqlite3")
             with (
                 (args.output / "retry.log").open("w", encoding="utf-8") as log,
