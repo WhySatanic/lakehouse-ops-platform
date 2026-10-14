@@ -435,6 +435,14 @@ container and retains final mart replay as a separate attempt without a checkpoi
 Container launch intent, hash-bound labels and completion/timeout evidence now share
 the corresponding run ID; automatic orphan-stage recovery remains planned.
 
+The normal runner retains hash-bound active-batch intent separately from completed
+checkpoints. A late manifest arriving during newer publication cannot displace its
+retry: complete the newer batch, rebuild the late full snapshot, process the next
+normal snapshot, then idle. Unit regressions cover arrival and failure boundaries;
+required isolated Spark/Iceberg acceptance checks real history publication, stable
+newer replay, literal corrected periods and the resumed queue. Shared-warehouse
+concurrent writers and orphan-container recovery remain outside this guarantee.
+
 An opt-in [late customer correction drill](runbooks/commerce-late-customer-correction.md)
 extends linked acceptance with an earlier-effective observation arriving after the three
 snapshots. It runs real S3/bronze/customer-silver ingestion and the existing history rebuild,

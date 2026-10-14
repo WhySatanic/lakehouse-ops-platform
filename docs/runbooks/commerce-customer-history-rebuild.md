@@ -35,6 +35,24 @@ batch gold, then current gold (which ignores an older snapshot), verifies batch 
 and only then checkpoints. A partial customer-only maintenance run remains unprocessed
 until this full path completes. The next newer snapshot uses forward history again.
 Manifests without that explicit declaration keep their existing forward-only path.
+The runner atomically records a hash-bound active batch in
+`<checkpoint>.active.json` before compute. This is retry intent, not a completed
+load. If a late manifest arrives while the selected newer batch is running or
+after its publication fails before checkpoint, the next run resumes the active
+batch first. It repeats every required stage and verification, then checkpoints
+and removes the intent. The late full snapshot is subsequently rebuilt against
+the completed newer history; the following normal snapshot runs forward and reaches
+idle. A crash after checkpoint but before intent cleanup does not re-run that
+completed batch. Changed or missing active manifests fail closed.
+
+Upgrade note: existing checkpoints remain valid and need no migration. Retry intent
+is recorded only by the updated runner. For a failure left by an older runner
+without intent, inspect its journal and published tables before attempting recovery;
+do not invent completion state or delete the checkpoint. Keep the intent beside
+its checkpoint when moving or restoring an unfinished run. Use the existing runner
+lock and exclusive writer ownership; this does not recover still-running orphan
+containers or coordinate independent checkpoints sharing a warehouse.
+
 Run it only with complete retained silver history and a single writer. Empty input,
 missing required values, duplicate effective timestamps or customer/batch identities,
 missing existing customers

@@ -196,6 +196,9 @@ def _run_commerce_batch(
     last = clock()
     planning_seconds = last - started
     batch = plan["batches"][0]
+    begin = getattr(planner, "begin", None)
+    if begin:
+        begin(batch)
     resolve_options = getattr(planner, "execution_options", None)
     options = resolve_options(batch) if resolve_options else {}
     batch = {**batch, **options}

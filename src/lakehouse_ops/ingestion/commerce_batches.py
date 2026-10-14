@@ -8,7 +8,7 @@ import re
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -20,6 +20,8 @@ class CommerceBatchError(ValueError):
 
 
 MAX_COMMERCE_MANIFEST_BYTES = 1024 * 1024
+# The isolated Spark acceptance imports this planner under its Python 3.10 runtime.
+UTC = timezone.utc  # noqa: UP017
 
 
 class S3Client(Protocol):
@@ -63,6 +65,7 @@ class CommerceBatchPlanner:
         self._client = client
         self._bucket = bucket
         self._state_path = state_path
+        self._active_path = Path(f"{state_path}.active.json")
         self._prefix = prefix.strip("/")
         # Opt in only for a thread-safe low-level client created before discovery.
         # Custom clients retain serial reads unless explicitly opted in.
@@ -98,6 +101,7 @@ class CommerceBatchPlanner:
         by_id = {batch.batch_id: batch for batch in batches}
         state = _load_state(self._state_path)
         _verify_processed_content(state, by_id)
+        active = self._active_batch(state, by_id)
         if replay_batches:
             missing = [batch_id for batch_id in replay_batches if batch_id not in by_id]
             if missing:
@@ -110,7 +114,10 @@ class CommerceBatchPlanner:
             processed = state["processed_batches"]
             selected = [
                 batch for batch in batches if batch.batch_id not in processed
-            ][:max_batches]
+            ]
+            if active:
+                selected = [active, *(batch for batch in selected if batch != active)]
+            selected = selected[:max_batches]
             mode = "incremental"
         return {
             "batches": [batch.as_dict() for batch in selected],
@@ -119,6 +126,51 @@ class CommerceBatchPlanner:
             "processed_batches": len(state["processed_batches"]),
             "selected_batches": len(selected),
         }
+
+    def begin(self, selected: dict[str, str]) -> None:
+        """Persist retry ownership before any compute, separately from checkpoint."""
+        try:
+            with commerce_runner_lock(Path(f"{self._state_path}.lock")):
+                ordered = self.discover()
+                batches = {batch.batch_id: batch for batch in ordered}
+                state = _load_state(self._state_path)
+                _verify_processed_content(state, batches)
+                active = self._active_batch(state, batches)
+                batch = batches.get(selected["batch_id"])
+                if batch is None or batch.manifest_sha256 != selected["manifest_sha256"]:
+                    raise CommerceBatchError("committed manifest changed before execution")
+                pending = [item for item in ordered
+                           if item.batch_id not in state["processed_batches"]]
+                if not pending or batch != (active or pending[0]):
+                    raise CommerceBatchError("selected batch is no longer next for execution")
+                if active is None:
+                    _write_state(self._active_path, {"schema_version": 1, "batch": batch.as_dict()})
+        except CommerceRunnerBusyError as error:
+            raise CommerceBatchError(f"commerce checkpoint is busy: {self._state_path}") from error
+
+    def _active_batch(
+        self, state: dict[str, Any], batches: dict[str, CommerceBatch],
+    ) -> CommerceBatch | None:
+        if not self._active_path.exists():
+            return None
+        try:
+            reservation = json.loads(self._active_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise CommerceBatchError("commerce active batch is unreadable") from error
+        if (
+            not isinstance(reservation, dict)
+            or type(reservation.get("schema_version")) is not int
+            or reservation["schema_version"] != 1
+            or not isinstance(reservation.get("batch"), dict)
+            or not isinstance(reservation["batch"].get("batch_id"), str)
+        ):
+            raise CommerceBatchError("commerce active batch has an unsupported structure")
+        recorded = reservation["batch"]
+        batch = batches.get(recorded["batch_id"])
+        if batch is None or batch.as_dict() != recorded:
+            raise CommerceBatchError("committed manifest changed or missing for active batch")
+        # A crash between checkpoint replacement and cleanup leaves harmless intent.
+        return None if batch.batch_id in state["processed_batches"] else batch
 
     def commit(
         self, batch_id: str, *, expected_manifest_sha256: str | None = None,
@@ -145,10 +197,11 @@ class CommerceBatchPlanner:
         ):
             raise CommerceBatchError("committed manifest changed during processing")
         processed = state["processed_batches"]
+        active = self._active_batch(state, batches)
         existing = processed.get(batch_id)
         if existing:
             return {"batch_id": batch_id, "created": False, "state": str(self._state_path)}
-        next_batch = next(
+        next_batch = active or next(
             batch for batch in ordered_batches if batch.batch_id not in processed
         )
         if next_batch.batch_id != batch_id:
@@ -160,6 +213,8 @@ class CommerceBatchPlanner:
             "manifest_sha256": batch.manifest_sha256,
         }
         _write_state(self._state_path, state)
+        if active:
+            self._active_path.unlink(missing_ok=True)
         return {"batch_id": batch_id, "created": True, "state": str(self._state_path)}
 
     def check_source_freshness(
