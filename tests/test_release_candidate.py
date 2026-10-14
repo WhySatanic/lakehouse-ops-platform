@@ -390,6 +390,62 @@ def _read_archive(path: Path) -> dict[str, bytes]:
         }
 
 
+@pytest.mark.parametrize("missing", [None, "linked.json", "checkpoint.json", "run-journal.sqlite3",
+                                     "late_batch_recovery", "next_batch_after_correction",
+                                     "idle_after_next_batch"])
+def test_candidate_retains_complete_commerce_evidence(monkeypatch, tmp_path, missing):
+    """Synthetic packaging checks, not evidence of real recovery."""
+    inputs = _write_inputs(tmp_path)
+    monkeypatch.setattr(candidate, "validate_upgrade_report", lambda report, plan: None)
+    relative = "serving-evidence/commerce-history-correction-ci/acceptance"
+    root = inputs["evidence_root"] / relative
+    root.mkdir(parents=True)
+    content = {"linked.json": json.dumps({
+        "status": "ready", "late_customer_correction": {"status": "ready"},
+        "late_batch_completion": {"status": "ready"}, "late_batch_recovery": {"status": "ready"},
+        "next_batch_after_correction": {"status": "ready"},
+        "idle_after_correction": {"status": "idle"}, "idle_after_next_batch": {"status": "idle"},
+    }).encode(), "checkpoint.json": b'{"processed_batches":{}}',
+        "run-journal.sqlite3": b"synthetic journal bytes"}
+    if missing in ("late_batch_recovery", "next_batch_after_correction", "idle_after_next_batch"):
+        linked = json.loads(content["linked.json"])
+        linked.pop(missing)
+        content["linked.json"] = json.dumps(linked).encode()
+    for name, body in content.items():
+        if name != missing:
+            (root / name).write_bytes(body)
+    bundle = tmp_path / "commerce.tar.gz"
+    if missing:
+        with pytest.raises(ReleaseCandidateError, match="commerce evidence"):
+            build_release_candidate(**inputs, output_path=bundle)
+        assert not bundle.exists()
+        return
+    report = build_release_candidate(**inputs, output_path=bundle)
+    entries = _read_archive(bundle)
+    manifest = json.loads(entries["manifest.json"])
+    by_name = {entry["path"]: entry["sha256"] for entry in manifest["entries"]}
+    for name, body in content.items():
+        archived = f"evidence/{relative}/{name}"
+        assert entries[archived] == body
+        assert by_name[archived] == candidate._digest_bytes(body)
+    second = tmp_path / "second.tar.gz"
+    build_release_candidate(**inputs, output_path=second)
+    assert bundle.read_bytes() == second.read_bytes()
+    report_path = tmp_path / "commerce-report.json"
+    _write_json(report_path, report)
+    assert candidate.verify_release_candidate(
+        bundle_path=bundle, report_path=report_path, expected_source_revision="a" * 40,
+    )["status"] == "verified"
+    entries[f"evidence/{relative}/checkpoint.json"] += b"tampered"
+    candidate._write_deterministic_archive(bundle, entries)
+    report["bundle_sha256"] = candidate._digest(bundle)
+    _write_json(report_path, report)
+    with pytest.raises(ReleaseCandidateError, match="member digest"):
+        candidate.verify_release_candidate(
+            bundle_path=bundle, report_path=report_path, expected_source_revision="a" * 40,
+        )
+
+
 def _write_archive(path: Path, members: list[tuple[str, bytes, bytes]]) -> None:
     with tarfile.open(path, "w:gz") as archive:
         for name, content, member_type in members:
