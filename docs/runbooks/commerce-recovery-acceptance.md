@@ -24,6 +24,21 @@ uv run python -m lakehouse_ops.commerce_recovery `
 
 Use the default `lakehouse` bucket. The optional `compose.spark-memory.yaml` overlay
 can record Spark process memory in `stages.log`; defaults remain unchanged.
+Selecting this canonical overlay in `COMPOSE_FILE` also enables whole-project memory
+observations in the existing recovery command. Use the platform path separator or
+`COMPOSE_PATH_SEPARATOR` for the base/overlay list. No new command or flag is required.
+The existing `StackMemorySampler` is shared with pipeline profiling and discovers only
+the dedicated recovery project's containers, including active Spark one-offs. It rejects
+the study stack, marketplace and normal `lakehouse-ops` project before any Docker call.
+
+With the overlay, `recovery.json` additionally retains `stack_memory` across interruption,
+before/after audits, retry and idle. The observer closes on failed loads too. Its `partial`
+status and errors mean incomplete memory evidence, not zero usage or a valid capacity
+measurement. Recovery correctness and observation status are separate: a sampling error
+does not fabricate a failed load. These are sampled Docker container usage values, not
+host RSS or exact simultaneous cgroup peaks. Without the overlay, previous recovery
+output and behavior remain unchanged.
+
 The scenario requires an empty output directory, fresh commerce catalog,
 one source batch and no competing writer. It creates a deterministic 100-order
 fixture, conditionally lands it, and runs the actual eight production stages twice.

@@ -9,13 +9,14 @@ import os
 import sys
 import time
 from collections.abc import Callable
-from contextlib import redirect_stderr
+from contextlib import nullcontext, redirect_stderr
 from pathlib import Path
 from typing import Any
 
 import boto3
 
 from lakehouse_ops.commerce_pipeline import COMMERCE_STAGES, run_commerce_batch, run_compose_stage
+from lakehouse_ops.commerce_pipeline_profile import StackMemorySampler
 from lakehouse_ops.commerce_runner_lock import commerce_runner_lock
 from lakehouse_ops.ingestion.commerce_batches import CommerceBatchPlanner
 from lakehouse_ops.ingestion.commerce_fixture import (
@@ -170,6 +171,7 @@ def main() -> int:
         parser.error("requires empty output directory")
     args.output.mkdir(parents=True, exist_ok=True)
     report: dict[str, Any] = {"status": "failed"}
+    memory = None
     try:
         with (
             commerce_runner_lock(),
@@ -191,17 +193,27 @@ def main() -> int:
                 (args.output / "stages.log").open("w", encoding="utf-8") as log,
                 redirect_stderr(log),
             ):
-                report = exercise_recovery(
-                    planner, trino.query,
-                    lambda service, batch: run_compose_stage(service, batch, bucket="lakehouse"),
-                    lambda: audit_tables(trino.query), state, evidence=report,
+                compose_files = os.environ.get("COMPOSE_FILE", "").split(
+                    os.environ.get("COMPOSE_PATH_SEPARATOR", os.pathsep),
                 )
+                if any(Path(name).name == "compose.spark-memory.yaml" for name in compose_files):
+                    memory = StackMemorySampler(project)
+                with memory if memory is not None else nullcontext():
+                    report = exercise_recovery(
+                        planner, trino.query,
+                        lambda service, batch: run_compose_stage(
+                            service, batch, bucket="lakehouse",
+                        ),
+                        lambda: audit_tables(trino.query), state, evidence=report,
+                    )
     except Exception as error:
         report["error_type"] = type(error).__name__
         print(f"commerce recovery acceptance failed: {error}", file=sys.stderr)
         return 2
     finally:
         report["fixture_orders"] = args.orders
+        if memory is not None:
+            report["stack_memory"] = memory.report()
         (args.output / "recovery.json").write_text(json.dumps(report, indent=2))
     print(json.dumps(report, sort_keys=True))
     return 0
