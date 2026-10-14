@@ -411,11 +411,17 @@ jobs:
           overwrite: true
       - name: Show Ranger logs
         if: failure()
-        run: >-
-          docker compose --profile security --profile catalog --profile compute
-          --profile query --profile secure-query logs ranger-db ranger-solr ranger-admin
-          trino-coordinator trino-security-bootstrap trino-secure-coordinator
-          trino-secure-worker trino-secure-worker-2
+        run: |
+          docker compose --profile security --profile catalog --profile compute \
+            --profile query --profile secure-query logs ranger-db ranger-solr ranger-admin \
+            trino-coordinator trino-worker trino-worker-2 trino-security-bootstrap \
+            trino-secure-coordinator trino-secure-worker trino-secure-worker-2
+          for service in trino-coordinator trino-worker trino-worker-2; do
+            container_id=$(docker compose --profile query ps --all --quiet "$service")
+            if [ -n "$container_id" ]; then
+              docker inspect --format '{{.Name}} {{json .State}} {{.RestartCount}}' "$container_id"
+            fi
+          done
       - name: Stop Ranger enforcement profiles
         if: always()
         run: >-
