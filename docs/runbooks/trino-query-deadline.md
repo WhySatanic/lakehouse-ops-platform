@@ -35,18 +35,42 @@ It never cancels by an arbitrary query ID or issues a broad administrative kill.
 - `not_available`: no usable URI, including submission timeout before query identity
   was received, or a terminal result received after the deadline.
 
-Cancellation has a separate five-second HTTP phase limit. No cancellation outcome
+Cancellation has a separate five-second total HTTP budget. No cancellation outcome
 turns the failed query into success. An unknown submission outcome requires operator
 inspection; never automatically resubmit mutating SQL based on this exception.
 
 ## Limits and upgrade
 
-This is a cooperative client-side time budget, not hard process preemption or a
-server-side execution guarantee. Checks occur between responses; HTTP connect/read/
-write/pool phase limits are clamped to remaining time while preserving shorter
-caller settings. Multiple phases, streaming progress, JSON decoding and response
-hooks can overrun the deadline. Cancellation also adds time. Server-side resource
-groups and execution limits remain separate controls.
+Budgeted HTTP requests run in a bounded reader thread so continuously arriving body
+chunks cannot keep the caller waiting past its network deadline. The reader owns
+and closes its response; connect/read/write/pool phase limits preserve shorter
+caller settings. There are at most two unfinished readers per client, allowing a
+request and its cancellation to close concurrently. A custom transport that ignores
+timeouts can retain a reader until it returns. JSON decoding and row assembly still
+run in the caller and are not preempted. Cancellation can add up to five seconds.
+This is not hard process preemption or a server-side execution guarantee.
+Server-side resource groups and execution limits remain separate controls.
+
+## Result page safety limit
+
+Every query accepts at most 1000 HTTP result responses, including the initial POST
+response. A terminal response at page 1000 succeeds. If page 1000 still has a
+validated `nextUri`, the adapter stops before another GET and attempts cancellation
+using that URI, routed through the configured coordinator and identity headers.
+The same five-second cancellation budget applies even without `query_timeout`.
+
+`TrinoPageLimitError` extends `TrinoProtocolError` and exposes `query_id` and
+`cancellation` with the outcomes listed above. Rejected or failed cancellation does
+not hide the page limit error. Partial rows are discarded, and gold verification
+cannot advance the commerce checkpoint. An accepted DELETE is not proof that the
+server has reclaimed resources. Other protocol failures do not acquire a new
+cancellation policy in this increment.
+
+Reproduce boundary and cancellation checks without a running Trino server:
+
+```powershell
+uv run --frozen pytest tests/test_trino_page_limit.py tests/test_trino_deadline.py tests/test_trino_deadline_http.py -q --no-cov
+```
 
 No data/config migration is needed. Existing clients are unchanged. To opt out,
 remove `query_timeout`; rolling back does not undo committed SQL or prove cancellation.

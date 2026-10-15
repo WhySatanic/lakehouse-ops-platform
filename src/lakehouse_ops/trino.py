@@ -31,6 +31,16 @@ class TrinoQueryTimeoutError(TrinoProtocolError):
         )
 
 
+class TrinoPageLimitError(TrinoProtocolError):
+    def __init__(self, query_id: str, cancellation: str) -> None:
+        self.query_id = query_id
+        self.cancellation = cancellation
+        super().__init__(
+            "Trino query exceeded the 1000-page safety limit: "
+            f"query_id={query_id}, cancellation={cancellation}"
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class TrinoQueryStats:
     state: str
@@ -152,7 +162,7 @@ class TrinoClient:
         columns: list[str] | None = None
         rows: list[dict[str, Any]] = []
 
-        for _ in range(1000):
+        for page in range(1, 1001):
             payload = self._payload(response)
             current_id = payload.get("id")
             if not isinstance(current_id, str) or not current_id:
@@ -185,9 +195,11 @@ class TrinoClient:
                     rows=tuple(rows),
                     stats=_query_stats(payload.get("stats")),
                 )
+            if page == 1000:
+                raise TrinoPageLimitError(query_id, self._cancel_query(cancellation_uri))
             response = request("GET", cancellation_uri, headers=self._headers)
 
-        raise TrinoProtocolError("Trino query exceeded the 1000-page safety limit")
+        raise AssertionError("Trino page loop must return or raise")  # pragma: no cover
 
     def _request_until(
         self, method: str, url: str, deadline: float, **kwargs: Any,
@@ -226,6 +238,9 @@ class TrinoClient:
             stopped.set()
 
     def _query_timeout_error(self, query_id: str | None, uri: str | None) -> None:
+        raise TrinoQueryTimeoutError(query_id, self._cancel_query(uri))
+
+    def _cancel_query(self, uri: str | None) -> str:
         cancellation = "not_available"
         if uri is not None:
             try:
@@ -237,7 +252,7 @@ class TrinoClient:
                 )
             except httpx.HTTPError:
                 cancellation = "transport_failed"
-        raise TrinoQueryTimeoutError(query_id, cancellation)
+        return cancellation
 
     @staticmethod
     def _payload(response: httpx.Response) -> dict[str, Any]:
