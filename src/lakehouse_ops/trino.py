@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+from concurrent.futures import Future
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
 from math import isfinite
+from threading import BoundedSemaphore, Event, Thread
 from time import monotonic
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -47,6 +51,22 @@ class TrinoQueryResult:
     stats: TrinoQueryStats
 
 
+class _DeadlineStream(httpx.SyncByteStream):
+    def __init__(self, stream: httpx.SyncByteStream, deadline: float, stopped: Event) -> None:
+        self._stream = stream
+        self._deadline = deadline
+        self._stopped = stopped
+
+    def __iter__(self) -> Iterator[bytes]:
+        for chunk in self._stream:
+            if self._stopped.is_set() or monotonic() >= self._deadline:
+                raise httpx.ReadTimeout("Trino response exceeded the query deadline")
+            yield chunk
+
+    def close(self) -> None:
+        self._stream.close()
+
+
 class TrinoClient:
     def __init__(
         self,
@@ -71,6 +91,9 @@ class TrinoClient:
         self._owns_client = client is None
         self._client = client or httpx.Client(timeout=timeout)
         self._query_timeout = query_timeout
+        # One request and its cancellation may be closing at the same time.
+        # A stalled transport must not create an unbounded number of reader threads.
+        self._request_slots = BoundedSemaphore(2)
         self._headers = {
             "Accept": "application/json",
             "X-Trino-User": user,
@@ -112,7 +135,9 @@ class TrinoClient:
                     }
                 )
             try:
-                return self._client.request(method, url, **kwargs)
+                if deadline is None:
+                    return self._client.request(method, url, **kwargs)
+                return self._request_until(method, url, deadline, **kwargs)
             except httpx.TimeoutException:
                 if deadline is not None:
                     self._query_timeout_error(query_id, cancellation_uri)
@@ -164,11 +189,49 @@ class TrinoClient:
 
         raise TrinoProtocolError("Trino query exceeded the 1000-page safety limit")
 
+    def _request_until(
+        self, method: str, url: str, deadline: float, **kwargs: Any,
+    ) -> httpx.Response:
+        remaining = deadline - monotonic()
+        if remaining <= 0 or not self._request_slots.acquire(timeout=remaining):
+            raise httpx.ReadTimeout("Trino HTTP request exceeded its deadline")
+        stopped = Event()
+        future: Future[httpx.Response] = Future()
+
+        def read() -> None:
+            try:
+                if stopped.is_set() or monotonic() >= deadline:
+                    raise httpx.ReadTimeout("Trino HTTP request exceeded its deadline")
+                with self._client.stream(method, url, **kwargs) as response:
+                    response.stream = _DeadlineStream(response.stream, deadline, stopped)
+                    response.read()
+                    future.set_result(response)
+            except BaseException as error:
+                future.set_exception(error)
+            finally:
+                self._request_slots.release()
+
+        try:
+            Thread(target=read, name="trino-http-read", daemon=True).start()
+        except BaseException:
+            self._request_slots.release()
+            raise
+        try:
+            return future.result(timeout=max(0, deadline - monotonic()))
+        except FutureTimeoutError:
+            raise httpx.ReadTimeout("Trino HTTP request exceeded its deadline") from None
+        finally:
+            # The reader owns and closes its response, including after caller expiry.
+            # Phase timeouts bound a blocked read; chunks never keep it alive forever.
+            stopped.set()
+
     def _query_timeout_error(self, query_id: str | None, uri: str | None) -> None:
         cancellation = "not_available"
         if uri is not None:
             try:
-                response = self._client.delete(uri, headers=self._headers, timeout=5.0)
+                response = self._request_until(
+                    "DELETE", uri, monotonic() + 5.0, headers=self._headers, timeout=5.0,
+                )
                 cancellation = (
                     "accepted" if response.is_success else f"http_{response.status_code}"
                 )
