@@ -746,6 +746,21 @@ jobs:
         run: >-
           uv run lakeops check-commerce-gold --batch-id "$COMMERCE_BATCH_ID"
           --server http://localhost:8080 --user lakehouse-ci
+      - name: Verify current and retained Iceberg references through Trino
+        timeout-minutes: 3
+        env:
+          WAREHOUSE_INVENTORY_ACCESS_KEY_ID: lakeops-inventory
+          WAREHOUSE_INVENTORY_SECRET_ACCESS_KEY: inventory-development-only
+        run: |
+          docker compose run --rm --no-deps --entrypoint /bin/sh minio-init -ec '
+            mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
+            sed "s/__BUCKET__/$LAKEHOUSE_BUCKET/g" /policies/warehouse-inventory-policy.json > /tmp/inventory.json
+            mc admin policy create local lakehouse-warehouse-inventory /tmp/inventory.json
+            mc admin user add local lakeops-inventory inventory-development-only
+            mc admin policy attach local lakehouse-warehouse-inventory --user lakeops-inventory
+          '
+          LAKEOPS_RUN_RETAINED_REFERENCES=1 uv run --frozen pytest \
+          tests/integration/test_warehouse_references_trino.py -q -o addopts=''
       - name: Checkpoint commerce only after Trino verification
         env:
           AWS_ACCESS_KEY_ID: lakeops-ingest
@@ -1271,6 +1286,7 @@ jobs:
             artifacts/trino-upgrade-rehearsal.json
             artifacts/commerce-runner.json
             artifacts/commerce-revision-trino.json
+            artifacts/warehouse-references-trino.json
             artifacts/commerce-runner-idle.json
             artifacts/commerce-runner-retry.json
             artifacts/commerce-runner-journal.sqlite3

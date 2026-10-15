@@ -2,6 +2,25 @@ import json
 from pathlib import Path
 
 
+def test_reference_gate_bootstraps_its_observer_in_the_same_isolated_job():
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    job = workflow.split("  lakehouse-integration:\n", 1)[1].split(
+        "  release-readiness:\n", 1,
+    )[0]
+    gate = job.split(
+        "      - name: Verify current and retained Iceberg references through Trino\n", 1,
+    )[1].split("      - name:", 1)[0]
+    # Users created in serving-integration's MinIO do not exist in this job's stack.
+    assert gate.index("mc admin user add local lakeops-inventory") < gate.index(
+        "tests/integration/test_warehouse_references_trino.py",
+    )
+    assert "/policies/warehouse-inventory-policy.json" in gate
+    assert "mc admin policy attach local lakehouse-warehouse-inventory" in gate
+    assert "--user lakeops-inventory" in gate
+    assert "WAREHOUSE_INVENTORY_ACCESS_KEY_ID: lakeops-inventory" in gate
+    assert "artifacts/warehouse-references-trino.json" in job
+
+
 def test_serving_ci_reuses_inflight_demo_and_retains_readonly_recovery_check():
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     job = workflow.split("  serving-integration:\n", 1)[1].split("  ranger-integration:\n", 1)[0]
