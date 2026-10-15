@@ -306,7 +306,14 @@ def customer_history_observation(client, configs, revisions) -> dict[str, Any]:
         if type(row["is_current"]) is not bool:
             raise ValueError("customer history current flag is not boolean")
         def timestamp(value):
-            return datetime.fromisoformat(value).replace(tzinfo=UTC).isoformat() if value else None
+            if value is None:
+                return None
+            parsed = datetime.fromisoformat(value.removesuffix(" UTC") + (
+                "+00:00" if value.endswith(" UTC") else ""
+            ))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=UTC)
+            return parsed.astimezone(UTC).isoformat()
         observed.append({"valid_from": timestamp(row["valid_from"]),
                          "valid_to": timestamp(row["valid_to"]),
                          "is_current": row["is_current"]})

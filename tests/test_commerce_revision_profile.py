@@ -76,3 +76,39 @@ def test_single_unchanged_period_includes_missing_email_customer():
                 "is_current": True, "rows": 2, "customers": 2, "matching_customers": 2,
             },), TrinoQueryStats("FINISHED", 1, 1, 1, 1, 1, 1, 1, 0))
     assert profile.customer_history_observation(Client(), configs, [0, 0])["total_rows"] == 2
+
+
+@pytest.mark.parametrize("start,end", [
+    ("2026-02-01 00:00:00.000000 UTC", "2026-02-02 00:00:00.000000 UTC"),
+    ("2026-02-01T00:00:00+00:00", "2026-02-02T00:00:00+00:00"),
+    ("2026-02-01T03:00:00+03:00", "2026-02-02T03:00:00+03:00"),
+    ("2026-01-31T19:00:00-05:00", "2026-02-01T19:00:00-05:00"),
+])
+def test_trino_zoned_periods_compare_instants_in_utc(start, end):
+    class Client:
+        def query_with_stats(self, sql):
+            rows = (
+                {"valid_from": start, "valid_to": end, "is_current": False,
+                 "rows": 2, "customers": 2, "matching_customers": 2},
+                {"valid_from": end, "valid_to": None, "is_current": True,
+                 "rows": 2, "customers": 2, "matching_customers": 2},
+            )
+            return TrinoQueryResult("zoned", rows,
+                                    TrinoQueryStats("FINISHED", 1, 1, 1, 1, 1, 1, 1, 0))
+    configs = profile.workload_configs([100, 100], customers=2, batches=2)
+    result = profile.customer_history_observation(Client(), configs, [0, 1])
+    assert result["status"] == "verified" and result["total_rows"] == 4
+    assert result["rows"][0]["valid_from"] == start
+
+
+def test_offset_with_same_clock_is_not_the_expected_utc_instant():
+    class Client:
+        def query_with_stats(self, sql):
+            return TrinoQueryResult("shifted", ({
+                "valid_from": "2026-02-01T00:00:00+03:00", "valid_to": None,
+                "is_current": True, "rows": 2, "customers": 2, "matching_customers": 2,
+            },), TrinoQueryStats("FINISHED", 1, 1, 1, 1, 1, 1, 1, 0))
+    with pytest.raises(ValueError, match="customer history periods"):
+        profile.customer_history_observation(
+            Client(), profile.workload_configs([100, 100], customers=2), [0, 0],
+        )

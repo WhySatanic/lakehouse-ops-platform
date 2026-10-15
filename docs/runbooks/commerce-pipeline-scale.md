@@ -152,6 +152,10 @@ period's boundaries and current flag, row count, distinct customer count, and na
 for all requested customer IDs. It includes the null-email customer. A count of
 30000 alone is insufficient. The aggregate returns at most 101 groups and scans the
 history table; it does not bound Trino's internal memory or represent a free query.
+Period comparison accepts Trino's `timestamp with time zone` text ending in `UTC`
+and normalizes explicit ISO offsets to UTC instants. Unzoned timestamps are treated
+as UTC. The saved aggregate rows retain the original engine text; normalization
+does not discard offsets or change the expected period boundaries.
 
 Each successful sample retains `customer_history` with expected periods, actual
 aggregate rows, SQL, query ID and statistics. Expected row totals after these four
