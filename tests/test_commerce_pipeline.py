@@ -174,6 +174,59 @@ def test_runner_reports_monotonic_phase_durations_including_retry() -> None:
     }
 
 
+@pytest.mark.parametrize("history_mode", [None, "forward", "rebuild"])
+def test_planning_includes_intent_and_execution_resolution_not_first_stage(history_mode):
+    now = 0.0
+    stages = []
+    options = {"customer_history_mode": history_mode} if history_mode else {}
+    expected_stages = (*pipeline.COMMERCE_STAGES, pipeline.CURRENT_STAGE) if options else (
+        pipeline.COMMERCE_STAGES
+    )
+
+    class TimedPlanner(Planner):
+        def plan(self, *, max_batches):
+            nonlocal now
+            now += 2
+            return super().plan(max_batches=max_batches)
+
+        def begin(self, batch):
+            nonlocal now
+            assert batch == BATCH and not stages
+            now += 3
+
+        def execution_options(self, batch):
+            nonlocal now
+            assert batch == BATCH and not stages
+            now += 5
+            return options
+
+        def commit(self, batch_id, *, expected_manifest_sha256):
+            nonlocal now
+            now += 6
+            return super().commit(batch_id, expected_manifest_sha256=expected_manifest_sha256)
+
+    def execute(service, batch):
+        nonlocal now
+        assert batch == {**BATCH, **options}
+        stages.append(service)
+        now += 1
+
+    def query(sql):
+        nonlocal now
+        assert stages == list(expected_stages)
+        now += 4
+        return gold(sql)
+
+    planner = TimedPlanner()
+    result = pipeline.run_commerce_batch(planner, query, run_stage=execute, clock=lambda: now)
+    assert result["completed_stages"] == list(expected_stages)
+    assert planner.commits == [BATCH["batch_id"]]
+    assert result["durations_seconds"] == {
+        "planning": 10, "stages": dict.fromkeys(expected_stages, 1),
+        "verification": 4, "checkpoint": 6, "total": 20 + len(expected_stages),
+    }
+
+
 @pytest.mark.parametrize("failure", ["transport", "protocol", "query", "quality"])
 def test_retry_failure_preserves_checkpoint_without_repeating_compute(failure: str) -> None:
     planner = Planner()

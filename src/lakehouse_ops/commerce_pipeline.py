@@ -233,8 +233,6 @@ def _run_commerce_batch(
     commerce_remaining_seconds()
     if not plan["batches"]:
         return {"status": "idle", "batch_id": None, "completed_stages": []}
-    last = clock()
-    planning_seconds = last - started
     batch = plan["batches"][0]
     begin = getattr(planner, "begin", None)
     if begin:
@@ -246,6 +244,8 @@ def _run_commerce_batch(
     batch_id = batch["batch_id"]
     if journal:
         journal.record("planning", "selected", batch=batch)
+    last = clock()
+    planning_seconds = last - started
     completed = []
     stage_seconds: dict[str, float] = {}
     for service in stages:

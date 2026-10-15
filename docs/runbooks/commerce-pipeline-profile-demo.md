@@ -35,6 +35,15 @@ quality cases and row counts match; order/payment timestamps shift forward one d
 with the second snapshot. Source JSONL is therefore not byte-identical. Row/revenue
 oracles, file/snapshot-stable idle checks and project-only memory sampling are unchanged.
 
+Runner `durations_seconds.planning` includes queue selection, persisted active-batch
+intent and execution-option resolution, including their S3 rediscovery and the
+selected-batch journal event. The first stage starts after that work. Before this timing
+correction (including v1.28.1), intent/resolution time was incorrectly charged to
+`bronze-input-sync`; planning included only the initial queue selection. Historical
+total-run measurements remain valid, but do not directly compare their planning or
+first-stage split with corrected reports. This changes attribution, not throughput,
+stage order, execution budget or checkpoint semantics; no speedup is claimed.
+
 The private profile report records `catalog_state` and `prior_completed_batches`
 for every sample. Equal volumes use `same_volume_fresh_then_warm_catalog` in the
 child report and `same_volume_fresh_then_warm_reference_stack` in the demo report;
