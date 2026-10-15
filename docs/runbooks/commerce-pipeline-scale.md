@@ -41,6 +41,51 @@ JSONL independently supplies expected order count and captured revenue for both
 batch and current-gold reconciliation. File inventories are cumulative current
 files across batches, not per-batch physical bytes or orphan-file accounting.
 
+## Customer attribute revisions for history-growth inputs
+
+Repeated full snapshots with the same customer attributes grow batch history,
+but do not create additional SCD2 attribute versions. The existing fixture API
+accepts `customer_revision=0..10000`; revision zero preserves previous batch IDs,
+manifest structure and payload bytes. A nonzero revision changes only customer
+`full_name` to `Customer 00000001 revision N` (and corresponding IDs' names),
+keeps customer IDs/email/registration and all fact/product rows unchanged for
+the same config, and includes the revision in the hash-bound manifest config.
+It also changes null-email customers' names. Missing email is accepted by the
+existing silver contract with `email_is_missing=true`, not treated as a reject.
+
+The existing CLI exposes `--customer-revision` and the API's previously available
+explicit source declaration via `--source-semantics full_snapshot`. For example:
+
+```powershell
+uv run --frozen lakeops generate-commerce-fixture `
+  --output artifacts/customer-history-inputs --customers 10000 --products 5 --orders 1000 `
+  --null-customer-emails 1 --duplicate-orders 1 --late-orders 1 --invalid-payments 1 `
+  --batch-at 2026-02-02T00:00:00Z --customer-revision 1 --source-semantics full_snapshot
+```
+
+For a controlled change/no-change sequence, generate February 1, 2, 3 and 4 with
+revisions `0, 1, 1, 2`, respectively, holding all other options constant. The two
+revision-1 sources have identical customer attributes and distinct batch times.
+The revision number is an input label, not a source-order clock: the existing
+manifest timestamp and runner still determine execution order. Same revision and
+same config replay verifies checksums; it never overwrites damaged fixtures.
+
+After running these four inputs through the existing runner in chronological
+order, the expected SCD2 result is 10000 current customers and 30000 total versions,
+with three versions per accepted customer. For `C00000002`, literal expected names
+are `Customer 00000002`, `Customer 00000002 revision 1`, and
+`Customer 00000002 revision 2`; intervals are `[February 1, February 2)`,
+`[February 2, February 4)`, and `[February 4, open)`, in UTC. February 3 must not
+add a version. Null-email customer `C00000001` also has three accepted versions,
+with null email and `email_is_missing=true` throughout.
+These are acceptance expectations, **not measured Spark results** from this
+increment. Capture actual SQL/history/checkpoint/warehouse reports when executing
+the experiment; input generation alone does not establish capacity or latency.
+
+The default scale profile and automatic demo still use stable customer attributes.
+This input option does not imply arbitrary CDC, customer deletion or return/refund
+semantics, and does not change the atomic SCD2 commit implementation.
+
 ## Optional retained warehouse inventory
 
 The existing profile accepts `--warehouse-inventory`. After each verified batch

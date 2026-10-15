@@ -74,10 +74,16 @@ class CommerceFixtureResult:
 
 def generate_commerce_fixture(
     output: Path, config: CommerceFixtureConfig, *, source_semantics: str | None = None,
+    customer_revision: int = 0,
 ) -> CommerceFixtureResult:
+    if type(customer_revision) is not int or not 0 <= customer_revision <= 10000:
+        raise CommerceFixtureError("customer revision must be an integer between 0 and 10000")
     if source_semantics not in (None, "full_snapshot"):
         raise CommerceFixtureError("unsupported commerce fixture source semantics")
     normalized = _normalized_config(config)
+    # Keep the original default identity and manifest byte-for-byte compatible.
+    if customer_revision:
+        normalized["customer_revision"] = customer_revision
     if source_semantics is not None:
         normalized["source_semantics"] = source_semantics
     batch_id = hashlib.sha256(_canonical_json(normalized)).hexdigest()[:16]
@@ -89,7 +95,7 @@ def generate_commerce_fixture(
     output.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix=f".{batch_id}.", dir=output))
     try:
-        table_rows = _write_tables(temporary, config)
+        table_rows = _write_tables(temporary, config, customer_revision=customer_revision)
         tables = {
             name: {
                 "file": f"{name}.jsonl",
@@ -123,10 +129,12 @@ def generate_commerce_fixture(
     return _result(destination, batch_id, True, manifest)
 
 
-def _write_tables(root: Path, config: CommerceFixtureConfig) -> dict[str, int]:
+def _write_tables(
+    root: Path, config: CommerceFixtureConfig, *, customer_revision: int = 0,
+) -> dict[str, int]:
     random_source = random.Random(config.seed)
     batch_at = datetime.fromisoformat(config.batch_at).astimezone(UTC)
-    customers = _customers(config)
+    customers = _customers(config, customer_revision=customer_revision)
     products = _products(config)
     orders = _orders(config, products, batch_at, random_source)
     payments = _payments(config, orders)
@@ -146,11 +154,14 @@ def _write_tables(root: Path, config: CommerceFixtureConfig) -> dict[str, int]:
     return {table: len(records) for table, records in rows.items()}
 
 
-def _customers(config: CommerceFixtureConfig) -> list[dict[str, Any]]:
+def _customers(
+    config: CommerceFixtureConfig, *, customer_revision: int = 0,
+) -> list[dict[str, Any]]:
+    suffix = f" revision {customer_revision}" if customer_revision else ""
     return [
         {
             "customer_id": f"C{index:08d}",
-            "full_name": f"Customer {index:08d}",
+            "full_name": f"Customer {index:08d}{suffix}",
             "email": None
             if index <= config.null_customer_emails
             else f"customer{index:08d}@example.test",
