@@ -15,6 +15,9 @@ from pathlib import Path
 from threading import Event, Thread
 from typing import Any
 
+import boto3
+from botocore.config import Config
+
 from lakehouse_ops.commerce_pipeline import (
     COMMERCE_RUN_CLEANUP_GRACE_SECONDS,
     COMMERCE_STAGES,
@@ -26,6 +29,7 @@ from lakehouse_ops.ingestion.commerce_fixture import (
     generate_commerce_fixture,
 )
 from lakehouse_ops.trino import TrinoClient
+from lakehouse_ops.warehouse_inventory import warehouse_inventory
 
 _INVENTORY_TABLES_SQL = (
     "SELECT table_schema, table_name FROM lakehouse.information_schema.tables "
@@ -250,7 +254,8 @@ def measure_idle_replay(
     }
 
 
-def profile(output: Path, *, orders: list[int], endpoint: str, server: str) -> dict[str, Any]:
+def profile(output: Path, *, orders: list[int], endpoint: str, server: str,
+            warehouse_client: Any = None) -> dict[str, Any]:
     if len(orders) != 2 or not 100 <= orders[0] <= orders[1]:
         raise ValueError("requires two ascending or equal order volumes >= 100")
     project = os.environ.get("COMPOSE_PROJECT_NAME", "")
@@ -266,6 +271,7 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str) -> d
         ),
         "project": project, "samples": [], "recovery": "idle_checkpoint_replay_only",
         "source_semantics": "full_snapshot",
+        "warehouse_inventory": "enabled" if warehouse_client is not None else "not_requested",
         "limitations": ["not isolated per-volume capacity", "no crash recovery injection",
                         "sampled stack memory excludes host/VM overhead and inactive file cache",
                         "discrete samples can miss short memory peaks",
@@ -344,6 +350,12 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str) -> d
                         )):
                     raise ValueError("SQL results do not reconcile to independent input oracle")
                 idle = measure_idle_replay(client, command, output, f"{label}-idle")
+                storage = None
+                if warehouse_client is not None:
+                    storage = warehouse_inventory(warehouse_client)
+                    (output / f"{label}.warehouse.json").write_text(
+                        json.dumps(storage, indent=2), encoding="utf-8",
+                    )
                 report["samples"].append({
                     "orders": volume, "batch_id": fixture.batch_id, "config": asdict(config),
                     "prior_completed_batches": index,
@@ -356,6 +368,7 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str) -> d
                     "query_costs": costs,
                     "input_expected": expected, "current_query": asdict(current),
                     "idle_replay_observation": idle,
+                    "warehouse_storage": storage,
                 })
                 (output / "profile.json").write_text(json.dumps(report, indent=2))
                 if stack_observation.get("status") != "observed":
@@ -378,13 +391,30 @@ def main() -> int:
     parser.add_argument("--orders", nargs=2, type=int, default=[100, 1000])
     parser.add_argument("--s3-endpoint-url", required=True)
     parser.add_argument("--server", required=True)
+    parser.add_argument("--warehouse-inventory", action="store_true",
+                        help="list warehouse versions with separate read-only credentials")
     args = parser.parse_args()
     try:
+        warehouse_client = None
+        if args.warehouse_inventory:
+            access = os.environ.get("WAREHOUSE_INVENTORY_ACCESS_KEY_ID")
+            secret = os.environ.get("WAREHOUSE_INVENTORY_SECRET_ACCESS_KEY")
+            if not access or not secret:
+                raise ValueError("warehouse inventory requires separate read-only credentials")
+            warehouse_client = boto3.client(
+                "s3", endpoint_url=args.s3_endpoint_url, region_name="us-east-1",
+                aws_access_key_id=access, aws_secret_access_key=secret,
+                config=Config(connect_timeout=5, read_timeout=30,
+                              retries={"max_attempts": 2}),
+            )
         report = profile(args.output, orders=args.orders, endpoint=args.s3_endpoint_url,
-                         server=args.server)
+                         server=args.server, warehouse_client=warehouse_client)
     except Exception as error:
         print(f"commerce pipeline profile failed: {error}", file=sys.stderr)
         return 2
+    finally:
+        if warehouse_client is not None:
+            warehouse_client.close()
     print(json.dumps(report, sort_keys=True))
     return 0
 

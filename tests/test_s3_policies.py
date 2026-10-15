@@ -60,10 +60,19 @@ def test_hms_policy_manages_only_warehouse_paths() -> None:
 
 
 def test_policies_do_not_grant_wildcards() -> None:
-    for name in ("ingest", "spark", "trino", "hms", "clickhouse"):
+    for name in ("ingest", "spark", "trino", "hms", "clickhouse", "warehouse-inventory"):
         policy = _policy(name)
         assert "*" not in _values(policy, "Action")
         assert "*" not in _values(policy, "Resource")
+
+
+def test_warehouse_inventory_can_only_observe_version_metadata():
+    policy = _policy("warehouse-inventory")
+    assert _values(policy, "Action") == {"s3:GetBucketVersioning", "s3:ListBucketVersions"}
+    assert _values(policy, "Resource") == {"arn:aws:s3:::__BUCKET__"}
+    assert policy["Statement"][1]["Condition"] == {
+        "StringLike": {"s3:prefix": ["warehouse/*"]},
+    }
 
 
 def test_runtime_services_do_not_use_minio_root_credentials() -> None:

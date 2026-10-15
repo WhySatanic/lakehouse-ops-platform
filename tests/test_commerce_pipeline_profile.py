@@ -43,7 +43,8 @@ def test_default_project_is_rejected(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 @pytest.mark.parametrize("failure", [None, "memory", "idle", "existing", "second-run",
                                     "missing-current", "current-revenue", "wrong-sql-revenue",
-                                    "stack-empty", "stack-partial-first", "stack-partial-second"])
+                                    "stack-empty", "stack-partial-first", "stack-partial-second",
+                                    "warehouse-inventory"])
 @pytest.mark.parametrize("volumes", [[100, 1000], [100, 100]])
 def test_two_volume_evidence_or_retained_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure, volumes,
@@ -134,9 +135,21 @@ def test_two_volume_evidence_or_retained_failure(
                     "errors": ["Docker sample unavailable"] if partial and not empty else []}
 
     monkeypatch.setattr(profile, "StackMemorySampler", Sampler)
+    storage_client = object()
+    storage_calls = []
+
+    def inventory(client):
+        assert client is storage_client
+        storage_calls.append(True)
+        if failure == "warehouse-inventory":
+            raise ValueError("warehouse listing denied")
+        return {"total_payload_bytes": len(storage_calls) * 8192}
+
+    monkeypatch.setattr(profile, "warehouse_inventory", inventory)
     if failure:
         with pytest.raises((ValueError, subprocess.CalledProcessError)):
-            profile.profile(tmp_path, orders=volumes, endpoint="unused", server="unused")
+            profile.profile(tmp_path, orders=volumes, endpoint="unused", server="unused",
+                            warehouse_client=storage_client)
         assert json.loads((tmp_path / "profile.json").read_text())["status"] == "failed"
         if failure == "second-run":
             evidence = json.loads((tmp_path / "profile.json").read_text())
@@ -155,8 +168,15 @@ def test_two_volume_evidence_or_retained_failure(
             if count == 1:
                 assert not (tmp_path / "sample-2").exists()
     else:
-        result = profile.profile(tmp_path, orders=volumes, endpoint="unused", server="unused")
+        result = profile.profile(tmp_path, orders=volumes, endpoint="unused", server="unused",
+                                 warehouse_client=storage_client)
         assert result["status"] == "ready"
+        assert result["warehouse_inventory"] == "enabled"
+        for index, sample in enumerate(result["samples"], start=1):
+            assert sample["warehouse_storage"] == {"total_payload_bytes": index * 8192}
+            assert json.loads((tmp_path / f"sample-{index}.warehouse.json").read_text()) == (
+                sample["warehouse_storage"]
+            )
         assert [s["orders"] for s in result["samples"]] == volumes
         assert result["scope"] == (
             "same_volume_fresh_then_warm_catalog" if volumes[0] == volumes[1]
