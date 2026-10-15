@@ -737,6 +737,11 @@ jobs:
         env:
           TRINO_SERVER_IMAGE: trinodb/trino:482@sha256:90b35b7c603eaa1f889bf03981a62b75f998ee6c0f851d9f4e341b49a57022b6
         run: docker compose --profile query run --rm commerce-daily-gold-trino-check
+      - name: Verify customer revision SQL against Trino
+        timeout-minutes: 3
+        run: >-
+          LAKEOPS_RUN_REVISION_TRINO=1 uv run --frozen pytest
+          tests/integration/test_commerce_revision_trino.py -q -o addopts=''
       - name: Verify selected commerce gold batch through the CLI
         run: >-
           uv run lakeops check-commerce-gold --batch-id "$COMMERCE_BATCH_ID"
@@ -1250,6 +1255,7 @@ jobs:
           docker compose --profile observability run --rm prometheus-check
           EXPECTED_ALERT_STATUS=resolved docker compose --profile observability run --rm alert-delivery-check
       - name: Upload core and recovery evidence
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           archive: true
@@ -1264,6 +1270,7 @@ jobs:
             artifacts/ingestion-freshness-recovery.json
             artifacts/trino-upgrade-rehearsal.json
             artifacts/commerce-runner.json
+            artifacts/commerce-revision-trino.json
             artifacts/commerce-runner-idle.json
             artifacts/commerce-runner-retry.json
             artifacts/commerce-runner-journal.sqlite3

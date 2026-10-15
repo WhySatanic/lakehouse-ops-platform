@@ -168,6 +168,19 @@ failure retention using a substituted Trino/runner. They do not establish execut
 of this new SQL on a real Trino stack or Spark capacity; retain that evidence from
 the bounded experiment before making such claims.
 
+The required lakehouse CI also runs `test_commerce_revision_trino.py` against its
+existing Trino service. It executes this aggregate over six literal history rows
+for the change/repeat and return-to-earlier sequences, rejects five corrupt input
+variants, and runs the unchanged production query against the existing 40-customer
+Iceberg seed as an intentionally mismatched oracle. The literal CTE changes only
+the test's input relation. No table is created or modified, no extra Spark runner
+is started and no permission is expanded. The JSON report retains each executed
+SQL/query ID/result/statistics, including partial evidence on failure, and the
+core evidence upload runs even when a check fails. A ready report proves the SQL
+execution and validation cases; it does not prove Spark generation/publication of
+the revision workload or 10k-customer growth. Preserve the checkout SHA and raw
+`artifacts/commerce-revision-trino.json` with the other CI evidence.
+
 Omitting `--customer-revisions` keeps previous workload metadata and does not add
 the history query or sample field. The default scale profile and automatic demo
 still use stable customer attributes.
