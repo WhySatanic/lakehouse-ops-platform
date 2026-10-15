@@ -27,6 +27,15 @@ docker compose --profile compute build spark-bronze
 The smoke tests exercise prelaunch journal/container label agreement, two real
 stage timeouts with owned-container cleanup, and
 a real local Spark JVM/Python Parquet write/read with cgroup-v2 memory observation.
+That same Spark session also exercises production commerce bronze source preparation
+against temporary JSONL files. The 41 cases cover all four table schemas, every
+required field individually and together, valid duplicate multiplicity/hash/provenance,
+literal typed values and optional NULLs, valid-input row-count mismatch, empty input,
+row-count error priority, malformed JSON and an invalid integer. They make no catalog
+calls or Iceberg writes and do not substitute for full pipeline/recovery acceptance.
+The host test requires the explicit bronze-validation summary as well as the memory
+report; memory observation alone is not a successful validation smoke. This does not
+freeze Spark action counts or require the rejected single-aggregate optimization.
 They use network-disabled, disposable containers, not existing MinIO/Trino tables.
 No existing stack is started/stopped, no volumes are removed, and no images are
 pulled or built by the checker. A unique scoped Compose project name is supplied.

@@ -20,13 +20,20 @@ def test_real_spark_session_emits_container_memory():
         "--cgroupns", "private", "--hostname", "lakeops-memory",
         "--add-host", "lakeops-memory:127.0.0.1", "-e", "SPARK_LOCAL_IP=127.0.0.1",
         "--mount", f"type=bind,source={root},target=/repo,readonly",
-        "-e", "PYTHONPATH=/repo/jobs/spark", "-e", "LAKEOPS_SPARK_MEMORY_REPORT=1",
+        "-e", "PYTHONPATH=/repo/src:/repo/jobs/spark", "-e", "LAKEOPS_SPARK_MEMORY_REPORT=1",
         "-e", "LAKEHOUSE_BUCKET=unused", "-e", "LAKEOPS_S3_ENDPOINT_URL=http://localhost:9000",
         "-e", "AWS_ACCESS_KEY_ID=unused", "-e", "AWS_SECRET_ACCESS_KEY=unused",
         "-e", "HIVE_METASTORE_URI=thrift://localhost:9083",
         "lakehouse-ops/spark-iceberg:3.5.9-1.11.0", "/opt/spark/bin/spark-submit",
         "/repo/tests/integration/check_spark_memory.py",
-    ], check=True, capture_output=True, text=True, timeout=180)
+    ], check=False, capture_output=True, text=True, timeout=180)
+    assert result.returncode == 0, result.stdout + result.stderr
+    validations = [json.loads(line) for line in result.stdout.splitlines()
+                   if line.startswith('{"cases":')]
+    assert validations == [{"kind": "commerce_bronze_validation", "status": "ready", "cases": 41,
+                            "scope": "jsonl_schema_and_required_fields_before_merge",
+                            "tables": ["customers", "orders", "payments", "products"]}]
+    print(json.dumps(validations[0], sort_keys=True))
     reports = [json.loads(line) for line in (result.stdout + result.stderr).splitlines()
                if line.startswith('{"app_name":')]
     assert len(reports) == 1

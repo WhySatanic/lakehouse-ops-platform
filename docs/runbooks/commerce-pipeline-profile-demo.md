@@ -721,3 +721,52 @@ five core services and one completed prior batch, but still starts eight new Spa
 processes. This closes the declared matched-volume load measurement at 100k, not
 long historical queues, large-load failure/retry cost, full-path release-candidate
 proof or production capacity. Keep those remaining audit requirements open.
+
+## Rejected bronze validation aggregation, 2026-10-15
+
+A bounded study at main `27fcd22cbab23aef849cae77b6db3caad406672b` tested replacing
+the separate JSONL row-count and required-NULL counts in `prepare_source` with one
+aggregation returning both counts. Three serial `--orders 1000 1000` pairs per
+implementation reused this exact runner, settings, fixed oracles and stage boundaries.
+Fresh still means new services/catalog, not cold OS/images; warm has one prior batch.
+All before pairs preceded all after pairs, so this is not randomized/interleaved AB.
+
+| Observation, seconds | Before fresh | Candidate fresh | Before warm | Candidate warm |
+|---|---:|---:|---:|---:|
+| Bronze round 1 | 17.309 | 16.729 | 15.212 | 14.761 |
+| Bronze round 2 | 16.060 | 16.407 | 15.046 | 13.882 |
+| Bronze round 3 | 15.666 | 14.495 | 14.600 | 14.032 |
+| Bronze median | 16.060 | 16.407 | 15.046 | 14.032 |
+| Runner wall median | 114.142 | 107.881 | 110.684 | 105.406 |
+
+The fresh bronze median was 2.16% higher; warm was 6.74% lower with overlapping
+ranges. Unchanged stages also improved: fresh daily gold median 15.50 to 14.67 s
+and warm payment silver 12.97 to 12.37 s. The total wall-time change therefore
+does not establish an attributable pipeline speedup from combining counts. The
+candidate was rejected and production code restored. Fewer Python action calls
+did not prove fewer physical Spark jobs or a consistent stage-time benefit.
+
+All twelve loads completed nine stages, observed project/eight Spark memory reports,
+literal detail/daily/current SQL of 1000 orders and 2733643 cents, identical input
+manifest hashes and current-file inventories, two final completed checkpoints and
+stable compute-free idle. Fresh/warm files were 13/24, bytes 224126/437910 throughout.
+Sampled project peak medians were 3719.70/3773.80 MiB before and 3600.60/3632.68 MiB
+after; largest individual Spark lifetime peak medians 1095.07/1047.29 and
+951.48/970.91 MiB. These observations are not attributed memory savings or capacity.
+The six projects retained six volumes each and zero containers/networks after teardown.
+Docker VM total was 16637542400 bytes with 12 CPUs and local reference images;
+ordinary host activity/caches were uncontrolled, with no concurrent second stack,
+build or heavy local test suite. This adds idle replay evidence, not injected recovery.
+
+Local raw evidence is `artifacts/bronze-validation-scan/{before,after}-N/`, with
+per-stage timing, startup/shutdown, SQL IDs, memory, files, checkpoints and journals.
+The asserted `comparison.json` SHA256 is
+`3895bfab830d30c82bdc9c2a357a75cc1e0f5de1157551bb15ba6fdcc3996b11`;
+the retained rejected four-file `candidate-complete.patch` SHA256 is
+`a5cad51091c7fa82e401a36dfb1ab1a171e58fbb344628553b78e8423e65c97c`.
+All final checkpoint hashes are
+`2612e8b2cc5a5d42e9dfe0066d125d1def0c8b3f2c547eb2f110f9882f3737e8`.
+This small-volume result does not replace the existing 10k/100k/history/recovery
+measurements or prove a shared-session alternative. Only the semantic source-validation
+cases are retained in the existing Spark smoke; no action-count requirement,
+production optimization, new command/profile, migration or release version is added.
