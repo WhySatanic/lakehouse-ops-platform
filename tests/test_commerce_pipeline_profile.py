@@ -46,15 +46,19 @@ def test_default_project_is_rejected(tmp_path: Path, monkeypatch: pytest.MonkeyP
                                     "stack-empty", "stack-partial-first", "stack-partial-second",
                                     "warehouse-inventory", "last-run"])
 @pytest.mark.parametrize("volumes", [[100, 1000], [100, 100]])
-@pytest.mark.parametrize(("customers", "batches"), [(10, 2), (13, 3)])
+@pytest.mark.parametrize(("customers", "batches", "revisions"), [
+    (10, 2, None), (13, 3, None), (2, 4, [0, 1, 1, 0]),
+])
 def test_two_volume_evidence_or_retained_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure, volumes, customers, batches,
+    revisions,
 ):
     monkeypatch.setenv("COMPOSE_PROJECT_NAME", "lakehouse-ops-scale-test")
     running = failure == "existing"
     selected_volume = 100
     selected_revenue = 0
     sampler_reports = 0
+    selected_sample = 0
 
     class Client:
         def __init__(self, *args, **kwargs):
@@ -75,6 +79,21 @@ def test_two_volume_evidence_or_retained_failure(
             return [{"files": 1, "bytes": 1024}]
 
         def query_with_stats(self, sql):
+            if "dim_customers_scd2" in sql:
+                periods = [("2026-02-01 00:00:00", None)]
+                if selected_sample >= 2:
+                    periods = [("2026-02-01 00:00:00", "2026-02-02 00:00:00"),
+                               ("2026-02-02 00:00:00", None)]
+                if selected_sample == 4:
+                    periods[-1] = ("2026-02-02 00:00:00", "2026-02-04 00:00:00")
+                    periods.append(("2026-02-04 00:00:00", None))
+                rows = tuple({"valid_from": start, "valid_to": end, "is_current": end is None,
+                              "rows": customers, "customers": customers,
+                              "matching_customers": customers} for start, end in periods)
+                if failure == "history" and selected_sample == 4:
+                    rows[-1]["matching_customers"] -= 1
+                return TrinoQueryResult("history", rows,
+                                        TrinoQueryStats("FINISHED", 1, 1, 1, 1, 1, 1, 1, 0))
             revenue = selected_revenue
             row = {"revenue": revenue + int(failure == "wrong-sql-revenue")}
             if "commerce_current_daily" in sql:
@@ -85,7 +104,7 @@ def test_two_volume_evidence_or_retained_failure(
                                     TrinoQueryStats("FINISHED", 1, 1, 1, 1, 1, 1, 1, 0))
 
     def execute(args, output, label):
-        nonlocal running, selected_volume, selected_revenue
+        nonlocal running, selected_volume, selected_revenue, selected_sample
         assert "--s3-bucket" in args
         if "landing" in label:
             return {}
@@ -97,11 +116,15 @@ def test_two_volume_evidence_or_retained_failure(
         if failure == "last-run" and label == f"sample-{batches}":
             raise subprocess.CalledProcessError(2, args)
         running = True
+        selected_sample = int(label.split("-")[1])
         fixture = next((output / label).iterdir())
         manifest = json.loads((fixture / "manifest.json").read_text())
         batch = manifest["batch_id"]
         selected_volume = manifest["config"]["orders"]
         assert manifest["config"]["customers"] == customers
+        assert manifest["config"].get("customer_revision", 0) == (
+            revisions[selected_sample - 1] if revisions else 0
+        )
         selected_revenue = sum(
             row["amount_cents"] for row in (
                 json.loads(line) for line in (fixture / "payments.jsonl").read_text().splitlines()
@@ -159,7 +182,8 @@ def test_two_volume_evidence_or_retained_failure(
     if failure:
         with pytest.raises((ValueError, subprocess.CalledProcessError)):
             profile.profile(tmp_path, orders=volumes, endpoint="unused", server="unused",
-                            warehouse_client=storage_client, customers=customers, batches=batches)
+                            warehouse_client=storage_client, customers=customers, batches=batches,
+                            customer_revisions=revisions)
         assert json.loads((tmp_path / "profile.json").read_text())["status"] == "failed"
         if failure == "second-run":
             evidence = json.loads((tmp_path / "profile.json").read_text())
@@ -168,6 +192,8 @@ def test_two_volume_evidence_or_retained_failure(
         if failure == "last-run":
             evidence = json.loads((tmp_path / "profile.json").read_text())
             assert len(evidence["samples"]) == batches - 1
+        if failure == "history":
+            assert len(json.loads((tmp_path / "profile.json").read_text())["samples"]) == 3
         if failure.startswith("stack-"):
             evidence = json.loads((tmp_path / "profile.json").read_text())
             count = 2 if failure == "stack-partial-second" else 1
@@ -183,9 +209,16 @@ def test_two_volume_evidence_or_retained_failure(
     else:
         result = profile.profile(tmp_path, orders=volumes, endpoint="unused", server="unused",
                                  warehouse_client=storage_client, customers=customers,
-                                 batches=batches)
+                                 batches=batches, customer_revisions=revisions)
         assert result["status"] == "ready"
         assert result["warehouse_inventory"] == "enabled"
+        if revisions:
+            assert result["workload"]["customer_revisions"] == revisions
+            assert [sample["customer_history"]["total_rows"] for sample in result["samples"]] == (
+                [2, 4, 4, 6]
+            )
+        else:
+            assert all("customer_history" not in sample for sample in result["samples"])
         for index, sample in enumerate(result["samples"], start=1):
             assert sample["warehouse_storage"] == {"total_payload_bytes": index * 8192}
             assert json.loads((tmp_path / f"sample-{index}.warehouse.json").read_text()) == (
@@ -208,7 +241,7 @@ def test_two_volume_evidence_or_retained_failure(
             "fresh_commerce_catalog", "one_completed_prior_batch",
             *(["multiple_completed_prior_batches"] * (batches - 2)),
         ]
-        if volumes[0] == volumes[1]:
+        if volumes[0] == volumes[1] and revisions is None:
             assert first["input_expected"] == second["input_expected"]
             fixtures = [next((tmp_path / label).iterdir()) for label in ("sample-1", "sample-2")]
             for table in ("customers", "products", "orders", "payments"):
@@ -297,3 +330,9 @@ def test_detail_daily_costs_reconcile_before_evidence(failure):
 def test_query_costs_rejects_unbound_batch_before_query():
     with pytest.raises(ValueError, match="batch ID"):
         profile.query_costs(None, "' OR true --", 100)
+
+
+def test_wrong_final_customer_state_retains_only_verified_samples(tmp_path, monkeypatch):
+    test_two_volume_evidence_or_retained_failure(
+        tmp_path, monkeypatch, "history", [100, 100], 2, 4, [0, 1, 1, 0],
+    )

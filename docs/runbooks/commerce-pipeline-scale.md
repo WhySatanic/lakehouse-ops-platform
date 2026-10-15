@@ -69,8 +69,8 @@ growing catalog history with the normal nine-stage runner, SQL revenue/order
 oracles, checkpoint and compute-free idle verification at every batch. Customer
 IDs and attributes remain stable: it does **not** create a new SCD2 attribute
 version per batch. More orders or more completed snapshots must not be labelled
-more SCD2 versions. A changing-attribute history workload is a separate remaining
-PERF-01 case. The optional warehouse inventory below can be combined with these
+more SCD2 versions. Use the explicit revision sequence below to change attributes.
+The optional warehouse inventory below can be combined with these
 flags; current Iceberg file bytes alone remain insufficient for retained storage.
 
 Offline tests exercise first/last real 10000-customer fixtures across a 100-day
@@ -133,7 +133,44 @@ These are acceptance expectations, **not measured Spark results** from this
 increment. Capture actual SQL/history/checkpoint/warehouse reports when executing
 the experiment; input generation alone does not establish capacity or latency.
 
-The default scale profile and automatic demo still use stable customer attributes.
+### Run and verify a revision sequence with the existing profile
+
+On a fresh dedicated stack, use this instead of the default measurement command:
+
+```powershell
+uv run --frozen python -m lakehouse_ops.commerce_pipeline_profile `
+  --output artifacts/commerce-customer-revisions-10000 `
+  --orders 100 100 --customers 10000 --batches 4 --customer-revisions 0 1 1 2 `
+  --s3-endpoint-url http://localhost:19100 --server http://localhost:18100
+```
+
+`--customer-revisions` requires exactly one integer 0..10000 per batch. This is
+the same fixture API and normal nine-stage runner, with the original checkpoint,
+revenue/order checks and idle verification. The schedule is recorded in `workload`.
+Before accepting each sample, an additional Trino aggregate checks every expected
+period's boundaries and current flag, row count, distinct customer count, and names
+for all requested customer IDs. It includes the null-email customer. A count of
+30000 alone is insufficient. The aggregate returns at most 101 groups and scans the
+history table; it does not bound Trino's internal memory or represent a free query.
+
+Each successful sample retains `customer_history` with expected periods, actual
+aggregate rows, SQL, query ID and statistics. Expected row totals after these four
+batches are 10000, 20000, 20000 and 30000, with 10000 current each time. A return
+sequence `0 1 1 0` also expects three periods: returning to the first attributes
+does not collapse nonadjacent versions. A failed history check marks the profile
+failed and preserves earlier verified samples; it does not undo an already
+checkpointed batch or prove that the runner failed inside an Iceberg commit.
+
+The history observation runs outside the runner's timing and adds work between
+batches. Compare runs with the same observation settings. Local tests cover literal
+period expectations, wrong counts/names/intervals, the four-batch profile path and
+failure retention using a substituted Trino/runner. They do not establish execution
+of this new SQL on a real Trino stack or Spark capacity; retain that evidence from
+the bounded experiment before making such claims.
+
+Omitting `--customer-revisions` keeps previous workload metadata and does not add
+the history query or sample field. The default scale profile and automatic demo
+still use stable customer attributes.
 This input option does not imply arbitrary CDC, customer deletion or return/refund
 semantics, and does not change the atomic SCD2 commit implementation.
 
