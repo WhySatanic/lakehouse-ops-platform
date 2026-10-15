@@ -36,8 +36,23 @@ replay. It applies the same document, checksum and path rules as the audit. A va
 repeat keeps the first stored bytes, including its original ingestion timestamp;
 changes to volatile `generationtime_ms` do not change content identity. Corrupt,
 conflicting or unreadable objects fail without being overwritten. A directory at the
-object path is an unreadable-object error. This check does not change publication
-semantics for concurrent first writers.
+object path is an unreadable-object error.
+
+Filesystem publication writes and fsyncs a private temporary file in the destination
+directory, then atomically links that complete file to the absent object name.
+Concurrent first writers cannot replace the winner: exactly one successful publisher
+reports `created: true`; another validates the published object and reports
+`created: false`, or fails if that object is corrupt. The first body's ingestion
+timestamp and volatile source fields remain unchanged. Temporary files are removed
+after publication or failure.
+
+This requires a local filesystem with atomic hard-link creation. The same synchronized
+writer tests exercise publication on Windows locally and Linux in CI. Unsupported
+links or permission failures stop the
+write without falling back to an overwriting rename. The guarantee covers cooperating
+writers using this adapter, not another process editing/removing published files,
+distributed storage semantics, or persistence across host/power loss: directory
+entries are not fsynced by this adapter.
 
 ## Respond to a failed audit
 

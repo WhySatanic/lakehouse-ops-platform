@@ -96,22 +96,7 @@ class FileLandingZone:
         destination.parent.mkdir(parents=True, exist_ok=True)
 
         if destination.exists():
-            # Audit uses the checksum function above; load it after module initialization.
-            from lakehouse_ops.ingestion.audit import audit_landing_content
-
-            try:
-                existing_body = destination.read_bytes()
-            except OSError as error:
-                raise ValueError(
-                    f"existing filesystem object is unreadable: {destination}"
-                ) from error
-            item = audit_landing_content(Path(landing_object.key), existing_body)
-            if item.status != "valid":
-                raise ValueError(
-                    f"existing filesystem object conflicts with forecast: {destination}; "
-                    + "; ".join(item.errors)
-                )
-            return LandingResult(path=destination, checksum=landing_object.checksum, created=False)
+            return self._verified_replay(destination, landing_object)
 
         descriptor, temporary_name = tempfile.mkstemp(
             dir=destination.parent, prefix=f".{landing_object.checksum}.", suffix=".tmp"
@@ -121,9 +106,32 @@ class FileLandingZone:
                 temporary_file.write(landing_object.body)
                 temporary_file.flush()
                 os.fsync(temporary_file.fileno())
-            os.replace(temporary_name, destination)
+            try:
+                # Publish a complete inode only if the destination name is still absent.
+                os.link(temporary_name, destination)
+            except FileExistsError:
+                return self._verified_replay(destination, landing_object)
         finally:
             if os.path.exists(temporary_name):
                 os.unlink(temporary_name)
 
         return LandingResult(path=destination, checksum=landing_object.checksum, created=True)
+
+    @staticmethod
+    def _verified_replay(destination: Path, landing_object: LandingObject) -> LandingResult:
+        # Audit imports the checksum function above, so load it after module initialization.
+        from lakehouse_ops.ingestion.audit import audit_landing_content
+
+        try:
+            existing_body = destination.read_bytes()
+        except OSError as error:
+            raise ValueError(
+                f"existing filesystem object is unreadable: {destination}"
+            ) from error
+        item = audit_landing_content(Path(landing_object.key), existing_body)
+        if item.status != "valid":
+            raise ValueError(
+                f"existing filesystem object conflicts with forecast: {destination}; "
+                + "; ".join(item.errors)
+            )
+        return LandingResult(path=destination, checksum=landing_object.checksum, created=False)
