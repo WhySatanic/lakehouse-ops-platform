@@ -1,0 +1,16 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetBucketVersioning"],
+      "Resource": ["arn:aws:s3:::__BUCKET__"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:ListBucketVersions"],
+      "Resource": ["arn:aws:s3:::__BUCKET__"],
+      "Condition": {"StringLike": {"s3:prefix": ["warehouse/*"]}}
+    }
+  ]
+}

@@ -41,6 +41,71 @@ JSONL independently supplies expected order count and captured revenue for both
 batch and current-gold reconciliation. File inventories are cumulative current
 files across batches, not per-batch physical bytes or orphan-file accounting.
 
+## Optional retained warehouse inventory
+
+The existing profile accepts `--warehouse-inventory`. After each verified batch
+and idle replay, it saves `sample-N.warehouse.json` and the same observation in
+`profile.json` under `samples[].warehouse_storage`. Without the flag the report
+explicitly records `warehouse_inventory: not_requested`. Existing commands and
+the automatic profile demo keep their previous credential requirements.
+
+Provision a separate observer in the **dedicated local experiment project** before
+running the profile. The supplied
+[`warehouse-inventory-policy.json`](../../config/s3/warehouse-inventory-policy.json)
+grants only bucket versioning status and version listings under `warehouse/`.
+It grants no object reads, writes or deletes. Do not attach it to ingest or runtime
+identities. With the scoped project and ports above, provision once using its
+administrator bootstrap service (the password below is public development data):
+
+```powershell
+$bootstrap = @'
+mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
+sed "s/__BUCKET__/$LAKEHOUSE_BUCKET/g" /policies/warehouse-inventory-policy.json > /tmp/inventory.json
+mc admin policy create local lakehouse-warehouse-inventory /tmp/inventory.json
+mc admin user add local lakeops-inventory inventory-development-only
+mc admin policy attach local lakehouse-warehouse-inventory --user lakeops-inventory
+'@
+docker compose run --rm --no-deps --entrypoint /bin/sh minio-init -ec $bootstrap
+$env:WAREHOUSE_INVENTORY_ACCESS_KEY_ID = 'lakeops-inventory'
+$env:WAREHOUSE_INVENTORY_SECRET_ACCESS_KEY = 'inventory-development-only'
+uv run --frozen python -m lakehouse_ops.commerce_pipeline_profile `
+  --output artifacts/commerce-pipeline-scale-with-storage --orders 100 1000 `
+  --s3-endpoint-url http://localhost:19100 --server http://localhost:18100 `
+  --warehouse-inventory
+```
+
+Use an empty commerce catalog, so choose this command instead of the first profile
+command above, or start a new isolated stack. The runner still uses the ingest AWS
+environment credentials; only the observer uses the two separate variables.
+Missing observer credentials, denied listing or a failure on a later page fails
+the requested profile instead of reporting a partial total as complete.
+
+The collector uses the SDK's
+[ListObjectVersions paginator](https://docs.aws.amazon.com/boto3/latest/reference/services/s3/paginator/ListObjectVersions.html),
+including both key and version continuation markers. Every listed object version
+contributes its `Size` once, including noncurrent versions of deleted keys and
+`null` versions. `versions.latest` is the S3 latest object version, **not** an
+Iceberg current-file classification. Latest delete markers hide older payload;
+markers are counted separately and contribute no invented payload bytes.
+`layout` divides payload by `metadata`/`data` path segments and `other`, not
+by inferred file suffix or reachability. Raw key/version/size records are retained
+for subsequent reconciliation.
+
+`total_payload_bytes = versions.latest.bytes + versions.noncurrent.bytes` covers
+the whole warehouse prefix, including non-commerce tables in that prefix. It
+excludes landing, incomplete multipart uploads, S3/MinIO implementation overhead,
+replication, filesystem allocation and billing. No writers or maintenance may run
+concurrently: a paginated listing is not an atomic snapshot. The profile invokes
+it outside the timed runner/query/idle measurements after its stages have stopped.
+
+This increment supplies the object-store side of storage accounting. It does not
+yet join Iceberg retained-snapshot references, classify unreferenced objects, run
+retention, or prove a measured physical saving. `iceberg_reachability` explicitly
+remains `not_classified`. SDK pagination and failure handling have offline tests;
+a real versioned MinIO measurement remains required before completing PERF-02.
+
+## Query and replay measurements
+
 Each new sample additionally retains `query_costs`: separate IDs, results and Trino
 statistics for a detail orders/payments aggregation and the materialized daily mart.
 Payments are grouped by order before the left join so split payments do not multiply
