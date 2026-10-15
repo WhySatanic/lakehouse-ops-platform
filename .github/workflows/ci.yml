@@ -162,6 +162,35 @@ jobs:
         run: >-
           uv run --frozen pytest tests/integration/test_commerce_retained_history_correction.py
           -k retained_inflight -q -o addopts='' --junitxml=artifacts/commerce-inflight-retained.xml
+      - name: Interrupt active Spark and verify retained-batch recovery
+        timeout-minutes: 15
+        env:
+          COMPOSE_PROJECT_NAME: lakehouse-ops-active-spark-${{ github.run_id }}-${{ github.run_attempt }}
+          MINIO_API_PORT: "19700"
+          MINIO_CONSOLE_PORT: "19701"
+          HIVE_METASTORE_PORT: "19783"
+          TRINO_HTTP_PORT: "18700"
+          AWS_ACCESS_KEY_ID: lakeops-ingest
+          AWS_SECRET_ACCESS_KEY: ingest-development-only
+        run: |
+          cleanup_active_stack() {
+            active_exit_code=$?
+            trap - EXIT
+            docker compose --profile catalog --profile compute --profile query logs \
+              > artifacts/commerce-active-spark-infra.log 2>&1 || true
+            docker compose --profile catalog --profile compute --profile query down \
+              || active_exit_code=1
+            exit "$active_exit_code"
+          }
+          trap cleanup_active_stack EXIT
+          docker compose --profile catalog --profile compute --profile query up \
+            -d --wait --wait-timeout 180 --no-build --pull never \
+            minio metastore-db hive-metastore trino-coordinator trino-worker
+          docker compose run --rm minio-init
+          uv run --frozen python tests/integration/exercise_commerce_active_spark.py \
+            --output artifacts/commerce-active-spark-ci \
+            --s3-endpoint-url http://localhost:19700 --server http://localhost:18700 \
+            2> artifacts/commerce-active-spark-stages.log
       - name: Upload serving evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -176,6 +205,9 @@ jobs:
             artifacts/commerce-inflight-ci/
             artifacts/commerce-inflight-ci.stdout.json
             artifacts/commerce-inflight-retained.xml
+            artifacts/commerce-active-spark-ci/
+            artifacts/commerce-active-spark-stages.log
+            artifacts/commerce-active-spark-infra.log
           if-no-files-found: error
           overwrite: true
 
