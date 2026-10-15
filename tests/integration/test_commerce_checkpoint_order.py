@@ -14,13 +14,78 @@ import pytest
 
 from lakehouse_ops import commerce_cycle
 from lakehouse_ops.commerce_change_scenario import generate_change_scenario
-from lakehouse_ops.commerce_pipeline import CommercePipelineError, run_commerce_batch
+from lakehouse_ops.commerce_pipeline import (
+    COMMERCE_STAGES,
+    CURRENT_STAGE,
+    CommercePipelineError,
+    run_commerce_batch,
+)
 from lakehouse_ops.ingestion.commerce_batches import CommerceBatchError, CommerceBatchPlanner
 from lakehouse_ops.ingestion.commerce_fixture import (
     CommerceFixtureConfig,
     generate_commerce_fixture,
 )
 from lakehouse_ops.ingestion.commerce_s3_landing import CommerceS3LandingZone
+
+
+@pytest.mark.skipif(
+    os.getenv("LAKEOPS_RUN_S3_SMOKE") != "1", reason="requires an initialized local MinIO"
+)
+def test_real_minio_planning_timing_includes_precompute_discovery(tmp_path):
+    client = boto3.client(
+        "s3", endpoint_url=os.getenv("LAKEOPS_S3_ENDPOINT_URL", "http://localhost:9000"),
+        aws_access_key_id=os.getenv("MINIO_ROOT_USER", "lakeops"),
+        aws_secret_access_key=os.getenv("MINIO_ROOT_PASSWORD", "lakeops-development-only"),
+        region_name="us-east-1",
+    )
+    bucket = os.getenv("LAKEHOUSE_BUCKET", "lakehouse")
+    prefix = f"smoke/commerce-phase-timing-{uuid4().hex}"
+    scenario = generate_change_scenario(tmp_path / "scenario")
+    first = scenario["batches"][0]
+    CommerceS3LandingZone(client, bucket=bucket, prefix=prefix).write(Path(first["path"]))
+    now = [0.0]
+    discoveries = []
+
+    class TimedPlanner(CommerceBatchPlanner):
+        def discover(self):
+            batches = super().discover()
+            discoveries.append(len(batches))
+            now[0] += 1
+            return batches
+
+    state = tmp_path / "checkpoint.json"
+    planner = TimedPlanner(client, bucket=bucket, prefix=prefix, state_path=state)
+    stages = []
+
+    def stage(service, batch):
+        assert batch["customer_history_mode"] == "forward"
+        assert not state.exists()
+        assert state.with_name("checkpoint.json.active.json").is_file()
+        stages.append(service)
+        now[0] += 2
+
+    def query(_):
+        assert stages == [*COMMERCE_STAGES, CURRENT_STAGE] and not state.exists()
+        now[0] += 3
+        return [{"days": 1, "orders": 1, "captured_revenue_cents": 1000, "invalid_days": 0}]
+
+    result = run_commerce_batch(planner, query, run_stage=stage, clock=lambda: now[0])
+    assert discoveries == [1, 1, 1, 1]
+    assert result["durations_seconds"] == {
+        "planning": 3, "stages": dict.fromkeys([*COMMERCE_STAGES, CURRENT_STAGE], 2),
+        "verification": 3, "checkpoint": 1, "total": 25,
+    }
+    checkpoint = state.read_bytes()
+    assert set(json.loads(checkpoint)["processed_batches"]) == {first["batch_id"]}
+    assert not state.with_name("checkpoint.json.active.json").exists()
+
+    def forbidden(*_):
+        pytest.fail("idle must not compute or verify gold")
+
+    assert run_commerce_batch(planner, forbidden, run_stage=forbidden) == {
+        "status": "idle", "batch_id": None, "completed_stages": [],
+    }
+    assert state.read_bytes() == checkpoint
 
 
 @pytest.mark.skipif(
