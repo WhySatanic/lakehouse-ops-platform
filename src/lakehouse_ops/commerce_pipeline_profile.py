@@ -31,6 +31,7 @@ from lakehouse_ops.ingestion.commerce_fixture import (
 )
 from lakehouse_ops.trino import TrinoClient
 from lakehouse_ops.warehouse_inventory import warehouse_inventory
+from lakehouse_ops.warehouse_references import file_references, reconcile_references
 
 _INVENTORY_TABLES_SQL = (
     "SELECT table_schema, table_name FROM lakehouse.information_schema.tables "
@@ -274,8 +275,10 @@ def workload_configs(orders: list[int], *, customers: int = 10,
 
 def profile(output: Path, *, orders: list[int], endpoint: str, server: str,
             warehouse_client: Any = None, customers: int = 10,
-            batches: int = 2) -> dict[str, Any]:
+            batches: int = 2, retained_references: bool = False) -> dict[str, Any]:
     configs = workload_configs(orders, customers=customers, batches=batches)
+    if retained_references and warehouse_client is None:
+        raise ValueError("retained references require warehouse inventory")
     project = os.environ.get("COMPOSE_PROJECT_NAME", "")
     if project != "lakehouse-ops-scale" and not project.startswith("lakehouse-ops-scale-"):
         raise ValueError("requires a dedicated COMPOSE_PROJECT_NAME=lakehouse-ops-scale-<name>")
@@ -295,6 +298,7 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str,
                      "orders_per_snapshot": [config.orders for config in configs],
                      "customer_attributes": "unchanged_no_scd2_attribute_version_growth"},
         "warehouse_inventory": "enabled" if warehouse_client is not None else "not_requested",
+        "retained_references": "enabled" if retained_references else "not_requested",
         "limitations": ["not isolated per-volume capacity", "no crash recovery injection",
                         "sampled stack memory excludes host/VM overhead and inactive file cache",
                         "discrete samples can miss short memory peaks",
@@ -371,7 +375,14 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str,
                 idle = measure_idle_replay(client, command, output, f"{label}-idle")
                 storage = None
                 if warehouse_client is not None:
+                    tables = client.query(_INVENTORY_TABLES_SQL) if retained_references else []
+                    references = file_references(client, tables) if retained_references else []
                     storage = warehouse_inventory(warehouse_client)
+                    if retained_references:
+                        if (client.query(_INVENTORY_TABLES_SQL) != tables
+                                or file_references(client, tables) != references):
+                            raise ValueError("Iceberg references changed during warehouse listing")
+                        storage["reference_accounting"] = reconcile_references(storage, references)
                     (output / f"{label}.warehouse.json").write_text(
                         json.dumps(storage, indent=2), encoding="utf-8",
                     )
@@ -417,6 +428,8 @@ def main() -> int:
     parser.add_argument("--server", required=True)
     parser.add_argument("--warehouse-inventory", action="store_true",
                         help="list warehouse versions with separate read-only credentials")
+    parser.add_argument("--retained-references", action="store_true",
+                        help="reconcile current and retained data/delete references (opt-in)")
     args = parser.parse_args()
     try:
         warehouse_client = None
@@ -433,7 +446,8 @@ def main() -> int:
             )
         report = profile(args.output, orders=args.orders, endpoint=args.s3_endpoint_url,
                          server=args.server, warehouse_client=warehouse_client,
-                         customers=args.customers, batches=args.batches)
+                         customers=args.customers, batches=args.batches,
+                         retained_references=args.retained_references)
     except Exception as error:
         print(f"commerce pipeline profile failed: {error}", file=sys.stderr)
         return 2
