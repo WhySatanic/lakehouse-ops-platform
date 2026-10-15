@@ -104,6 +104,51 @@ retention, or prove a measured physical saving. `iceberg_reachability` explicitl
 remains `not_classified`. SDK pagination and failure handling have offline tests;
 a real versioned MinIO measurement remains required before completing PERF-02.
 
+### Real MinIO inventory and permissions gate
+
+The mandatory `serving-integration` CI job provisions the listing-only observer
+above in its initialized reference MinIO and runs
+[`test_warehouse_inventory_minio.py`](../../tests/integration/test_warehouse_inventory_minio.py)
+before Spark table creation. Its writers and maintenance are idle during this step.
+The test writes only a new UUID prefix under `warehouse/`: a three-byte object
+overwritten with five bytes, a seven-byte object hidden by a delete marker, and
+two bytes of synthetic metadata. These are synthetic payload, not valid Iceberg
+table files or performance evidence. No existing objects are modified or removed;
+test versions and marker are retained in the scoped CI stack.
+
+The production collector runs through the real SDK paginator with a two-entry
+page size. The complete listing must cover at least three pages and reconcile
+each returned version ID and size against the writes. The expected payload delta
+is 17 bytes: 7 latest and 10 noncurrent; there is exactly one additional delete
+marker. Existing warehouse objects contribute to both baseline and final totals.
+Concurrent writes fail this comparison instead of becoming an invented saving.
+
+The observer must receive `AccessDenied`/403 for listing landing or bucket root,
+reading an existing warehouse object, writing a new object and deleting its live
+test object. A successful inventory alone does not prove these restrictions.
+The CI step uses the existing administrator bootstrap container only to provision
+the observer; the observer and Spark writer use separate runtime credentials.
+
+To run on the fresh isolated stack above, provision the observer with the bootstrap
+commands, export its two credentials, then run in PowerShell:
+
+```powershell
+$env:LAKEOPS_RUN_WAREHOUSE_INVENTORY_SMOKE = '1'
+$env:LAKEOPS_S3_ENDPOINT_URL = 'http://localhost:19100'
+$env:WAREHOUSE_INVENTORY_REPORT = 'artifacts/warehouse-inventory-minio-local.json'
+uv run --frozen pytest tests/integration/test_warehouse_inventory_minio.py -q -o addopts=''
+```
+
+Use a new evidence path on each run. `serving-evidence` retains the JSON baseline,
+final listing, owned prefix, written version IDs, page count and permission result.
+Failures retain a `failed` JSON report where setup permits; pytest/CI logs identify
+the failing assertion or API error. Default local quality skips the real test and
+checks its assertions offline with SDK Stubber, including wrong payload, latest
+flags, marker response, excessive permissions and setup failure. Until the real
+gate has run successfully on the exact PR head, these offline tests are not a
+confirmed MinIO result. A successful synthetic gate still does not finish PERF-02's
+commerce retained-reference/physical-storage reconciliation.
+
 ## Query and replay measurements
 
 Each new sample additionally retains `query_costs`: separate IDs, results and Trino
