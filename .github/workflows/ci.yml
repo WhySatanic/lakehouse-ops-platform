@@ -151,6 +151,17 @@ jobs:
         run: >-
           uv run --frozen pytest tests/integration/test_commerce_retained_history_correction.py
           -q -o addopts='' --junitxml=artifacts/commerce-history-correction-retained.xml
+      - name: Run in-flight late-arrival recovery path
+        run: >-
+          uv run --frozen python -m lakehouse_ops.commerce_linked_demo
+          --inflight-late-arrival --output artifacts/commerce-inflight-ci
+          > artifacts/commerce-inflight-ci.stdout.json
+      - name: Verify retained in-flight recovery evidence
+        env:
+          LAKEOPS_INFLIGHT_DIRECTORY: artifacts/commerce-inflight-ci/acceptance
+        run: >-
+          uv run --frozen pytest tests/integration/test_commerce_retained_history_correction.py
+          -k retained_inflight -q -o addopts='' --junitxml=artifacts/commerce-inflight-retained.xml
       - name: Upload serving evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -162,6 +173,9 @@ jobs:
             artifacts/commerce-history-correction-ci/
             artifacts/commerce-history-correction-ci.stdout.json
             artifacts/commerce-history-correction-retained.xml
+            artifacts/commerce-inflight-ci/
+            artifacts/commerce-inflight-ci.stdout.json
+            artifacts/commerce-inflight-retained.xml
           if-no-files-found: error
           overwrite: true
 

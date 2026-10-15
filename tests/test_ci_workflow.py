@@ -2,6 +2,28 @@ import json
 from pathlib import Path
 
 
+def test_serving_ci_reuses_inflight_demo_and_retains_readonly_recovery_check():
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    job = workflow.split("  serving-integration:\n", 1)[1].split("  ranger-integration:\n", 1)[0]
+    assert "python -m lakehouse_ops.commerce_history_correction_demo" in job
+    run = job.split("      - name: Run in-flight late-arrival recovery path\n", 1)[1].split(
+        "      - name:", 1,
+    )[0]
+    assert "python -m lakehouse_ops.commerce_linked_demo" in run
+    assert "--inflight-late-arrival --output artifacts/commerce-inflight-ci" in run
+    check = job.split("      - name: Verify retained in-flight recovery evidence\n", 1)[1].split(
+        "      - name:", 1,
+    )[0]
+    assert "LAKEOPS_INFLIGHT_DIRECTORY: artifacts/commerce-inflight-ci/acceptance" in check
+    assert "test_commerce_retained_history_correction.py" in check
+    assert "-k retained_inflight" in check
+    upload = job.split("      - name: Upload serving evidence\n", 1)[1]
+    assert "if: always()" in upload
+    for evidence in ("commerce-inflight-ci/", "commerce-inflight-ci.stdout.json",
+                     "commerce-inflight-retained.xml"):
+        assert f"artifacts/{evidence}" in upload
+
+
 def test_failed_ranger_startup_retains_default_worker_logs_and_container_state():
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     job = workflow.split("  ranger-integration:\n", 1)[1].split(
