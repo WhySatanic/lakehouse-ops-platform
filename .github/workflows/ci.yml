@@ -94,6 +94,22 @@ jobs:
         run: LAKEOPS_RUN_S3_SMOKE=1 uv run pytest tests/integration/test_weather_s3_replay.py -q -o addopts=''
       - name: Verify commerce checkpoint and backlog in MinIO
         run: LAKEOPS_RUN_S3_SMOKE=1 uv run pytest tests/integration/test_commerce_checkpoint_order.py -q -o addopts=''
+      - name: Verify retained warehouse inventory and observer permissions
+        timeout-minutes: 3
+        env:
+          WAREHOUSE_INVENTORY_ACCESS_KEY_ID: lakeops-inventory
+          WAREHOUSE_INVENTORY_SECRET_ACCESS_KEY: inventory-development-only
+          WAREHOUSE_INVENTORY_REPORT: artifacts/warehouse-inventory-minio.json
+          LAKEOPS_RUN_WAREHOUSE_INVENTORY_SMOKE: "1"
+        run: |
+          docker compose run --rm --no-deps --entrypoint /bin/sh minio-init -ec '
+            mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
+            sed "s/__BUCKET__/$LAKEHOUSE_BUCKET/g" /policies/warehouse-inventory-policy.json > /tmp/inventory.json
+            mc admin policy create local lakehouse-warehouse-inventory /tmp/inventory.json
+            mc admin user add local lakeops-inventory inventory-development-only
+            mc admin policy attach local lakehouse-warehouse-inventory --user lakeops-inventory
+          '
+          uv run --frozen pytest tests/integration/test_warehouse_inventory_minio.py -q -o addopts=''
       - name: Verify related commerce snapshot gold expectations
         run: |
           uv run python -m lakehouse_ops.commerce_change_scenario \
@@ -199,6 +215,7 @@ jobs:
           name: serving-evidence
           path: |
             artifacts/clickhouse-serving.json
+            artifacts/warehouse-inventory-minio.json
             artifacts/commerce-history-correction-ci/
             artifacts/commerce-history-correction-ci.stdout.json
             artifacts/commerce-history-correction-retained.xml
