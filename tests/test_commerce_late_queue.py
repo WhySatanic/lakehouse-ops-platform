@@ -15,6 +15,45 @@ from lakehouse_ops.ingestion.commerce_batches import CommerceBatchPlanner
 CURRENT = "spark-commerce-current-gold"
 
 
+def test_fractional_seconds_are_chronological_with_existing_checkpoints(tmp_path):
+    client = FakeS3Client()
+    add_snapshot(client, "a" * 16, "2026-02-01T00:00:00Z")
+    state = tmp_path / "state.json"
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state)
+    planner.commit("a" * 16)
+    add_snapshot(client, "c" * 16, "2026-02-01T00:00:00.500000Z")
+    planner.commit("c" * 16)
+    add_snapshot(client, "b" * 16, "2026-02-01T00:00:00.250000Z")
+    add_snapshot(client, "d" * 16, "2026-02-01T00:00:00.750000Z")
+    pending = planner.plan(max_batches=2)["batches"]
+    assert [batch["batch_id"] for batch in pending] == ["b" * 16, "d" * 16]
+    assert planner.execution_options(pending[0]) == {"customer_history_mode": "rebuild"}
+    assert planner.execution_options(pending[1]) == {"customer_history_mode": "forward"}
+    assert json.loads(state.read_text())["processed_batches"]["a" * 16]["batch_at"] == (
+        "2026-02-01T00:00:00Z"
+    )
+
+
+def test_zero_fractional_timestamp_sorts_before_nonzero_fraction(tmp_path):
+    client = FakeS3Client()
+    add_snapshot(client, "b" * 16, "2026-02-01T00:00:00.000001Z")
+    add_snapshot(client, "a" * 16, "2026-02-01T03:00:00+03:00")
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=tmp_path / "state.json")
+    assert [batch["batch_id"] for batch in planner.plan(max_batches=2)["batches"]] == [
+        "a" * 16, "b" * 16,
+    ]
+
+
+def test_zero_fractional_late_snapshot_is_older_than_completed_fraction(tmp_path):
+    client = FakeS3Client()
+    add_snapshot(client, "b" * 16, "2026-02-01T00:00:00.500000Z")
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=tmp_path / "state.json")
+    planner.commit("b" * 16)
+    add_snapshot(client, "a" * 16, "2026-02-01T00:00:00Z")
+    selected = planner.plan(max_batches=1)["batches"][0]
+    assert planner.execution_options(selected) == {"customer_history_mode": "rebuild"}
+
+
 def add_snapshot(client, batch_id, at, *, full=True):
     client.add_manifest(batch_id, at)
     key = f"landing/source=commerce/batch_id={batch_id}/manifest.json"
