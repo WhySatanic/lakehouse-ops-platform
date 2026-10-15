@@ -63,6 +63,9 @@ missing existing customers
 and input starting after their earliest published version are rejected before writes.
 These checks cannot prove that intermediate observations have not been removed by
 retention. Incomplete silver history is not a valid rebuild source.
+Follow the [commerce retention contract](commerce-retention.md) before maintenance:
+current silver observation history and historical Iceberg snapshots serve different
+purposes, and no finite source-retention cutoff is currently implemented.
 
 Both forward updates and rebuilds publish one Iceberg commit. Forward updates use a
 staged MERGE to close old periods and insert replacements atomically; the rebuild
