@@ -205,7 +205,7 @@ def test_two_volume_evidence_or_retained_failure(
         result = profile.profile(tmp_path, orders=volumes, endpoint="unused", server="unused",
                                  warehouse_client=storage_client,
                                  retained_references=with_references,
-                            customers=customers, batches=batches)
+                                 customers=customers, batches=batches)
         assert result["status"] == "ready"
         assert result["warehouse_inventory"] == "enabled"
         assert result["retained_references"] == ("enabled" if with_references else "not_requested")
