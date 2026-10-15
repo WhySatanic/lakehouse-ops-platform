@@ -44,14 +44,16 @@ def test_default_project_is_rejected(tmp_path: Path, monkeypatch: pytest.MonkeyP
 @pytest.mark.parametrize("failure", [None, "memory", "idle", "existing", "second-run",
                                     "missing-current", "current-revenue", "wrong-sql-revenue",
                                     "stack-empty", "stack-partial-first", "stack-partial-second",
-                                    "warehouse-inventory"])
+                                    "warehouse-inventory", "last-run"])
 @pytest.mark.parametrize("volumes", [[100, 1000], [100, 100]])
+@pytest.mark.parametrize(("customers", "batches"), [(10, 2), (13, 3)])
 def test_two_volume_evidence_or_retained_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure, volumes,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure, volumes, customers, batches,
 ):
     monkeypatch.setenv("COMPOSE_PROJECT_NAME", "lakehouse-ops-scale-test")
     running = failure == "existing"
     selected_volume = 100
+    selected_revenue = 0
     sampler_reports = 0
 
     class Client:
@@ -73,7 +75,7 @@ def test_two_volume_evidence_or_retained_failure(
             return [{"files": 1, "bytes": 1024}]
 
         def query_with_stats(self, sql):
-            revenue = {100: 278410, 1000: 2733643}[selected_volume]
+            revenue = selected_revenue
             row = {"revenue": revenue + int(failure == "wrong-sql-revenue")}
             if "commerce_current_daily" in sql:
                 row["revenue"] += int(failure == "current-revenue")
@@ -83,7 +85,7 @@ def test_two_volume_evidence_or_retained_failure(
                                     TrinoQueryStats("FINISHED", 1, 1, 1, 1, 1, 1, 1, 0))
 
     def execute(args, output, label):
-        nonlocal running, selected_volume
+        nonlocal running, selected_volume, selected_revenue
         assert "--s3-bucket" in args
         if "landing" in label:
             return {}
@@ -92,11 +94,19 @@ def test_two_volume_evidence_or_retained_failure(
                     "batch_id": None, "completed_stages": []}
         if failure == "second-run" and label == "sample-2":
             raise subprocess.CalledProcessError(2, args)
+        if failure == "last-run" and label == f"sample-{batches}":
+            raise subprocess.CalledProcessError(2, args)
         running = True
         fixture = next((output / label).iterdir())
         manifest = json.loads((fixture / "manifest.json").read_text())
         batch = manifest["batch_id"]
         selected_volume = manifest["config"]["orders"]
+        assert manifest["config"]["customers"] == customers
+        selected_revenue = sum(
+            row["amount_cents"] for row in (
+                json.loads(line) for line in (fixture / "payments.jsonl").read_text().splitlines()
+            ) if type(row["amount_cents"]) is int and row["amount_cents"] >= 0
+        )
         assert manifest["config"]["source_semantics"] == "full_snapshot"
         observations = [{"app_name": str(i), "kind": "spark_container_memory",
                          "status": "unavailable" if failure == "memory" else "observed"}
@@ -149,12 +159,15 @@ def test_two_volume_evidence_or_retained_failure(
     if failure:
         with pytest.raises((ValueError, subprocess.CalledProcessError)):
             profile.profile(tmp_path, orders=volumes, endpoint="unused", server="unused",
-                            warehouse_client=storage_client)
+                            warehouse_client=storage_client, customers=customers, batches=batches)
         assert json.loads((tmp_path / "profile.json").read_text())["status"] == "failed"
         if failure == "second-run":
             evidence = json.loads((tmp_path / "profile.json").read_text())
             assert len(evidence["samples"]) == 1
             assert evidence["samples"][0]["orders"] == 100
+        if failure == "last-run":
+            evidence = json.loads((tmp_path / "profile.json").read_text())
+            assert len(evidence["samples"]) == batches - 1
         if failure.startswith("stack-"):
             evidence = json.loads((tmp_path / "profile.json").read_text())
             count = 2 if failure == "stack-partial-second" else 1
@@ -169,7 +182,8 @@ def test_two_volume_evidence_or_retained_failure(
                 assert not (tmp_path / "sample-2").exists()
     else:
         result = profile.profile(tmp_path, orders=volumes, endpoint="unused", server="unused",
-                                 warehouse_client=storage_client)
+                                 warehouse_client=storage_client, customers=customers,
+                                 batches=batches)
         assert result["status"] == "ready"
         assert result["warehouse_inventory"] == "enabled"
         for index, sample in enumerate(result["samples"], start=1):
@@ -177,17 +191,22 @@ def test_two_volume_evidence_or_retained_failure(
             assert json.loads((tmp_path / f"sample-{index}.warehouse.json").read_text()) == (
                 sample["warehouse_storage"]
             )
-        assert [s["orders"] for s in result["samples"]] == volumes
-        assert result["scope"] == (
-            "same_volume_fresh_then_warm_catalog" if volumes[0] == volumes[1]
-            else "two_volume_sequential_warm_stack"
+        assert [s["orders"] for s in result["samples"]] == (
+            [volumes[0]] + [volumes[1]] * (batches - 1)
         )
-        first, second = result["samples"]
+        assert result["scope"] == (
+            "sequential_snapshot_history_growth" if batches > 2 else (
+                "same_volume_fresh_then_warm_catalog" if volumes[0] == volumes[1]
+                else "two_volume_sequential_warm_stack"
+            )
+        )
+        first, second = result["samples"][:2]
         assert first["batch_id"] != second["batch_id"]
         assert first["config"]["batch_at"] < second["config"]["batch_at"]
-        assert [s["prior_completed_batches"] for s in result["samples"]] == [0, 1]
+        assert [s["prior_completed_batches"] for s in result["samples"]] == list(range(batches))
         assert [s["catalog_state"] for s in result["samples"]] == [
             "fresh_commerce_catalog", "one_completed_prior_batch",
+            *(["multiple_completed_prior_batches"] * (batches - 2)),
         ]
         if volumes[0] == volumes[1]:
             assert first["input_expected"] == second["input_expected"]
