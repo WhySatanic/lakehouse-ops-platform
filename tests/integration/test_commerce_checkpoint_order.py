@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import json
 import os
+import subprocess
+import sys
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
@@ -8,6 +12,7 @@ from uuid import uuid4
 import boto3
 import pytest
 
+from lakehouse_ops import commerce_cycle
 from lakehouse_ops.commerce_change_scenario import generate_change_scenario
 from lakehouse_ops.commerce_pipeline import CommercePipelineError, run_commerce_batch
 from lakehouse_ops.ingestion.commerce_batches import CommerceBatchError, CommerceBatchPlanner
@@ -16,6 +21,93 @@ from lakehouse_ops.ingestion.commerce_fixture import (
     generate_commerce_fixture,
 )
 from lakehouse_ops.ingestion.commerce_s3_landing import CommerceS3LandingZone
+
+
+@pytest.mark.skipif(
+    os.getenv("LAKEOPS_RUN_S3_SMOKE") != "1", reason="requires an initialized local MinIO"
+)
+@pytest.mark.parametrize("delay_phase", ["startup", "query"])
+def test_real_child_cycle_deadline_preserves_checkpoint_and_retries(
+    tmp_path, monkeypatch, delay_phase,
+):
+    endpoint = os.getenv("LAKEOPS_S3_ENDPOINT_URL", "http://localhost:9000")
+    client = boto3.client(
+        "s3", endpoint_url=endpoint,
+        aws_access_key_id=os.getenv("MINIO_ROOT_USER", "lakeops"),
+        aws_secret_access_key=os.getenv("MINIO_ROOT_PASSWORD", "lakeops-development-only"),
+        region_name="us-east-1",
+    )
+    bucket = os.getenv("LAKEHOUSE_BUCKET", "lakehouse")
+    prefix = f"smoke/commerce-cycle-deadline-{uuid4().hex}"
+    fixture = generate_commerce_fixture(tmp_path / "fixture", CommerceFixtureConfig(
+        customers=4, products=2, orders=6, null_customer_emails=1, duplicate_orders=1,
+        late_orders=1, invalid_payments=1, batch_at="2026-02-01T00:00:00Z",
+    ))
+    CommerceS3LandingZone(client, bucket=bucket, prefix=prefix).write(fixture.path)
+    state = tmp_path / "checkpoint.json"
+    script = '''
+import json, os, sys, time
+import boto3
+from lakehouse_ops.commerce_pipeline import CommercePipelineError, run_commerce_batch
+from lakehouse_ops.ingestion.commerce_batches import CommerceBatchPlanner
+from pathlib import Path
+state, prefix, bucket, endpoint, phase = sys.argv[1:]
+if phase == "startup":
+    time.sleep(5.1)
+client = boto3.client("s3", endpoint_url=endpoint,
+    aws_access_key_id=os.getenv("MINIO_ROOT_USER", "lakeops"),
+    aws_secret_access_key=os.getenv("MINIO_ROOT_PASSWORD", "lakeops-development-only"),
+    region_name="us-east-1")
+planner = CommerceBatchPlanner(client, bucket=bucket, prefix=prefix, state_path=Path(state))
+def query(_):
+    if phase == "query":
+        time.sleep(4.5)
+    return [{"days": 1, "orders": 1, "captured_revenue_cents": 100, "invalid_days": 0}]
+try:
+    report = run_commerce_batch(planner, query, run_stage=lambda *_: None)
+except CommercePipelineError as error:
+    print(str(error), file=sys.stderr)
+    raise SystemExit(2)
+print(json.dumps({"status": report["status"]}))
+'''
+    run = subprocess.run
+    phase = [delay_phase]
+    results = []
+
+    def launch(command, **kwargs):
+        if command[3] == "notify-commerce-freshness":
+            return subprocess.CompletedProcess(command, 0)
+        if phase[0] == "query":
+            time.sleep(0.6)
+        result = run(
+            [sys.executable, "-c", script, str(state), prefix, bucket, endpoint, phase[0]],
+            **kwargs, capture_output=True, text=True,
+        )
+        results.append(result)
+        return result
+
+    monkeypatch.setattr(commerce_cycle.subprocess, "run", launch)
+    monkeypatch.setenv("COMMERCE_RUN_TIMEOUT_SECONDS", "5")
+    options = [
+        "--s3-bucket", bucket, "--s3-endpoint-url", endpoint, "--state", str(state),
+        "--server", "http://localhost:8080", "--user", "lakehouse-ops",
+        "--instance", "commerce-smoke", "--alertmanager-server", "http://localhost:9093",
+    ]
+    assert commerce_cycle.main(options) == 2
+    assert "time budget exhausted" in results[0].stderr
+    assert not state.exists()
+    if delay_phase == "query":
+        assert state.with_name("checkpoint.json.active.json").is_file()
+    phase[0] = "retry"
+    monkeypatch.setenv("COMMERCE_RUN_TIMEOUT_SECONDS", "10")
+    assert commerce_cycle.main(options) == 0
+    assert json.loads(results[-1].stdout)["status"] == "ready"
+    checkpoint = state.read_bytes()
+    assert set(json.loads(checkpoint)["processed_batches"]) == {fixture.batch_id}
+    assert not state.with_name("checkpoint.json.active.json").exists()
+    assert commerce_cycle.main(options) == 0
+    assert json.loads(results[-1].stdout)["status"] == "idle"
+    assert state.read_bytes() == checkpoint
 
 
 @pytest.mark.skipif(
