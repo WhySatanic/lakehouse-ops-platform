@@ -4,6 +4,10 @@ This local source fixture supplies the related data that the weather example can
 customers, products, orders, and payments. It is intended for SQL joins, dimensional
 modeling, incremental processing, late-arriving-data drills, and later gold marts.
 
+For failure diagnosis and retry, start with the [batch state and recovery map](commerce-recovery-states.md).
+It links manifest, active intent, journal, SCD2, gold and checkpoint boundaries to
+their implementation and acceptance checks.
+
 Generate the default dataset:
 
 ```bash
