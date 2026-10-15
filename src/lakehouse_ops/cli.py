@@ -136,6 +136,10 @@ def build_parser() -> argparse.ArgumentParser:
     commerce.add_argument("--invalid-payments", type=int, default=1_000)
     commerce.add_argument("--seed", type=int, default=20260921)
     commerce.add_argument("--batch-at", default="2026-01-31T00:00:00+00:00")
+    commerce.add_argument("--customer-revision", type=int, default=0,
+                          help="customer name revision for SCD2 workload inputs (0..10000)")
+    commerce.add_argument("--source-semantics", choices=["full_snapshot"], default=None,
+                          help="declare the generated commerce source contract explicitly")
 
     commerce_landing = subparsers.add_parser(
         "land-commerce-fixture",
@@ -546,7 +550,10 @@ def main(argv: list[str] | None = None) -> int:
                 seed=args.seed,
                 batch_at=args.batch_at,
             )
-            report = generate_commerce_fixture(args.output, config)
+            report = generate_commerce_fixture(
+                args.output, config, source_semantics=args.source_semantics,
+                customer_revision=args.customer_revision,
+            )
         except (OSError, CommerceFixtureError) as error:
             parser.error(str(error))
         print(json.dumps(report.as_dict(), sort_keys=True))
