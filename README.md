@@ -7,7 +7,7 @@ just starting containers. The project combines a reproducible local data platfor
 with a Python control plane for ingestion, table health, maintenance, access policy,
 observability, and performance experiments.
 
-> Status: version `1.28.0`, stable `1.0.0` control-plane contract, and reproducible
+> Status: version `1.28.1`, stable `1.0.0` control-plane contract, and reproducible
 > reference stack.
 > Open-Meteo ingestion works against the local filesystem and MinIO. Spark writes
 > S3-backed Iceberg bronze and validated silver tables registered in PostgreSQL-backed
@@ -440,6 +440,8 @@ The [1.27.0 release notes](docs/releases/1.27.0.md) describe the ingestion-fresh
 incident recovery and healthy final SLO evidence.
 The [1.28.0 release notes](docs/releases/1.28.0.md) describe the complete supported
 commerce correction/recovery path, measured costs, upgrade notes and limitations.
+The [1.28.1 release notes](docs/releases/1.28.1.md) describe in-flight late-arrival
+recovery, chronological timestamps, shared execution deadlines and retained RC proofs.
 The [1.26.0 release notes](docs/releases/1.26.0.md) describe delivered ingestion-freshness
 SLO alert evidence.
 The [1.25.0 release notes](docs/releases/1.25.0.md) describe independently verifiable
