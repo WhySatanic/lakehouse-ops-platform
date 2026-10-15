@@ -1,4 +1,4 @@
-"""Two-volume local commerce execution evidence on an already started isolated stack."""
+"""Local commerce volume and snapshot-history evidence on an isolated started stack."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import sys
 import time
 from collections.abc import Callable
 from dataclasses import asdict
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Event, Thread
 from typing import Any
@@ -254,10 +255,27 @@ def measure_idle_replay(
     }
 
 
-def profile(output: Path, *, orders: list[int], endpoint: str, server: str,
-            warehouse_client: Any = None) -> dict[str, Any]:
+def workload_configs(orders: list[int], *, customers: int = 10,
+                     batches: int = 2) -> list[CommerceFixtureConfig]:
+    """Keep the original two-volume input, then repeat the second on later snapshots."""
     if len(orders) != 2 or not 100 <= orders[0] <= orders[1]:
         raise ValueError("requires two ascending or equal order volumes >= 100")
+    if type(customers) is not int or not 2 <= customers <= 100_000:
+        raise ValueError("customers must be an integer between 2 and 100000")
+    if type(batches) is not int or not 2 <= batches <= 100:
+        raise ValueError("batches must be an integer between 2 and 100")
+    start = datetime(2026, 2, 1, tzinfo=UTC)
+    return [CommerceFixtureConfig(
+        customers=customers, products=5, orders=orders[min(index, 1)], null_customer_emails=1,
+        duplicate_orders=1, late_orders=1, invalid_payments=1,
+        batch_at=(start + timedelta(days=index)).isoformat(),
+    ) for index in range(batches)]
+
+
+def profile(output: Path, *, orders: list[int], endpoint: str, server: str,
+            warehouse_client: Any = None, customers: int = 10,
+            batches: int = 2) -> dict[str, Any]:
+    configs = workload_configs(orders, customers=customers, batches=batches)
     project = os.environ.get("COMPOSE_PROJECT_NAME", "")
     if project != "lakehouse-ops-scale" and not project.startswith("lakehouse-ops-scale-"):
         raise ValueError("requires a dedicated COMPOSE_PROJECT_NAME=lakehouse-ops-scale-<name>")
@@ -266,11 +284,16 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str,
     output.mkdir(parents=True, exist_ok=True)
     report: dict[str, Any] = {
         "status": "running", "scope": (
-            "same_volume_fresh_then_warm_catalog" if orders[0] == orders[1]
-            else "two_volume_sequential_warm_stack"
+            "sequential_snapshot_history_growth" if batches > 2 else (
+                "same_volume_fresh_then_warm_catalog" if orders[0] == orders[1]
+                else "two_volume_sequential_warm_stack"
+            )
         ),
         "project": project, "samples": [], "recovery": "idle_checkpoint_replay_only",
         "source_semantics": "full_snapshot",
+        "workload": {"customers_per_snapshot": customers, "requested_batches": batches,
+                     "orders_per_snapshot": [config.orders for config in configs],
+                     "customer_attributes": "unchanged_no_scd2_attribute_version_growth"},
         "warehouse_inventory": "enabled" if warehouse_client is not None else "not_requested",
         "limitations": ["not isolated per-volume capacity", "no crash recovery injection",
                         "sampled stack memory excludes host/VM overhead and inactive file cache",
@@ -282,13 +305,9 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str,
         with TrinoClient(server, user="lakehouse-performance") as client:
             if file_inventory(client):
                 raise ValueError("requires fresh commerce catalog in the dedicated stack")
-            for index, volume in enumerate(orders):
+            for index, config in enumerate(configs):
+                volume = config.orders
                 label = f"sample-{index + 1}"
-                config = CommerceFixtureConfig(
-                    customers=10, products=5, orders=volume, null_customer_emails=1,
-                    duplicate_orders=1, late_orders=1, invalid_payments=1,
-                    batch_at=f"2026-02-0{index + 1}T00:00:00+00:00",
-                )
                 fixture = generate_commerce_fixture(output / label, config,
                                                      source_semantics="full_snapshot")
                 # Independent of Spark and the SQL marts: read this synthetic input.
@@ -360,7 +379,8 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str,
                     "orders": volume, "batch_id": fixture.batch_id, "config": asdict(config),
                     "prior_completed_batches": index,
                     "catalog_state": ("fresh_commerce_catalog" if index == 0
-                                      else "one_completed_prior_batch"),
+                                      else ("one_completed_prior_batch" if index == 1
+                                            else "multiple_completed_prior_batches")),
                     "run": run, "memory": memory, "cumulative_current_files": files,
                     "stack_memory": stack_observation,
                     "query_id": query.query_id, "query_stats": asdict(query.stats),
@@ -389,6 +409,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--orders", nargs=2, type=int, default=[100, 1000])
+    parser.add_argument("--customers", type=int, default=10,
+                        help="customer cardinality per full snapshot (2..100000)")
+    parser.add_argument("--batches", type=int, default=2,
+                        help="chronological snapshots (2..100); repeats second order volume")
     parser.add_argument("--s3-endpoint-url", required=True)
     parser.add_argument("--server", required=True)
     parser.add_argument("--warehouse-inventory", action="store_true",
@@ -408,7 +432,8 @@ def main() -> int:
                               retries={"max_attempts": 2}),
             )
         report = profile(args.output, orders=args.orders, endpoint=args.s3_endpoint_url,
-                         server=args.server, warehouse_client=warehouse_client)
+                         server=args.server, warehouse_client=warehouse_client,
+                         customers=args.customers, batches=args.batches)
     except Exception as error:
         print(f"commerce pipeline profile failed: {error}", file=sys.stderr)
         return 2
