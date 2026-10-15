@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 import subprocess
 import sys
@@ -33,6 +34,7 @@ COMMERCE_STAGES = (
 )
 CURRENT_STAGE = "spark-commerce-current-gold"
 COMMERCE_RUN_CLEANUP_GRACE_SECONDS = 35
+COMMERCE_CYCLE_DEADLINE_ENV = "LAKEOPS_COMMERCE_CYCLE_DEADLINE"
 
 
 class CommercePipelineError(RuntimeError):
@@ -163,7 +165,37 @@ def run_commerce_batch(
 ) -> dict[str, Any]:
     validate_commerce_gold_retry(attempts, delay_seconds)
     timeout = commerce_run_timeout_seconds()
-    token = _RUN_BUDGET.set((clock() + timeout, clock))
+    started = clock()
+    deadline = started + timeout
+    budget_clock = clock
+    inherited = os.environ.get(COMMERCE_CYCLE_DEADLINE_ENV)
+    if inherited is not None:
+        try:
+            cycle_deadline = float(inherited)
+        except ValueError as error:
+            raise CommercePipelineError("invalid inherited commerce cycle deadline") from error
+        if not math.isfinite(cycle_deadline):
+            raise CommercePipelineError("invalid inherited commerce cycle deadline")
+        # The cycle's monotonic deadline includes child launch/import time. Convert
+        # its unspent budget to this runner's clock; never round or reset it.
+        remaining = cycle_deadline - time.monotonic()
+        if remaining <= 0:
+            raise CommercePipelineError(
+                "commerce run time budget exhausted; checkpoint not advanced",
+            )
+        deadline = min(deadline, started + remaining)
+
+        def inherited_budget_clock() -> float:
+            # Recheck the original clock as well, including directly before the
+            # checkpoint replace; converting clocks once is not that guard.
+            if time.monotonic() >= cycle_deadline:
+                raise CommercePipelineError(
+                    "commerce run time budget exhausted; checkpoint not advanced",
+                )
+            return clock()
+
+        budget_clock = inherited_budget_clock
+    token = _RUN_BUDGET.set((deadline, budget_clock))
     budget = _RUN_BUDGET.get()
     budget_scope = getattr(planner, "execution_budget", None)
     try:

@@ -488,7 +488,24 @@ correct the configuration and rerun. This preflight does not prove service reach
 
 `COMMERCE_RUN_TIMEOUT_SECONDS` is also the scheduled cycle's total work budget
 (default 3600, integer 1..86400), measured with a monotonic clock. Configuration is
-validated before starting either child. The runner receives the unspent budget;
+validated before starting either child. The runner receives the unspent budget
+and the original monotonic deadline through a child-only internal environment value
+(`LAKEOPS_COMMERCE_CYCLE_DEADLINE`). Do not export or reuse this value manually.
+The deadline includes runner process launch, Python imports and CLI setup, not a fresh
+timer starting after them. Fractional seconds are not rounded up for checkpoint
+eligibility. An expired inherited deadline refuses even discovery; otherwise the
+normal S3/read/stage/query/checkpoint budget checks use the earlier of this deadline
+and the runner's own limit. Standalone commands without the internal value retain
+their ordinary fresh budget. A failed run can safely retry with a new cycle deadline;
+the existing active intent remains until a complete checkpoint succeeds.
+
+Managed-clock regression exercises preflight, launch and subsecond handoff boundaries
+with the production planner and checkpoint file. The opt-in real-MinIO smoke additionally
+runs a real Python child with delayed startup or query callback, requires no checkpoint
+after expiry, then a complete fresh retry and unchanged compute-free idle. Its compute,
+query and freshness delivery callbacks are mocked; it is not a Spark transaction or
+live Alertmanager proof.
+
 the freshness child receives only what remains after the runner, not a new full
 timeout. If no time remains, notification is skipped and the cycle fails rather
 than reporting healthy freshness. Monitor that stderr and nonzero exit separately.
@@ -496,7 +513,8 @@ than reporting healthy freshness. Monitor that stderr and nonzero exit separatel
 The runner process wait allows an extra 35 seconds for its existing 30-second
 stage-container cleanup, journal update and exit. Thus the normal cycle's bound
 is the work budget plus this shutdown grace, not a strict work-budget wall clock.
-This outer wait also covers runner CLI setup excluded from its internal deadline.
+This outer wait covers the same CLI setup plus cleanup grace; cleanup grace does not
+permit a completed checkpoint after the work deadline.
 If even the outer wait expires, Python terminates the immediate child process.
 That is **not** proof that a Compose descendant, active Docker stage or Trino query
 was removed: stderr explicitly says container cleanup is unconfirmed. Inspect the

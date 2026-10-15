@@ -13,6 +13,7 @@ from collections.abc import Sequence
 from lakehouse_ops.commerce_alerts import CommerceAlertError, validate_commerce_alert_options
 from lakehouse_ops.commerce_gold_gate import CommerceGoldGateError, validate_commerce_gold_retry
 from lakehouse_ops.commerce_pipeline import (
+    COMMERCE_CYCLE_DEADLINE_ENV,
     COMMERCE_RUN_CLEANUP_GRACE_SECONDS,
     CommercePipelineError,
     commerce_run_timeout_seconds,
@@ -62,7 +63,10 @@ def run_cycle(args: argparse.Namespace) -> int:
         # The runner may spend up to 30 seconds removing its timed-out stage.
         # A small margin also permits its failed journal event and process exit.
         timeout=remaining + COMMERCE_RUN_CLEANUP_GRACE_SECONDS,
-        environment={**os.environ, "COMMERCE_RUN_TIMEOUT_SECONDS": str(math.ceil(remaining))},
+        environment={
+            **os.environ, "COMMERCE_RUN_TIMEOUT_SECONDS": str(math.ceil(remaining)),
+            COMMERCE_CYCLE_DEADLINE_ENV: repr(deadline),
+        },
     )
     remaining = deadline - time.monotonic()
     if remaining <= 0:
