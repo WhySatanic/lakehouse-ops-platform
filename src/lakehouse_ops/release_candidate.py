@@ -78,12 +78,24 @@ def build_release_candidate(
             raise ReleaseCandidateError(f"evidence digest changed: {relative_path}")
         archive_entries[f"evidence/{relative_path}"] = _read_bytes(path)
 
-    # Historical input sets remain supported. Current CI requires and revalidates
-    # this full-path evidence before building; never package a partial triplet.
-    commerce_path = "serving-evidence/commerce-history-correction-ci/acceptance"
-    commerce_root = _resolve_below(evidence_root, commerce_path)
-    if commerce_root.exists():
-        for name in ("linked.json", "checkpoint.json", "run-journal.sqlite3"):
+    # Historical inputs remain supported. Current CI requires both paths and
+    # revalidates their retained journals before building; never pack a partial triplet.
+    commerce_paths = {
+        "serving-evidence/commerce-history-correction-ci/acceptance": {
+            "late_customer_correction": "ready", "late_batch_completion": "ready",
+            "late_batch_recovery": "ready", "next_batch_after_correction": "ready",
+            "idle_after_correction": "idle", "idle_after_next_batch": "idle",
+        },
+        "serving-evidence/commerce-inflight-ci/acceptance": {"inflight_recovery": "ready"},
+    }
+    for commerce_path, expected in commerce_paths.items():
+        commerce_root = _resolve_below(evidence_root, commerce_path)
+        if not commerce_root.exists():
+            continue
+        members = ("linked.json", "checkpoint.json", "run-journal.sqlite3")
+        if "inflight_recovery" in expected:
+            members += ("scenario/expected.json",)
+        for name in members:
             relative_path = f"{commerce_path}/{name}"
             path = _resolve_below(evidence_root, relative_path)
             if not path.is_file():
@@ -92,9 +104,6 @@ def build_release_candidate(
         commerce = _load_json_bytes(
             archive_entries[f"evidence/{commerce_path}/linked.json"], "commerce evidence",
         )
-        expected = {"late_customer_correction": "ready", "late_batch_completion": "ready",
-                    "late_batch_recovery": "ready", "next_batch_after_correction": "ready",
-                    "idle_after_correction": "idle", "idle_after_next_batch": "idle"}
         if commerce.get("status") != "ready" or any(
             not isinstance(commerce.get(key), dict) or commerce[key].get("status") != status
             for key, status in expected.items()
@@ -102,6 +111,19 @@ def build_release_candidate(
             raise ReleaseCandidateError(
                 "commerce evidence does not contain the complete recovery path",
             )
+        if "inflight_recovery" in expected:
+            recovery = commerce["inflight_recovery"]
+            attempts = recovery.get("attempts")
+            idle = recovery.get("idle")
+            if (not isinstance(idle, dict) or idle.get("status") != "idle"
+                    or not isinstance(attempts, list) or any(
+                        not isinstance(attempt, dict) for attempt in attempts)
+                    or [attempt.get("status") for attempt in attempts] != [
+                        "ready", "injected_failure", "ready", "ready", "ready",
+                    ]):
+                raise ReleaseCandidateError(
+                    "commerce evidence does not contain the complete in-flight retry/idle path",
+                )
 
     try:
         upgrade_report = _load_object(upgrade_report_path, "Trino upgrade report")

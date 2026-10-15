@@ -446,6 +446,116 @@ def test_candidate_retains_complete_commerce_evidence(monkeypatch, tmp_path, mis
         )
 
 
+@pytest.mark.parametrize("mutation", [None, "linked.json", "checkpoint.json", "run-journal.sqlite3",
+                                     "scenario/expected.json", "recovery", "idle", "attempts",
+                                     "nonobject_recovery",
+                                     "nonobject_idle", "nonlist_attempts", "nonobject_attempt",
+                                     "last_attempt", "root_status"])
+def test_candidate_retains_inflight_commerce_evidence(monkeypatch, tmp_path, mutation):
+    """Synthetic packaging checks; actual recovery is checked before CI packaging."""
+    inputs = _write_inputs(tmp_path)
+    monkeypatch.setattr(candidate, "validate_upgrade_report", lambda *_: None)
+    relative = "serving-evidence/commerce-inflight-ci/acceptance"
+    root = inputs["evidence_root"] / relative
+    root.mkdir(parents=True)
+    (root / "scenario").mkdir()
+    recovery = {"status": "ready", "idle": {"status": "idle"}, "attempts": [
+        {"status": state} for state in ("ready", "injected_failure", "ready", "ready", "ready")
+    ]}
+    if mutation == "recovery":
+        recovery["status"] = "running"
+    elif mutation == "idle":
+        recovery["idle"] = {"status": "ready"}
+    elif mutation == "attempts":
+        recovery["attempts"].pop()
+    elif mutation == "nonobject_idle":
+        recovery["idle"] = []
+    elif mutation == "nonlist_attempts":
+        recovery["attempts"] = None
+    elif mutation == "nonobject_attempt":
+        recovery["attempts"][0] = None
+    elif mutation == "last_attempt":
+        recovery["attempts"][-1]["status"] = "running"
+    report_data = {"status": "failed" if mutation == "root_status" else "ready",
+                   "inflight_recovery": [] if mutation == "nonobject_recovery" else recovery}
+    content = {
+        "linked.json": json.dumps(report_data).encode(),
+        "checkpoint.json": b'{"processed_batches":{}}',
+        "run-journal.sqlite3": b"synthetic journal bytes",
+        "scenario/expected.json": b'{"synthetic":true}',
+    }
+    for name, body in content.items():
+        if name != mutation:
+            (root / name).write_bytes(body)
+    bundle = tmp_path / "inflight.tar.gz"
+    if mutation:
+        with pytest.raises(ReleaseCandidateError, match="commerce evidence"):
+            build_release_candidate(**inputs, output_path=bundle)
+        assert not bundle.exists()
+        return
+    report = build_release_candidate(**inputs, output_path=bundle)
+    entries = _read_archive(bundle)
+    manifest = json.loads(entries["manifest.json"])
+    hashes = {entry["path"]: entry["sha256"] for entry in manifest["entries"]}
+    for name, body in content.items():
+        archived = f"evidence/{relative}/{name}"
+        assert entries[archived] == body
+        assert hashes[archived] == candidate._digest_bytes(body)
+    second = tmp_path / "second.tar.gz"
+    build_release_candidate(**inputs, output_path=second)
+    assert bundle.read_bytes() == second.read_bytes()
+    report_path = tmp_path / "report.json"
+    _write_json(report_path, report)
+    assert candidate.verify_release_candidate(
+        bundle_path=bundle, report_path=report_path, expected_source_revision="a" * 40,
+    )["status"] == "verified"
+    entries[f"evidence/{relative}/run-journal.sqlite3"] += b"tampered"
+    candidate._write_deterministic_archive(bundle, entries)
+    report["bundle_sha256"] = candidate._digest(bundle)
+    _write_json(report_path, report)
+    with pytest.raises(ReleaseCandidateError, match="member digest"):
+        candidate.verify_release_candidate(
+            bundle_path=bundle, report_path=report_path, expected_source_revision="a" * 40,
+        )
+
+
+def test_candidate_retains_both_commerce_paths(monkeypatch, tmp_path):
+    inputs = _write_inputs(tmp_path)
+    monkeypatch.setattr(candidate, "validate_upgrade_report", lambda *_: None)
+    reports = {
+        "commerce-history-correction-ci": {
+            "status": "ready", **{key: {"status": "ready"} for key in (
+                "late_customer_correction", "late_batch_completion", "late_batch_recovery",
+                "next_batch_after_correction",
+            )}, "idle_after_correction": {"status": "idle"},
+            "idle_after_next_batch": {"status": "idle"},
+        },
+        "commerce-inflight-ci": {"status": "ready", "inflight_recovery": {
+            "status": "ready", "idle": {"status": "idle"}, "attempts": [
+                {"status": state} for state in (
+                    "ready", "injected_failure", "ready", "ready", "ready",
+                )
+            ],
+        }},
+    }
+    for name, report_data in reports.items():
+        root = inputs["evidence_root"] / "serving-evidence" / name / "acceptance"
+        root.mkdir(parents=True)
+        _write_json(root / "linked.json", report_data)
+        (root / "checkpoint.json").write_bytes(b"synthetic checkpoint")
+        (root / "run-journal.sqlite3").write_bytes(b"synthetic journal")
+        if name == "commerce-inflight-ci":
+            (root / "scenario").mkdir()
+            (root / "scenario" / "expected.json").write_bytes(b"synthetic oracle")
+    bundle = tmp_path / "both.tar.gz"
+    report = build_release_candidate(**inputs, output_path=bundle)
+    assert report["entries"] == 14
+    entries = _read_archive(bundle)
+    for name in reports:
+        for member in ("linked.json", "checkpoint.json", "run-journal.sqlite3"):
+            assert f"evidence/serving-evidence/{name}/acceptance/{member}" in entries
+
+
 def _write_archive(path: Path, members: list[tuple[str, bytes, bytes]]) -> None:
     with tarfile.open(path, "w:gz") as archive:
         for name, content, member_type in members:
