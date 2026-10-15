@@ -449,20 +449,24 @@ class CommerceBatchPlanner:
         try:
             manifest = json.loads(body)
             batch_at = manifest["config"]["batch_at"]
+            if not isinstance(batch_at, str):
+                raise ValueError("batch_at must be a timestamp string")
             parsed_batch_at = datetime.fromisoformat(batch_at.replace("Z", "+00:00"))
-        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
+            if parsed_batch_at.tzinfo is None:
+                raise ValueError("batch_at must have a timezone")
+            normalized_batch_at = parsed_batch_at.astimezone(UTC).isoformat().replace("+00:00", "Z")
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError, OverflowError) as error:
             raise CommerceBatchError(f"invalid commerce manifest: {key}") from error
         if (
             type(manifest.get("schema_version")) is not int
             or manifest["schema_version"] != 1
             or manifest.get("batch_id") != batch_id
-            or parsed_batch_at.tzinfo is None
             or not _valid_table_inventory(manifest.get("tables"))
         ):
             raise CommerceBatchError(f"invalid commerce manifest: {key}")
         return CommerceBatch(
             batch_id=batch_id,
-            batch_at=parsed_batch_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+            batch_at=normalized_batch_at,
             manifest_sha256=checksum,
             path=f"s3://{self._bucket}/{key.removesuffix('manifest.json')}",
             committed_at=(

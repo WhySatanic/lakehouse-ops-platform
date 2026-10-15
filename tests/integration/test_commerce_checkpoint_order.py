@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import time
@@ -26,6 +28,68 @@ from lakehouse_ops.ingestion.commerce_fixture import (
     generate_commerce_fixture,
 )
 from lakehouse_ops.ingestion.commerce_s3_landing import CommerceS3LandingZone
+
+
+@pytest.mark.skipif(
+    os.getenv("LAKEOPS_RUN_S3_SMOKE") != "1", reason="requires an initialized local MinIO"
+)
+@pytest.mark.parametrize("batch_at", [None, "9999-12-31T23:59:59-01:00"])
+def test_real_cli_rejects_invalid_manifest_timestamp_before_compute(tmp_path, batch_at):
+    endpoint = os.getenv("LAKEOPS_S3_ENDPOINT_URL", "http://localhost:9000")
+    access = os.getenv("MINIO_ROOT_USER", "lakeops")
+    secret = os.getenv("MINIO_ROOT_PASSWORD", "lakeops-development-only")
+    client = boto3.client("s3", endpoint_url=endpoint, aws_access_key_id=access,
+                          aws_secret_access_key=secret, region_name="us-east-1")
+    bucket = f"commerce-timestamp-{uuid4().hex}"
+    client.create_bucket(Bucket=bucket)
+    first = generate_change_scenario(tmp_path / "scenario")["batches"][0]
+    CommerceS3LandingZone(client, bucket=bucket).write(Path(first["path"]))
+    key = f"landing/source=commerce/batch_id={first['batch_id']}/manifest.json"
+    original = client.get_object(Bucket=bucket, Key=key)
+    with original["Body"] as stream:
+        valid_body = stream.read()
+    manifest = json.loads(valid_body)
+    manifest["config"]["batch_at"] = batch_at
+    bad_body = json.dumps(manifest).encode()
+    metadata = {**original["Metadata"], "sha256": hashlib.sha256(bad_body).hexdigest()}
+    client.put_object(Bucket=bucket, Key=key, Body=bad_body, Metadata=metadata)
+    state = tmp_path / "checkpoint.json"
+    state.write_text('{"schema_version":1,"processed_batches":{}}\n')
+    before = state.read_bytes()
+    env = {**os.environ, "AWS_ACCESS_KEY_ID": access, "AWS_SECRET_ACCESS_KEY": secret}
+    env.pop("AWS_SESSION_TOKEN", None)
+    options = ["--state", str(state), "--s3-bucket", bucket,
+               "--s3-prefix", "landing", "--s3-endpoint-url", endpoint]
+    failed = subprocess.run(
+        [sys.executable, "-m", "lakehouse_ops.cli", "run-commerce-batch", *options,
+         "--server", "http://127.0.0.1:1"],
+        cwd=tmp_path, env=env, capture_output=True, text=True, timeout=30, check=False,
+    )
+    assert failed.returncode == 2 and "invalid commerce manifest" in failed.stderr
+    assert "Traceback" not in failed.stderr and failed.stdout == ""
+    assert state.read_bytes() == before
+    assert not state.with_name("checkpoint.json.active.json").exists()
+    journal = state.with_name("checkpoint.json.runs.sqlite3")
+    with sqlite3.connect(f"{journal.as_uri()}?mode=ro", uri=True) as connection:
+        table = connection.execute(
+            "SELECT name FROM sqlite_master "
+            "WHERE type='table' AND name='commerce_container_events'",
+        ).fetchone()
+        if table:
+            events = connection.execute("SELECT COUNT(*) FROM commerce_container_events").fetchone()
+            assert events == (0,)
+
+    # Only this test's rejected, never-started object is repaired; completed state stays intact.
+    client.put_object(Bucket=bucket, Key=key, Body=valid_body, Metadata=original["Metadata"])
+    planned = subprocess.run(
+        [sys.executable, "-m", "lakehouse_ops.cli", "plan-commerce-batches", *options],
+        cwd=tmp_path, env=env, capture_output=True, text=True, timeout=30, check=False,
+    )
+    assert planned.returncode == 0, planned.stderr
+    assert [batch["batch_id"] for batch in json.loads(planned.stdout)["batches"]] == [
+        first["batch_id"],
+    ]
+    assert state.read_bytes() == before
 
 
 @pytest.mark.skipif(

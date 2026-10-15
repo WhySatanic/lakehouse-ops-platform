@@ -12,6 +12,18 @@ uv run lakeops generate-commerce-fixture --output data/commerce
 
 The command prints the generated batch directory.
 
+Committed manifests must have a string `config.batch_at` with an explicit timezone
+whose normalized UTC value fits Python's datetime range. A valid commit-marker
+checksum does not make a malformed timestamp valid. Discovery rejects non-string
+values, timezone-free timestamps and UTC overflow with the usual
+`invalid commerce manifest` error (CLI exit 2). At initial planning this happens
+before compute or active intent; later revalidation refuses checkpoint advancement.
+Previously non-string values and UTC overflow escaped as
+uncaught exceptions; this is an error-handling correction, not a data-loss fix.
+Existing valid timestamps, fractional-second ordering and checkpoint bytes retain
+their format and semantics. Correct invalid, never-started producer input using the
+landing rules; do not clear checkpoints or rewrite already processed manifests.
+
 ## Related snapshot correction scenario
 
 Generate a separate, small acceptance dataset:
