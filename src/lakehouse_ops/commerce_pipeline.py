@@ -5,6 +5,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable
+from contextlib import nullcontext
 from contextvars import ContextVar
 from typing import Any
 from uuid import uuid4
@@ -55,7 +56,10 @@ def commerce_run_timeout_seconds() -> int:
 
 
 def commerce_remaining_seconds() -> float | None:
-    budget = _RUN_BUDGET.get()
+    return _remaining_budget_seconds(_RUN_BUDGET.get())
+
+
+def _remaining_budget_seconds(budget: tuple[float, Callable[[], float]] | None) -> float | None:
     if budget is None:
         return None
     deadline, clock = budget
@@ -160,13 +164,17 @@ def run_commerce_batch(
     validate_commerce_gold_retry(attempts, delay_seconds)
     timeout = commerce_run_timeout_seconds()
     token = _RUN_BUDGET.set((clock() + timeout, clock))
+    budget = _RUN_BUDGET.get()
+    budget_scope = getattr(planner, "execution_budget", None)
     try:
         if journal:
             journal.record("planning", "started")
-        report = _run_commerce_batch(
-            planner, query, run_stage=run_stage, attempts=attempts,
-            delay_seconds=delay_seconds, clock=clock, journal=journal,
-        )
+        with (budget_scope(lambda: _remaining_budget_seconds(budget))
+              if budget_scope else nullcontext()):
+            report = _run_commerce_batch(
+                planner, query, run_stage=run_stage, attempts=attempts,
+                delay_seconds=delay_seconds, clock=clock, journal=journal,
+            )
     except BaseException as error:
         if journal:
             journal.record(journal.phase, "failed", error_type=type(error).__name__)

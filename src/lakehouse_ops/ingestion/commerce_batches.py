@@ -6,10 +6,14 @@ import math
 import os
 import re
 import tempfile
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Callable, Iterator
+from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock, Thread
 from typing import Any, Protocol
 
 from lakehouse_ops.commerce_runner_lock import CommerceRunnerBusyError, commerce_runner_lock
@@ -70,6 +74,69 @@ class CommerceBatchPlanner:
         # Opt in only for a thread-safe low-level client created before discovery.
         # Custom clients retain serial reads unless explicitly opted in.
         self._manifest_read_workers = manifest_read_workers
+        self._budget_check: Callable[[], float | None] | None = None
+
+    @contextmanager
+    def execution_budget(self, check: Callable[[], float | None]) -> Iterator[None]:
+        previous = self._budget_check
+        self._budget_check = check
+        try:
+            yield
+        finally:
+            self._budget_check = previous
+
+    def _read_with_budget(self, action: Callable[[], Any]) -> Any:
+        check = self._budget_check
+        remaining = check() if check else None
+        if remaining is None:
+            return action()
+        # Only read-only SDK/stream calls run here. A blocked read cannot hold up
+        # the runner or later publish a checkpoint after its caller times out.
+        future: Future[Any] = Future()
+        abandoned = False
+        guard = Lock()
+
+        def close_response(value: Any) -> None:
+            if isinstance(value, dict) and "Body" in value:
+                value["Body"].close()
+
+        def abandon() -> None:
+            nonlocal abandoned
+            with guard:
+                abandoned = True
+                if future.done() and future.exception() is None:
+                    close_response(future.result())
+
+        def read() -> None:
+            try:
+                result = action()
+            except BaseException as error:
+                future.set_exception(error)
+            else:
+                with guard:
+                    if abandoned:
+                        close_response(result)
+                    future.set_result(result)
+
+        Thread(target=read, name="commerce-s3-read", daemon=True).start()
+        try:
+            result = future.result(timeout=remaining)
+        except FutureTimeoutError:
+            completed = future.done()
+            abandon()
+            check()
+            if completed:
+                raise
+            raise CommerceBatchError("commerce S3 read exceeded run time budget") from None
+        except BaseException:
+            abandon()
+            raise
+        try:
+            check()
+        except BaseException:
+            close_response(result)
+            raise
+        return result
 
     def execution_options(self, selected: dict[str, str]) -> dict[str, str]:
         """Resolve full-snapshot execution without changing the public plan format."""
@@ -213,7 +280,10 @@ class CommerceBatchPlanner:
             "batch_at": batch.batch_at,
             "manifest_sha256": batch.manifest_sha256,
         }
-        _write_state(self._state_path, state)
+        if self._budget_check:
+            _write_state(self._state_path, state, before_replace=self._budget_check)
+        else:
+            _write_state(self._state_path, state)
         if active:
             self._active_path.unlink(missing_ok=True)
         return {"batch_id": batch_id, "created": True, "state": str(self._state_path)}
@@ -318,7 +388,9 @@ class CommerceBatchPlanner:
             request: dict[str, Any] = {"Bucket": self._bucket, "Prefix": f"{root}/"}
             if continuation:
                 request["ContinuationToken"] = continuation
-            response = self._client.list_objects_v2(**request)
+            response = self._read_with_budget(
+                lambda request=request: self._client.list_objects_v2(**request),
+            )
             for item in response.get("Contents", []):
                 key = item.get("Key", "")
                 match = manifest_pattern.fullmatch(key)
@@ -347,14 +419,16 @@ class CommerceBatchPlanner:
         return sorted(batches, key=lambda batch: (_effective_at(batch.batch_at), batch.batch_id))
 
     def _read_manifest(self, batch_id: str, key: str, committed_at: object) -> CommerceBatch:
-        response = self._client.get_object(Bucket=self._bucket, Key=key)
+        response = self._read_with_budget(
+            lambda: self._client.get_object(Bucket=self._bucket, Key=key),
+        )
         metadata = response.get("Metadata", {})
         body_stream = response["Body"]
         try:
             chunks: list[bytes] = []
             remaining = MAX_COMMERCE_MANIFEST_BYTES + 1
             while remaining:
-                chunk = body_stream.read(remaining)
+                chunk = self._read_with_budget(lambda size=remaining: body_stream.read(size))
                 if not chunk:
                     break
                 chunks.append(chunk)
@@ -469,7 +543,9 @@ def _verify_processed_content(
             )
 
 
-def _write_state(path: Path, state: dict[str, Any]) -> None:
+def _write_state(
+    path: Path, state: dict[str, Any], *, before_replace: Callable[[], float | None] | None = None,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = json.dumps(state, indent=2, sort_keys=True) + "\n"
     descriptor, temporary_name = tempfile.mkstemp(
@@ -481,6 +557,8 @@ def _write_state(path: Path, state: dict[str, Any]) -> None:
             stream.write(payload)
             stream.flush()
             os.fsync(stream.fileno())
+        if before_replace:
+            before_replace()
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
