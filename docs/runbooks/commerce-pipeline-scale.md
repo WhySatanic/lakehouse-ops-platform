@@ -1,6 +1,6 @@
-# Local two-volume commerce measurement
+# Local commerce volume and snapshot-history measurement
 
-This opt-in experiment runs the actual nine-stage full-snapshot commerce runner twice
+By default this opt-in experiment runs the nine-stage full-snapshot commerce runner twice
 against a dedicated, fresh MinIO/Hive Metastore/Trino stack, including current-gold
 publication and eight Spark memory observations per batch. It depends on the
 [Spark memory overlay](spark-container-memory.md). Historical evidence below describes
@@ -30,6 +30,57 @@ The bucket is `lakehouse`; keep the reference stack's default bucket configurati
 The dedicated catalog must contain no commerce tables before measurement. The output
 directory must be empty. A repeated experiment needs a new project/output directory,
 not deletion of previous evidence or resetting a live catalog.
+
+## Independent customer cardinality and retained batch depth
+
+The existing profile also accepts `--customers` (2..100000, default 10) and
+`--batches` (2..100, default 2). It always takes the original two order volumes:
+batch one uses the first volume; batches two and later repeat the second volume.
+Each batch advances the full-snapshot timestamp by one day, including month
+boundaries, so its immutable fixture identity is distinct. Products and quality
+injection counts stay fixed. One customer has a null email at every cardinality;
+this is a fixed count, not a constant reject percentage.
+
+For example, on a fresh, dedicated stack prepared above, choose this instead of
+the original two-batch command:
+
+```powershell
+uv run --frozen python -m lakehouse_ops.commerce_pipeline_profile `
+  --output artifacts/commerce-history-10000-customers-50-batches `
+  --orders 100 100 --customers 10000 --batches 50 `
+  --s3-endpoint-url http://localhost:19100 --server http://localhost:18100
+```
+
+Repeat with `--batches 100` only on another fresh project/output directory. To
+isolate customer cardinality, use the same orders and batch count on separate
+fresh stacks with different `--customers`. The upper bounds limit an experiment's
+requested input, not a demonstrated capacity. Fifty batches still start 400 Spark
+processes and can take hours; no stage or run timeout is relaxed. Failed later
+batches preserve completed samples and existing stage logs in a failed report.
+
+`workload` records requested customer/batch counts and the complete order schedule.
+Each sample records its actual config and `prior_completed_batches`; three or more
+batches use scope `sequential_snapshot_history_growth`. The default two-batch
+commands, fixture configs and original scope values stay compatible. The automatic
+profile demo keeps the default two batches and its existing timeout.
+
+This workload retains successive full snapshots in bronze/silver and measures
+growing catalog history with the normal nine-stage runner, SQL revenue/order
+oracles, checkpoint and compute-free idle verification at every batch. Customer
+IDs and attributes remain stable: it does **not** create a new SCD2 attribute
+version per batch. More orders or more completed snapshots must not be labelled
+more SCD2 versions. A changing-attribute history workload is a separate remaining
+PERF-01 case. The optional warehouse inventory below can be combined with these
+flags; current Iceberg file bytes alone remain insufficient for retained storage.
+
+Offline tests exercise first/last real 10000-customer fixtures across a 100-day
+schedule, foreign-key links, stable customer attributes, three runner samples and
+later-sample failure retention. These are input/control-flow checks. No real
+50/100-batch Spark timing, memory, storage totals or resource limit is claimed by
+this increment; collect and retain those measurements on the available Docker
+stack before drawing performance conclusions.
+
+## Retained evidence and original two-volume defaults
 
 Each chronological batch has 10 customers, 5 products, and one null email, duplicate
 order, late order and invalid payment. Only the order volume increases. The second
