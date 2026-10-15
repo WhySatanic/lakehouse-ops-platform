@@ -724,6 +724,11 @@ jobs:
         run: >-
           uv run lakeops check-commerce-gold --batch-id "$COMMERCE_BATCH_ID"
           --server http://localhost:8080 --user lakehouse-ci
+      - name: Verify current and retained Iceberg references through Trino
+        timeout-minutes: 3
+        run: >-
+          LAKEOPS_RUN_RETAINED_REFERENCES=1 uv run --frozen pytest
+          tests/integration/test_warehouse_references_trino.py -q -o addopts=''
       - name: Checkpoint commerce only after Trino verification
         env:
           AWS_ACCESS_KEY_ID: lakeops-ingest
@@ -1247,6 +1252,7 @@ jobs:
             artifacts/ingestion-freshness-recovery.json
             artifacts/trino-upgrade-rehearsal.json
             artifacts/commerce-runner.json
+            artifacts/warehouse-references-trino.json
             artifacts/commerce-runner-idle.json
             artifacts/commerce-runner-retry.json
             artifacts/commerce-runner-journal.sqlite3

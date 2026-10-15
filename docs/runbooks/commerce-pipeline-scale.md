@@ -98,11 +98,49 @@ replication, filesystem allocation and billing. No writers or maintenance may ru
 concurrently: a paginated listing is not an atomic snapshot. The profile invokes
 it outside the timed runner/query/idle measurements after its stages have stopped.
 
-This increment supplies the object-store side of storage accounting. It does not
-yet join Iceberg retained-snapshot references, classify unreferenced objects, run
-retention, or prove a measured physical saving. `iceberg_reachability` explicitly
-remains `not_classified`. SDK pagination and failure handling have offline tests;
-a real versioned MinIO measurement remains required before completing PERF-02.
+The object-store inventory alone does not join Iceberg references, classify orphan
+objects, run retention, or prove a measured physical saving. `iceberg_reachability`
+remains `not_classified`. A real versioned MinIO measurement and a completed growth
+experiment remain required before completing PERF-02.
+
+### Optional current and retained data/delete references
+
+Add `--retained-references` to the command with `--warehouse-inventory` above.
+It requires the same separate listing observer and makes read-only Trino metadata
+queries using the profile's existing performance identity. Defaults and automatic
+demo commands do not request this additional work.
+
+For the selected commerce tables, `$files` supplies current data/delete references.
+The union of existing/added entries from `$all_entries` supplies references in
+retained snapshot manifests, deduplicated by path. Deleted entries are excluded.
+See the [Trino Iceberg metadata documentation](https://trino.io/docs/current/connector/iceberg.html#metadata-tables).
+Raw paths, sizes, content types and snapshot IDs are retained. Each referenced file
+must match an S3 latest payload version by literal key and size; a hidden older S3
+version does not satisfy a live Iceberg reference.
+
+`warehouse_storage.reference_accounting.groups` partitions every listed payload
+version once: current data, current deletes, retained-only data, retained-only
+deletes, latest objects outside selected file references, and S3 noncurrent
+versions. Shared paths count once; current references take precedence. Their bytes
+must sum to `total_payload_bytes`. The unclassified latest group includes metadata,
+unselected tables and other objects. It is **not an orphan classification** and
+must not be used to authorize deletion. No metadata-log reachability, snapshot
+expiration, cleanup, physical disk saving or billing claim is made.
+
+Stop all writers and maintenance. The profile compares table lists, snapshot IDs
+and file-reference sets before/after listing and fails on a detected change. This
+check does not turn multiple catalog/S3 requests into an atomic snapshot. Keep
+plain `s3://` or `s3a://lakehouse/warehouse/` locations: percent-escaped paths or
+query/fragment locations fail rather than guessing the S3 key.
+
+This bounded experiment rejects more than 32 tables, 100 snapshots per table or
+100000 distinct file references per table. SQL row limits and those bounds do not
+limit Trino's metadata materialization or guarantee its heap usage. Reference
+queries run outside runner/query/idle timers. On failure `profile.json` remains
+failed and earlier completed samples remain available. The serving CI check reads
+real current/retained metadata after the commerce scenario; offline tests cover
+the byte partition, shared files, delete references, mismatches and detected races.
+An end-to-end retained growth measurement with these groups is still pending.
 
 ## Query and replay measurements
 

@@ -41,18 +41,21 @@ def test_default_project_is_rejected(tmp_path: Path, monkeypatch: pytest.MonkeyP
         profile.profile(tmp_path, orders=[100, 1000], endpoint="unused", server="unused")
 
 
-@pytest.mark.parametrize("failure", [None, "memory", "idle", "existing", "second-run",
+@pytest.mark.parametrize(("failure", "with_references"), [(failure, enabled)
+    for failure in [None, "memory", "idle", "existing", "second-run",
                                     "missing-current", "current-revenue", "wrong-sql-revenue",
                                     "stack-empty", "stack-partial-first", "stack-partial-second",
-                                    "warehouse-inventory"])
+                    "warehouse-inventory"] for enabled in (False, True)
+] + [("reference-race", True), ("table-race", True)])
 @pytest.mark.parametrize("volumes", [[100, 1000], [100, 100]])
 def test_two_volume_evidence_or_retained_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure, volumes,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure, volumes, with_references,
 ):
     monkeypatch.setenv("COMPOSE_PROJECT_NAME", "lakehouse-ops-scale-test")
     running = failure == "existing"
     selected_volume = 100
     sampler_reports = 0
+    reference_reads = 0
 
     class Client:
         def __init__(self, *args, **kwargs):
@@ -66,6 +69,8 @@ def test_two_volume_evidence_or_retained_failure(
 
         def query(self, sql):
             if "information_schema" in sql:
+                if failure == "table-race" and reference_reads:
+                    return []
                 return [{"table_schema": "gold", "table_name": "commerce_daily"}] if running else []
             if "$snapshots" in sql:
                 return [{"snapshot_id": 100}]
@@ -146,10 +151,24 @@ def test_two_volume_evidence_or_retained_failure(
         return {"total_payload_bytes": len(storage_calls) * 8192}
 
     monkeypatch.setattr(profile, "warehouse_inventory", inventory)
+
+    def references(client, tables):
+        nonlocal reference_reads
+        reference_reads += 1
+        assert tables == [{"table_schema": "gold", "table_name": "commerce_daily"}]
+        return [{"observation": reference_reads if failure == "reference-race" else 1}]
+
+    def reconcile(storage, refs):
+        assert storage == {"total_payload_bytes": len(storage_calls) * 8192}
+        assert refs == [{"observation": 1}]
+        return {"status": "reconciled"}
+
+    monkeypatch.setattr(profile, "file_references", references)
+    monkeypatch.setattr(profile, "reconcile_references", reconcile)
     if failure:
         with pytest.raises((ValueError, subprocess.CalledProcessError)):
             profile.profile(tmp_path, orders=volumes, endpoint="unused", server="unused",
-                            warehouse_client=storage_client)
+                            warehouse_client=storage_client, retained_references=with_references)
         assert json.loads((tmp_path / "profile.json").read_text())["status"] == "failed"
         if failure == "second-run":
             evidence = json.loads((tmp_path / "profile.json").read_text())
@@ -169,11 +188,17 @@ def test_two_volume_evidence_or_retained_failure(
                 assert not (tmp_path / "sample-2").exists()
     else:
         result = profile.profile(tmp_path, orders=volumes, endpoint="unused", server="unused",
-                                 warehouse_client=storage_client)
+                                 warehouse_client=storage_client,
+                                 retained_references=with_references)
         assert result["status"] == "ready"
         assert result["warehouse_inventory"] == "enabled"
+        assert result["retained_references"] == ("enabled" if with_references else "not_requested")
+        assert reference_reads == (4 if with_references else 0)
         for index, sample in enumerate(result["samples"], start=1):
-            assert sample["warehouse_storage"] == {"total_payload_bytes": index * 8192}
+            expected_storage = {"total_payload_bytes": index * 8192}
+            if with_references:
+                expected_storage["reference_accounting"] = {"status": "reconciled"}
+            assert sample["warehouse_storage"] == expected_storage
             assert json.loads((tmp_path / f"sample-{index}.warehouse.json").read_text()) == (
                 sample["warehouse_storage"]
             )
@@ -278,3 +303,11 @@ def test_detail_daily_costs_reconcile_before_evidence(failure):
 def test_query_costs_rejects_unbound_batch_before_query():
     with pytest.raises(ValueError, match="batch ID"):
         profile.query_costs(None, "' OR true --", 100)
+
+
+def test_reference_accounting_requires_inventory_before_creating_output(tmp_path):
+    output = tmp_path / "new"
+    with pytest.raises(ValueError, match="require warehouse inventory"):
+        profile.profile(output, orders=[100, 100], endpoint="unused", server="unused",
+                        retained_references=True)
+    assert not output.exists()
