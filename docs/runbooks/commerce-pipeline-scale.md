@@ -138,9 +138,16 @@ This bounded experiment rejects more than 32 tables, 100 snapshots per table or
 limit Trino's metadata materialization or guarantee its heap usage. Reference
 queries run outside runner/query/idle timers. On failure `profile.json` remains
 failed and earlier completed samples remain available. The serving CI check reads
-real current/retained metadata after the commerce scenario; offline tests cover
-the byte partition, shared files, delete references, mismatches and detected races.
-An end-to-end retained growth measurement with these groups is still pending.
+current/retained metadata after the commerce scenario and reconciles it with a
+fresh whole-warehouse version listing using the separately provisioned observer.
+It repeats catalog observations around listing, verifies payload presence/size
+and retains raw references, version records, classified groups and checkout SHA
+in `warehouse-references-trino.json`. Observer permissions remain listing-only.
+Offline tests cover the byte partition, shared files, delete references, missing
+payload, size mismatch, denied listing and detected races through the actual
+SDK paginator. This CI check is a bounded correctness gate, not a growth or
+physical disk measurement. A retained growth experiment with these groups is
+still pending.
 
 ### Real MinIO inventory and permissions gate
 

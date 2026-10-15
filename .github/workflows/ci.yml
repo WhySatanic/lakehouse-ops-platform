@@ -743,6 +743,9 @@ jobs:
           --server http://localhost:8080 --user lakehouse-ci
       - name: Verify current and retained Iceberg references through Trino
         timeout-minutes: 3
+        env:
+          WAREHOUSE_INVENTORY_ACCESS_KEY_ID: lakeops-inventory
+          WAREHOUSE_INVENTORY_SECRET_ACCESS_KEY: inventory-development-only
         run: >-
           LAKEOPS_RUN_RETAINED_REFERENCES=1 uv run --frozen pytest
           tests/integration/test_warehouse_references_trino.py -q -o addopts=''
