@@ -96,6 +96,21 @@ class FileLandingZone:
         destination.parent.mkdir(parents=True, exist_ok=True)
 
         if destination.exists():
+            # Audit uses the checksum function above; load it after module initialization.
+            from lakehouse_ops.ingestion.audit import audit_landing_content
+
+            try:
+                existing_body = destination.read_bytes()
+            except OSError as error:
+                raise ValueError(
+                    f"existing filesystem object is unreadable: {destination}"
+                ) from error
+            item = audit_landing_content(Path(landing_object.key), existing_body)
+            if item.status != "valid":
+                raise ValueError(
+                    f"existing filesystem object conflicts with forecast: {destination}; "
+                    + "; ".join(item.errors)
+                )
             return LandingResult(path=destination, checksum=landing_object.checksum, created=False)
 
         descriptor, temporary_name = tempfile.mkstemp(
