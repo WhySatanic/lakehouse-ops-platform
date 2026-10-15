@@ -31,12 +31,23 @@ The command emits one JSON report. A healthy non-empty landing zone exits with c
 An empty landing zone or any invalid object exits with code 1, so scheduled jobs can use
 the command as a precondition.
 
+Filesystem ingestion also validates an existing object before reporting an idempotent
+replay. It applies the same document, checksum and path rules as the audit. A valid
+repeat keeps the first stored bytes, including its original ingestion timestamp;
+changes to volatile `generationtime_ms` do not change content identity. Corrupt,
+conflicting or unreadable objects fail without being overwritten. A directory at the
+object path is an unreadable-object error. This check does not change publication
+semantics for concurrent first writers.
+
 ## Respond to a failed audit
 
 1. Preserve the failed object and the JSON report as incident evidence.
 2. Do not edit the object in place or replay it into downstream tables.
 3. Compare the object with its source or a known-good replica.
-4. Re-ingest the affected location and date through the normal idempotent ingestion path.
+4. Restore the affected object from a verified replica after preserving the failed
+   bytes separately, or follow an explicit operator-approved replacement procedure.
+   Re-ingestion with the same identity refuses an existing corrupt file; it does not
+   repair it automatically. After restoration, replay the affected location/date.
 5. Re-run the audit before resuming downstream work.
 
 The SHA-256 checksum detects accidental corruption and inconsistent metadata. It is not

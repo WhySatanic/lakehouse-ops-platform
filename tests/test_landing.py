@@ -54,3 +54,73 @@ def test_landing_uses_utc_date_for_offset_timestamp(
     assert "ingest_date=2026-08-17" in result.path.as_posix()
     document = json.loads(result.path.read_text(encoding="utf-8"))
     assert document["ingestion"]["ingested_at"] == "2026-08-17T22:30:00+00:00"
+
+
+@pytest.mark.parametrize("damage", ["json", "document", "checksum", "payload", "location", "date"])
+def test_replay_refuses_corruption_and_preserves_existing_bytes(
+    tmp_path: Path, valid_source_payload: dict[str, Any], damage: str,
+) -> None:
+    payload = WeatherPayload.from_source(Location("moscow", 55.75, 37.62), valid_source_payload)
+    landing = FileLandingZone(tmp_path)
+    at = datetime(2026, 8, 6, 10, 30, tzinfo=UTC)
+    first = landing.write(payload, ingested_at=at)
+    document = json.loads(first.path.read_bytes())
+    if damage == "json":
+        body = b"corrupt"
+    elif damage == "document":
+        body = b"[]"
+    else:
+        if damage == "checksum":
+            document["ingestion"]["object_checksum"] = "0" * 64
+        elif damage == "payload":
+            document["payload"]["hourly"]["temperature_2m"][0] += 1
+        elif damage == "location":
+            document["ingestion"]["location"]["name"] = "another"
+        else:
+            document["ingestion"]["ingested_at"] = "2026-08-07T10:30:00+00:00"
+        body = json.dumps(document).encode()
+    first.path.write_bytes(body)
+
+    with pytest.raises(ValueError, match="existing filesystem object conflicts"):
+        landing.write(payload, ingested_at=at)
+
+    assert first.path.read_bytes() == body
+    assert not list(tmp_path.rglob("*.tmp"))
+
+
+def test_replay_refuses_directory_at_object_path(
+    tmp_path: Path, valid_source_payload: dict[str, Any],
+) -> None:
+    payload = WeatherPayload.from_source(Location("moscow", 55.75, 37.62), valid_source_payload)
+    landing = FileLandingZone(tmp_path)
+    at = datetime(2026, 8, 6, tzinfo=UTC)
+    first = landing.write(payload, ingested_at=at)
+    first.path.unlink()
+    first.path.mkdir()
+
+    with pytest.raises(ValueError, match="existing filesystem object is unreadable"):
+        landing.write(payload, ingested_at=at)
+
+    assert first.path.is_dir()
+
+
+def test_replay_reports_unreadable_existing_object(
+    tmp_path: Path, valid_source_payload: dict[str, Any], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = WeatherPayload.from_source(Location("moscow", 55.75, 37.62), valid_source_payload)
+    landing = FileLandingZone(tmp_path)
+    at = datetime(2026, 8, 6, tzinfo=UTC)
+    first = landing.write(payload, ingested_at=at)
+    original = Path.read_bytes
+
+    def denied(path: Path) -> bytes:
+        if path == first.path:
+            raise PermissionError("read denied")
+        return original(path)
+
+    monkeypatch.setattr(Path, "read_bytes", denied)
+    with pytest.raises(ValueError, match="existing filesystem object is unreadable") as caught:
+        landing.write(payload, ingested_at=at)
+
+    assert isinstance(caught.value.__cause__, PermissionError)
+    assert original(first.path)
