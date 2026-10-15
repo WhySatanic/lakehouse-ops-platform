@@ -607,6 +607,50 @@ def test_rejects_unsupported_committed_schema_version(
     assert not state.exists()
 
 
+@pytest.mark.parametrize("workers", [1, 2])
+@pytest.mark.parametrize("batch_at", [
+    None, True, 12, 1.5, [], {}, "not-a-timestamp", "2026-01-02T00:00:00",
+    "0001-01-01T00:00:00+01:00", "9999-12-31T23:59:59-01:00",
+])
+def test_invalid_timestamp_is_a_batch_error_before_compute_and_preserves_state(
+    tmp_path, batch_at, workers,
+):
+    from lakehouse_ops.commerce_pipeline import run_commerce_batch
+
+    class TrackingClient(FakeS3Client):
+        def get_object(self, **kwargs):
+            response = super().get_object(**kwargs)
+            streams.append(response["Body"])
+            return response
+
+    streams = []
+    client = TrackingClient()
+    client.add_manifest("aaaaaaaaaaaaaaaa", "2026-01-01T00:00:00Z")
+    state = tmp_path / "checkpoint.json"
+    planner = CommerceBatchPlanner(client, bucket="lakehouse", state_path=state,
+                                   manifest_read_workers=workers)
+    planner.commit("aaaaaaaaaaaaaaaa")
+    before = state.read_bytes()
+    client.add_manifest("bbbbbbbbbbbbbbbb", batch_at)
+    streams.clear()
+
+    def forbidden(*_):
+        pytest.fail("invalid manifest must not compute or query gold")
+
+    with pytest.raises(CommerceBatchError, match="invalid commerce manifest"):
+        run_commerce_batch(planner, forbidden, run_stage=forbidden)
+    assert state.read_bytes() == before
+    assert not state.with_name("checkpoint.json.active.json").exists()
+    assert streams and all(stream.closed for stream in streams)
+
+    # Repair the rejected, never-started marker without clearing completed history.
+    client.add_manifest("bbbbbbbbbbbbbbbb", "2026-01-02T00:00:00Z")
+    selected = planner.plan(max_batches=1)["batches"]
+    assert len(selected) == 1 and selected[0]["batch_id"] == "bbbbbbbbbbbbbbbb"
+    assert selected[0]["batch_at"] == "2026-01-02T00:00:00Z"
+    assert state.read_bytes() == before
+
+
 @pytest.mark.parametrize(
     "damage",
     ["missing-table", "reused-file", "bad-checksum", "negative-rows", "zero-rows", "bool-rows"],
