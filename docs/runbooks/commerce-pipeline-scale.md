@@ -72,6 +72,27 @@ host/VM overhead and inactive Linux file cache. Sampling can miss short peaks; s
 the memory runbook for cgroup accounting and missing-exit limitations. One run at
 two small volumes is reproducibility evidence, not a production capacity claim.
 
+A whole-project memory observation marked `partial`, including no samples or a
+known sampling error, now fails the measurement command instead of returning a
+top-level `ready` profile. The diagnostic sample and raw memory report are retained
+after SQL reconciliation and idle verification; an incomplete first sample does
+not start the second load. The completed ingestion checkpoint and warehouse are
+not rolled back or deleted. Retry the measurement with a new empty output and
+fresh owned catalog, not by clearing completed state. Historical ready profiles
+with nested partial memory remain incomplete cost evidence; do not relabel them.
+An `observed` result is still discrete sampling, not continuous peak coverage.
+
+Local validation on 2026-10-15 injected a partial observer result only after real
+Spark/Iceberg stages, independent Trino reconciliation, idle and Docker samples.
+The failed measurement retained one completed checkpoint and diagnostic sample;
+it did not start load two. A fresh isolated project then passed the unchanged
+default demo child with two 100-order snapshots and observed memory. Both projects
+were stopped, their networks removed and their named volumes retained. This is
+failure/retry correctness evidence, not a physical Docker-daemon fault test or a
+performance comparison. Six regressions cover empty/partial first and partial
+second observations at equal and increasing volumes. The shared local checker
+passed all ten steps: 1431 tests, 34 expected skips and four Docker smoke tests.
+
 After the run, stop only this project's services if no further measurements need them:
 
 ```powershell

@@ -358,6 +358,10 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str) -> d
                     "idle_replay_observation": idle,
                 })
                 (output / "profile.json").write_text(json.dumps(report, indent=2))
+                if stack_observation.get("status") != "observed":
+                    raise ValueError(
+                        "requires observed whole-project memory for a complete profile",
+                    )
         report["status"] = "ready"
     except Exception as error:
         report["status"] = "failed"

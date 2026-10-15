@@ -42,7 +42,8 @@ def test_default_project_is_rejected(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.parametrize("failure", [None, "memory", "idle", "existing", "second-run",
-                                    "missing-current", "current-revenue", "wrong-sql-revenue"])
+                                    "missing-current", "current-revenue", "wrong-sql-revenue",
+                                    "stack-empty", "stack-partial-first", "stack-partial-second"])
 @pytest.mark.parametrize("volumes", [[100, 1000], [100, 100]])
 def test_two_volume_evidence_or_retained_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure, volumes,
@@ -50,6 +51,7 @@ def test_two_volume_evidence_or_retained_failure(
     monkeypatch.setenv("COMPOSE_PROJECT_NAME", "lakehouse-ops-scale-test")
     running = failure == "existing"
     selected_volume = 100
+    sampler_reports = 0
 
     class Client:
         def __init__(self, *args, **kwargs):
@@ -120,8 +122,16 @@ def test_two_volume_evidence_or_retained_failure(
             pass
 
         def report(self):
-            return {"status": "observed", "peak_observed_bytes": 100,
-                    "samples": [], "errors": []}
+            nonlocal sampler_reports
+            sampler_reports += 1
+            partial = failure in {"stack-empty", "stack-partial-first"} or (
+                failure == "stack-partial-second" and sampler_reports == 2
+            )
+            empty = failure == "stack-empty"
+            return {"status": "partial" if partial else "observed",
+                    "peak_observed_bytes": None if empty else 100,
+                    "samples": [] if empty else [{"used_bytes": 100}],
+                    "errors": ["Docker sample unavailable"] if partial and not empty else []}
 
     monkeypatch.setattr(profile, "StackMemorySampler", Sampler)
     if failure:
@@ -132,6 +142,18 @@ def test_two_volume_evidence_or_retained_failure(
             evidence = json.loads((tmp_path / "profile.json").read_text())
             assert len(evidence["samples"]) == 1
             assert evidence["samples"][0]["orders"] == 100
+        if failure.startswith("stack-"):
+            evidence = json.loads((tmp_path / "profile.json").read_text())
+            count = 2 if failure == "stack-partial-second" else 1
+            assert len(evidence["samples"]) == count
+            assert evidence["samples"][-1]["stack_memory"]["status"] == "partial"
+            assert evidence["samples"][-1]["run"]["status"] == "ready"
+            assert evidence["samples"][-1]["idle_replay"] == "verified"
+            assert json.loads((tmp_path / f"sample-{count}.stack-memory.json").read_text()) == (
+                evidence["samples"][-1]["stack_memory"]
+            )
+            if count == 1:
+                assert not (tmp_path / "sample-2").exists()
     else:
         result = profile.profile(tmp_path, orders=volumes, endpoint="unused", server="unused")
         assert result["status"] == "ready"
