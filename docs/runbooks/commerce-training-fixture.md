@@ -434,6 +434,26 @@ rerun the same batch after investigating the failure. A missing query ID or fail
 cancellation does not prove server-side termination. The standalone gold commands and
 default generic Trino client retain their previous behavior. This is a per-query bound,
 not a shared deadline for the whole pipeline or scheduled cycle.
+
+The query budget includes a response that continuously sends small body chunks.
+HTTPX phase timeouts alone bound idle waits, so budgeted requests use a bounded
+reader and a deadline-aware response stream. After caller expiry the reader closes
+its own response at the next chunk or phase timeout; it cannot advance pagination,
+return partial rows or write a checkpoint. At most two HTTP readers per client may
+remain in progress, allowing a query and its cancellation without unbounded threads
+when an injected transport ignores timeouts. Such a transport may retain a reader
+until it returns. The separate five-second cancellation budget also covers its body.
+
+Run the real loopback slow-response regression without Docker:
+
+```text
+uv run --frozen pytest tests/test_trino_deadline_http.py -q -o addopts=''
+```
+
+It covers initial and paginated bodies, response closure, cancellation, a slow
+cancellation body, unchanged checkpoint and bounded readers with a stalled custom
+transport. It is an HTTP regression, not a live Trino or Iceberg recovery drill.
+
 Retry warnings go to stderr, so stdout stays one JSON report. CI injects one HTTP 503 at
 the Trino client boundary, then delegates to the real coordinator and retains separate
 retry evidence alongside the pipeline result; it does not simulate a real server outage.
