@@ -189,3 +189,9 @@ and 10000 current customers, literal periods/names for every snapshot, storage
 reconciliation, idle replay and verified owned cleanup before marking it ready.
 Do not restart against the partial catalog by bypassing the empty-catalog guard.
 The 50/100-snapshot acceptance criteria remain open.
+
+## Measured validation candidate
+
+The [SCD2 validation experiment](scd2-validation-experiment.md) compares a fused
+invariant check with the existing job in three matched replay pairs. Fewer Spark
+jobs did not meet the end-to-end adoption threshold; the production job is unchanged.
