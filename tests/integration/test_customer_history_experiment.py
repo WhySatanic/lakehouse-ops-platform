@@ -25,9 +25,11 @@ mc admin policy attach local lakehouse-warehouse-inventory --user lakeops-invent
 
 
 def history_workload(batches):
-    if type(batches) is not int or batches not in (4, 50):
-        raise ValueError("customer history experiment requires 4 or 50 snapshots")
-    return ([0, 1, 1, 2], 1800) if batches == 4 else (list(range(50)), 10800)
+    if type(batches) is not int or batches not in (4, 50, 100):
+        raise ValueError("customer history experiment requires 4, 50 or 100 snapshots")
+    if batches == 4:
+        return [0, 1, 1, 2], 1800
+    return list(range(batches)), 19500 if batches == 100 else 10800
 
 
 def measurements(profile, *, batches=4):

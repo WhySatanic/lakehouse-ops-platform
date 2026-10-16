@@ -7,9 +7,9 @@ retained payload are recorded separately from the four-snapshot baseline below.
 The separate `Customer history experiment` workflow uses one fresh GitHub runner
 and one uniquely named `lakehouse-ops-scale-history-*` stack. It runs for pull requests
 changing its workflow or experiment tests, and can be dispatched manually once the
-workflow is present on the default branch. Manual dispatch accepts only `snapshots=4`
-(default) or `snapshots=50`; pull requests retain the four-snapshot baseline.
-Ordinary CI and its five mandatory gates
+workflow is present on the default branch. Manual dispatch accepts `snapshots=4`
+(default), `snapshots=50` or `snapshots=100`; pull requests retain the four-snapshot baseline.
+Ordinary CI and its mandatory gates
 are unchanged. This experiment is not a release candidate or capacity certification.
 
 Inputs are fixed: 100 canonical orders, 10000 customers per chronological full snapshot,
@@ -35,11 +35,53 @@ The default child has a 1800-second total limit and the existing 300-second stag
 The default job is bounded to 60 minutes including build and upload. Timeout, memory failure,
 partial history or missing observations are failed evidence, not successful samples.
 
+## Extended workload budgets
+
+| Snapshots | Customer revisions | Profile child limit | CI measurement step | Whole job |
+|---|---|---:|---:|---:|
+| 4 | 0,1,1,2 | 30 min | 38 min | 60 min |
+| 50 | 0 through 49 | 180 min | 190 min | 220 min |
+| 100 | 0 through 99 | 325 min | 335 min | 360 min |
+
+The 100-snapshot option is an admission with a fixed resource budget, not a measured
+success. The [admission/compatibility evidence](../evidence/customer-history-100-budget-2026-10-16.json)
+records test-first boundary checks and an actual four-snapshot regression run, not
+an actual 100-snapshot result. The observed 50-snapshot profile took 162.495 minutes on one four-CPU hosted
+runner. Simply doubling that observation gives 324.990 minutes, almost the entire
+325-minute child limit; history growth, runner variation and inventory overhead can
+make the 100-snapshot attempt exceed it. Do not present that extrapolation as a forecast
+or increase limits indefinitely to force a green result. A budget refusal is a useful
+result when the retained partial profile says exactly which batches completed.
+
+The measurement step has ten minutes beyond the profile child for service startup,
+observer setup, logs and owned cleanup. The whole-job limit additionally reserves
+25 minutes for image setup (bounded build15/pull5), runner setup and upload. Existing
+per-stage 300-second limits are unchanged. Child timeout is caught outside the profile:
+the experiment writes failed experiment.json, preserves the partial profile/checkpoint,
+attempts scoped cleanup and re-raises the timeout. It never summarizes partial batches
+as a successful 100-snapshot result. A hard workflow/runner termination may prevent
+finally/upload; the timeout hierarchy reduces that risk and is not a guarantee.
+
+After the workflow version has merged, dispatch a single attempt when no experiment
+is active on main:
+
+```bash
+gh workflow run customer-history-experiment.yml \
+  --repo WhySatanic/lakehouse-ops-platform --ref main -f snapshots=100
+```
+
+Inspect its status before dispatching again. The concurrency group queues rather than
+cancels an existing run; it is not duplicate suppression. Ordinary PR validation still
+uses four snapshots. Do not pass a 100-snapshot artifact to the source-bound
+`audit-customer-history-50.py`: that audit deliberately verifies only the recorded
+50-snapshot run. Audit an actual 100-snapshot result separately against its own source,
+one million expected versions, 10000 current customers, checkpoint and raw inventories.
+
 Download the `customer-history-experiment` artifact from the workflow run. It retains
 `customer-history-ci/experiment.json`, raw `profile/profile.json` with its SHA256,
 source fixtures/manifests, SQL/results/query IDs, runner and memory reports, retained
 object/reference inventories, checkpoint and service logs. The outer report is ready
-only after the four sample and storage checks and successful owned cleanup. Partial
+only after all requested sample and storage checks and successful owned cleanup. Partial
 reports and logs upload even on failure. Verify report source SHA against the workflow
 checkout and PR head/merge parents before citing results.
 
@@ -47,7 +89,7 @@ The test uses scoped Compose down and validates ownership of the empty network.
 It does not delete volumes, images, unrelated containers or host data. GitHub runner
 disposal remains external: raw JSON artifacts are evidence, not a backup of warehouse
 volumes. Repeat on independent fresh stacks for comparisons; one run does not prove
-performance improvement, scaling to 50/100 snapshots, commit-time crash recovery or
+performance improvement, general capacity at 50/100 snapshots, commit-time crash recovery or
 distributed exactly-once processing.
 
 ## Observed baseline, 2026-10-16
