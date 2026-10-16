@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "independent_verification": {
+    "status": "verified_planning_observation",
+    "raw_observation_sha256": "855689694cc7d8f40640d443ddbe8d90d6166ead1f2218d0f07f859e7c1934ae",
+    "query_ids_verified": 6,
+    "expected_versions": 330000,
+    "expected_current": 10000,
+    "expected_name_length": 9360000,
+    "medians": {
+      "old": {
+        "planning_time_ms": 9,
+        "elapsed_time_ms": 123
+      },
+      "new": {
+        "planning_time_ms": 9,
+        "elapsed_time_ms": 91
+      }
+    },
+    "finding": "No consistent planning-time reduction across pairs; first old query includes cold-start effects. No whole-pipeline optimization claim."
+  },
+  "observed_queries": {
+    "status": "ready",
+    "started_at_utc": "2026-10-16T16:12:01.890941+00:00",
+    "project": "lakehouse-ops-scale-restore-d726818e472145ebab90dfa06198972d",
+    "base_sha": "e2debb5b424bf3b9fb7aef9febd18400ca38d2ef",
+    "prior_maintenance_sha256": "e82885c8293f8101b05a52b05952d3bee13f463697c3f5c7bbd9b5db368ff1e3",
+    "observation_scope": "three counterbalanced snapshot query pairs, one restarted restored fixture, not independent whole-pipeline trials",
+    "pairs": [
+      {
+        "pair": 1,
+        "order": [
+          "old",
+          "new"
+        ],
+        "observations": {
+          "old": {
+            "result": {
+              "query_id": "20261016_161245_00032_kaxs4",
+              "rows": [
+                {
+                  "versions": 330000,
+                  "current_versions": 10000,
+                  "name_length": 9360000
+                }
+              ],
+              "stats": {
+                "state": "FINISHED",
+                "elapsed_time_ms": 673,
+                "wall_time_ms": 9391,
+                "cpu_time_ms": 1156,
+                "processed_rows": 330000,
+                "processed_bytes": 25984459,
+                "physical_input_bytes": 25980191,
+                "peak_memory_bytes": 448,
+                "spilled_bytes": 0
+              }
+            },
+            "planning_time_ms": 18
+          },
+          "new": {
+            "result": {
+              "query_id": "20261016_161246_00033_kaxs4",
+              "rows": [
+                {
+                  "versions": 330000,
+                  "current_versions": 10000,
+                  "name_length": 9360000
+                }
+              ],
+              "stats": {
+                "state": "FINISHED",
+                "elapsed_time_ms": 115,
+                "wall_time_ms": 62,
+                "cpu_time_ms": 52,
+                "processed_rows": 330000,
+                "processed_bytes": 751922,
+                "physical_input_bytes": 751825,
+                "peak_memory_bytes": 224,
+                "spilled_bytes": 0
+              }
+            },
+            "planning_time_ms": 9
+          }
+        }
+      },
+      {
+        "pair": 2,
+        "order": [
+          "new",
+          "old"
+        ],
+        "observations": {
+          "new": {
+            "result": {
+              "query_id": "20261016_161246_00034_kaxs4",
+              "rows": [
+                {
+                  "versions": 330000,
+                  "current_versions": 10000,
+                  "name_length": 9360000
+                }
+              ],
+              "stats": {
+                "state": "FINISHED",
+                "elapsed_time_ms": 87,
+                "wall_time_ms": 33,
+                "cpu_time_ms": 31,
+                "processed_rows": 330000,
+                "processed_bytes": 751922,
+                "physical_input_bytes": 751825,
+                "peak_memory_bytes": 224,
+                "spilled_bytes": 0
+              }
+            },
+            "planning_time_ms": 8
+          },
+          "old": {
+            "result": {
+              "query_id": "20261016_161246_00035_kaxs4",
+              "rows": [
+                {
+                  "versions": 330000,
+                  "current_versions": 10000,
+                  "name_length": 9360000
+                }
+              ],
+              "stats": {
+                "state": "FINISHED",
+                "elapsed_time_ms": 90,
+                "wall_time_ms": 410,
+                "cpu_time_ms": 166,
+                "processed_rows": 330000,
+                "processed_bytes": 25984459,
+                "physical_input_bytes": 25980191,
+                "peak_memory_bytes": 1048576,
+                "spilled_bytes": 0
+              }
+            },
+            "planning_time_ms": 9
+          }
+        }
+      },
+      {
+        "pair": 3,
+        "order": [
+          "old",
+          "new"
+        ],
+        "observations": {
+          "old": {
+            "result": {
+              "query_id": "20261016_161247_00036_kaxs4",
+              "rows": [
+                {
+                  "versions": 330000,
+                  "current_versions": 10000,
+                  "name_length": 9360000
+                }
+              ],
+              "stats": {
+                "state": "FINISHED",
+                "elapsed_time_ms": 123,
+                "wall_time_ms": 1065,
+                "cpu_time_ms": 167,
+                "processed_rows": 330000,
+                "processed_bytes": 25984459,
+                "physical_input_bytes": 25980191,
+                "peak_memory_bytes": 11536472,
+                "spilled_bytes": 0
+              }
+            },
+            "planning_time_ms": 9
+          },
+          "new": {
+            "result": {
+              "query_id": "20261016_161247_00037_kaxs4",
+              "rows": [
+                {
+                  "versions": 330000,
+                  "current_versions": 10000,
+                  "name_length": 9360000
+                }
+              ],
+              "stats": {
+                "state": "FINISHED",
+                "elapsed_time_ms": 91,
+                "wall_time_ms": 29,
+                "cpu_time_ms": 26,
+                "processed_rows": 330000,
+                "processed_bytes": 751922,
+                "physical_input_bytes": 751825,
+                "peak_memory_bytes": 224,
+                "spilled_bytes": 0
+              }
+            },
+            "planning_time_ms": 10
+          }
+        }
+      }
+    ],
+    "snapshots": {
+      "old": "4080505965285324963",
+      "new": "7283836129631754092"
+    },
+    "literal_expected_rows": [
+      {
+        "versions": 330000,
+        "current_versions": 10000,
+        "name_length": 9360000
+      }
+    ],
+    "query_template": "SELECT count(*) AS versions, count_if(is_current) AS current_versions, sum(length(full_name)) AS name_length FROM lakehouse.gold.dim_customers_scd2 FOR VERSION AS OF {snapshot}",
+    "warehouse_metadata_unchanged": true,
+    "network_cleanup": {
+      "network": "lakehouse-ops-scale-restore-d726818e472145ebab90dfa06198972d_default",
+      "status": "absent"
+    },
+    "cleanup_verified": true,
+    "ended_at_utc": "2026-10-16T16:12:56.399282+00:00"
+  },
+  "protocol_source": "https://github.com/trinodb/trino/blob/483/client/trino-client/src/main/java/io/trino/client/StatementStats.java",
+  "operator_script_sha256": "0d6012fafce59d808a8e983de105a1334b2686be145fc381a0f8d584a05b3f81",
+  "verification_script_sha256": "d0b299e009bad3a0bcf3839fa563e41bde4571a41d9c4544b05a7d3d8a0dad94"
+}

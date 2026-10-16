@@ -1,0 +1,757 @@
+{
+  "schema_version": 1,
+  "status": "independently_verified",
+  "scope": "five_full_snapshots_through_existing_commerce_runner",
+  "baseline_commit": "6fa674b1b05f671108a8be63246cc976a8566353",
+  "source_sha256": {
+    "src/lakehouse_ops/commerce_change_scenario.py": "2bd7976dd112641f1580a519bb755a2af622646031237773f4030cc0ac83e782",
+    "src/lakehouse_ops/commerce_linked_acceptance.py": "7c61a93e96af3126228d81448019314b23848be74c84f403c6fb9c2245f1c359",
+    "src/lakehouse_ops/commerce_linked_demo.py": "2e243e96f342ea955153520c1ac2fe32ef5773039d683640fea388e384474f4c",
+    "src/lakehouse_ops/commerce_pipeline.py": "b48d36ed6a1134ed291f6c21e7590d0ad005730969dd74e634a16da0b9c5fe65",
+    "jobs/spark/silver_commerce_payments.py": "71cf985e112dd546fd5f0897308ae02371cdf142a935c91e088801ab9ede2e90",
+    "jobs/spark/gold_commerce_daily.py": "cd1e5391e59164cbc92485f342adebc10669b5a5496a895c989feb1a300d5340",
+    "jobs/spark/gold_commerce_current.py": "cbde9ff9b4cd3e96427854d535c1d31fb2e6c2aa288f84c2943aed35db45aab9",
+    "jobs/spark/commerce_customer_scd2.py": "6e0a592617bce299ba0c1858f4b91195d423883ec0551ead10c2afa647e25c7c"
+  },
+  "raw_sha256": {
+    "demo.json": "a9f3230f8480700852a47bcf6cf04b61e2873c5a95383b6508f187147ce6e3c8",
+    "independent-cleanup.json": "f0e7ab9fe0d87e516fdf5b0546e7206e1a16f7fb987485f241a806432126642e",
+    "acceptance/linked.json": "ad65f449ccb834cadfc69b86b1f90b176248714659b2bec417b2bb674a21d9fc",
+    "acceptance/checkpoint.json": "c95eb35951de83982427b9883d2f900768ce43cc975d8f9b72b70a46ab813456",
+    "acceptance/run-journal.sqlite3": "af90be08de97e54215a7f1066de31ae4edf568497a32274799b837ac3d3f9919",
+    "acceptance/scenario/expected.json": "9495c9e7dc2b417f3b4638c9e6785c4ad867fe023bdb58637fe6f00c27b7f5f4"
+  },
+  "acceptance": {
+    "status": "ready",
+    "samples": [
+      {
+        "batch_id": "9218da37b2756ecf",
+        "status": "ready",
+        "oracle": {
+          "batch_id": "9218da37b2756ecf",
+          "captured_revenue_cents": 1000,
+          "daily_revenue_cents": {
+            "2026-01-31": 1000
+          },
+          "customer_history": [
+            {
+              "full_name": "Alice",
+              "valid_from": "2026-02-01T00:00:00Z",
+              "valid_to": null
+            }
+          ],
+          "historical_daily": [
+            {
+              "source_batch_id": "9218da37b2756ecf",
+              "order_day": "2026-01-31",
+              "captured_revenue_cents": 1000,
+              "order_count": 1
+            }
+          ],
+          "payment_history": [
+            {
+              "source_batch_id": "9218da37b2756ecf",
+              "payment_id": "PAY0000000001",
+              "status": "captured",
+              "amount_cents": 1000
+            }
+          ]
+        },
+        "pipeline": {
+          "status": "ready",
+          "batch_id": "9218da37b2756ecf",
+          "completed_stages": [
+            "bronze-input-sync",
+            "spark-commerce-bronze",
+            "spark-commerce-payment-silver",
+            "spark-commerce-order-silver",
+            "spark-commerce-product-silver",
+            "spark-commerce-customer-silver",
+            "spark-commerce-customer-scd2",
+            "spark-commerce-daily-gold",
+            "spark-commerce-current-gold"
+          ],
+          "verification": {
+            "status": "ready",
+            "table": "lakehouse.gold.commerce_daily",
+            "batch_id": "9218da37b2756ecf",
+            "days": 1,
+            "orders": 1,
+            "captured_revenue_cents": 1000
+          },
+          "checkpoint": {
+            "batch_id": "9218da37b2756ecf",
+            "created": true,
+            "state": "C:\\Users\\qwe\\Documents\\Codex\\2026-10-15\\new-chat\\outputs\\lakehouse-ops-refund-scenario\\artifacts\\refund\\demo-r2\\acceptance\\checkpoint.json"
+          },
+          "durations_seconds": {
+            "planning": 0.04430339999998978,
+            "stages": {
+              "bronze-input-sync": 1.9359203000003617,
+              "spark-commerce-bronze": 17.715779299999667,
+              "spark-commerce-payment-silver": 12.261217899999792,
+              "spark-commerce-order-silver": 11.303415300000779,
+              "spark-commerce-product-silver": 10.736490599999343,
+              "spark-commerce-customer-silver": 11.829695500000525,
+              "spark-commerce-customer-scd2": 9.70386359999975,
+              "spark-commerce-daily-gold": 15.805917200000295,
+              "spark-commerce-current-gold": 14.545620599999893
+            },
+            "verification": 0.22042719999990368,
+            "checkpoint": 0.05823869999949238,
+            "total": 106.16088959999979
+          }
+        }
+      },
+      {
+        "batch_id": "2f2efc7ad822cf99",
+        "status": "ready",
+        "oracle": {
+          "batch_id": "2f2efc7ad822cf99",
+          "captured_revenue_cents": 1500,
+          "daily_revenue_cents": {
+            "2026-01-31": 1500
+          },
+          "customer_history": [
+            {
+              "full_name": "Alice",
+              "valid_from": "2026-02-01T00:00:00Z",
+              "valid_to": "2026-02-02T00:00:00Z"
+            },
+            {
+              "full_name": "Alice Updated",
+              "valid_from": "2026-02-02T00:00:00Z",
+              "valid_to": null
+            }
+          ],
+          "historical_daily": [
+            {
+              "source_batch_id": "2f2efc7ad822cf99",
+              "order_day": "2026-01-31",
+              "captured_revenue_cents": 1500,
+              "order_count": 1
+            },
+            {
+              "source_batch_id": "9218da37b2756ecf",
+              "order_day": "2026-01-31",
+              "captured_revenue_cents": 1000,
+              "order_count": 1
+            }
+          ],
+          "payment_history": [
+            {
+              "source_batch_id": "2f2efc7ad822cf99",
+              "payment_id": "PAY0000000001",
+              "status": "captured",
+              "amount_cents": 1500
+            },
+            {
+              "source_batch_id": "9218da37b2756ecf",
+              "payment_id": "PAY0000000001",
+              "status": "captured",
+              "amount_cents": 1000
+            }
+          ]
+        },
+        "pipeline": {
+          "status": "ready",
+          "batch_id": "2f2efc7ad822cf99",
+          "completed_stages": [
+            "bronze-input-sync",
+            "spark-commerce-bronze",
+            "spark-commerce-payment-silver",
+            "spark-commerce-order-silver",
+            "spark-commerce-product-silver",
+            "spark-commerce-customer-silver",
+            "spark-commerce-customer-scd2",
+            "spark-commerce-daily-gold",
+            "spark-commerce-current-gold"
+          ],
+          "verification": {
+            "status": "ready",
+            "table": "lakehouse.gold.commerce_daily",
+            "batch_id": "2f2efc7ad822cf99",
+            "days": 1,
+            "orders": 1,
+            "captured_revenue_cents": 1500
+          },
+          "checkpoint": {
+            "batch_id": "2f2efc7ad822cf99",
+            "created": true,
+            "state": "C:\\Users\\qwe\\Documents\\Codex\\2026-10-15\\new-chat\\outputs\\lakehouse-ops-refund-scenario\\artifacts\\refund\\demo-r2\\acceptance\\checkpoint.json"
+          },
+          "durations_seconds": {
+            "planning": 0.04660169999988284,
+            "stages": {
+              "bronze-input-sync": 1.9419857000002594,
+              "spark-commerce-bronze": 12.816834799999924,
+              "spark-commerce-payment-silver": 10.663359500000297,
+              "spark-commerce-order-silver": 11.20529230000011,
+              "spark-commerce-product-silver": 10.6506389999995,
+              "spark-commerce-customer-silver": 10.614888500000234,
+              "spark-commerce-customer-scd2": 10.225080899999739,
+              "spark-commerce-daily-gold": 13.69315220000044,
+              "spark-commerce-current-gold": 13.430184000000736
+            },
+            "verification": 0.12675519999902463,
+            "checkpoint": 0.04334000000017113,
+            "total": 95.45811380000032
+          }
+        }
+      },
+      {
+        "batch_id": "787f1740ab94d1c6",
+        "status": "ready",
+        "oracle": {
+          "batch_id": "787f1740ab94d1c6",
+          "captured_revenue_cents": 0,
+          "daily_revenue_cents": {
+            "2026-01-31": 0
+          },
+          "customer_history": [
+            {
+              "full_name": "Alice",
+              "valid_from": "2026-02-01T00:00:00Z",
+              "valid_to": "2026-02-02T00:00:00Z"
+            },
+            {
+              "full_name": "Alice Updated",
+              "valid_from": "2026-02-02T00:00:00Z",
+              "valid_to": null
+            }
+          ],
+          "historical_daily": [
+            {
+              "source_batch_id": "2f2efc7ad822cf99",
+              "order_day": "2026-01-31",
+              "captured_revenue_cents": 1500,
+              "order_count": 1
+            },
+            {
+              "source_batch_id": "787f1740ab94d1c6",
+              "order_day": "2026-01-31",
+              "captured_revenue_cents": 0,
+              "order_count": 1
+            },
+            {
+              "source_batch_id": "9218da37b2756ecf",
+              "order_day": "2026-01-31",
+              "captured_revenue_cents": 1000,
+              "order_count": 1
+            }
+          ],
+          "payment_history": [
+            {
+              "source_batch_id": "2f2efc7ad822cf99",
+              "payment_id": "PAY0000000001",
+              "status": "captured",
+              "amount_cents": 1500
+            },
+            {
+              "source_batch_id": "787f1740ab94d1c6",
+              "payment_id": "PAY0000000001",
+              "status": "refunded",
+              "amount_cents": 1500
+            },
+            {
+              "source_batch_id": "9218da37b2756ecf",
+              "payment_id": "PAY0000000001",
+              "status": "captured",
+              "amount_cents": 1000
+            }
+          ]
+        },
+        "pipeline": {
+          "status": "ready",
+          "batch_id": "787f1740ab94d1c6",
+          "completed_stages": [
+            "bronze-input-sync",
+            "spark-commerce-bronze",
+            "spark-commerce-payment-silver",
+            "spark-commerce-order-silver",
+            "spark-commerce-product-silver",
+            "spark-commerce-customer-silver",
+            "spark-commerce-customer-scd2",
+            "spark-commerce-daily-gold",
+            "spark-commerce-current-gold"
+          ],
+          "verification": {
+            "status": "ready",
+            "table": "lakehouse.gold.commerce_daily",
+            "batch_id": "787f1740ab94d1c6",
+            "days": 1,
+            "orders": 1,
+            "captured_revenue_cents": 0
+          },
+          "checkpoint": {
+            "batch_id": "787f1740ab94d1c6",
+            "created": true,
+            "state": "C:\\Users\\qwe\\Documents\\Codex\\2026-10-15\\new-chat\\outputs\\lakehouse-ops-refund-scenario\\artifacts\\refund\\demo-r2\\acceptance\\checkpoint.json"
+          },
+          "durations_seconds": {
+            "planning": 0.048088600000482984,
+            "stages": {
+              "bronze-input-sync": 0.9159459999991668,
+              "spark-commerce-bronze": 12.77046810000138,
+              "spark-commerce-payment-silver": 10.164289799999096,
+              "spark-commerce-order-silver": 11.153799600000639,
+              "spark-commerce-product-silver": 10.673666999999114,
+              "spark-commerce-customer-silver": 10.621809100000974,
+              "spark-commerce-customer-scd2": 8.699598199998945,
+              "spark-commerce-daily-gold": 13.188022700000147,
+              "spark-commerce-current-gold": 13.289983500000744
+            },
+            "verification": 0.11958149999918533,
+            "checkpoint": 0.04304080000110844,
+            "total": 91.68829490000098
+          }
+        }
+      },
+      {
+        "batch_id": "07525905a8767792",
+        "status": "ready",
+        "oracle": {
+          "batch_id": "07525905a8767792",
+          "captured_revenue_cents": 700,
+          "daily_revenue_cents": {
+            "2026-01-01": 700,
+            "2026-01-31": 0
+          },
+          "customer_history": [
+            {
+              "full_name": "Alice",
+              "valid_from": "2026-02-01T00:00:00Z",
+              "valid_to": "2026-02-02T00:00:00Z"
+            },
+            {
+              "full_name": "Alice Updated",
+              "valid_from": "2026-02-02T00:00:00Z",
+              "valid_to": null
+            }
+          ],
+          "historical_daily": [
+            {
+              "source_batch_id": "07525905a8767792",
+              "order_day": "2026-01-01",
+              "captured_revenue_cents": 700,
+              "order_count": 1
+            },
+            {
+              "source_batch_id": "07525905a8767792",
+              "order_day": "2026-01-31",
+              "captured_revenue_cents": 0,
+              "order_count": 1
+            },
+            {
+              "source_batch_id": "2f2efc7ad822cf99",
+              "order_day": "2026-01-31",
+              "captured_revenue_cents": 1500,
+              "order_count": 1
+            },
+            {
+              "source_batch_id": "787f1740ab94d1c6",
+              "order_day": "2026-01-31",
+              "captured_revenue_cents": 0,
+              "order_count": 1
+            },
+            {
+              "source_batch_id": "9218da37b2756ecf",
+              "order_day": "2026-01-31",
+              "captured_revenue_cents": 1000,
+              "order_count": 1
+            }
+          ],
+          "payment_history": [
+            {
+              "source_batch_id": "07525905a8767792",
+              "payment_id": "PAY0000000001",
+              "status": "refunded",
+              "amount_cents": 1500
+            },
+            {
+              "source_batch_id": "07525905a8767792",
+              "payment_id": "PAY0000000002",
+              "status": "captured",
+              "amount_cents": 700
+            },
+            {
+              "source_batch_id": "2f2efc7ad822cf99",
+              "payment_id": "PAY0000000001",
+              "status": "captured",
+              "amount_cents": 1500
+            },
+            {
+              "source_batch_id": "787f1740ab94d1c6",
+              "payment_id": "PAY0000000001",
+              "status": "refunded",
+              "amount_cents": 1500
+            },
+            {
+              "source_batch_id": "9218da37b2756ecf",
+              "payment_id": "PAY0000000001",
+              "status": "captured",
+              "amount_cents": 1000
+            }
+          ]
+        },
+        "pipeline": {
+          "status": "ready",
+          "batch_id": "07525905a8767792",
+          "completed_stages": [
+            "bronze-input-sync",
+            "spark-commerce-bronze",
+            "spark-commerce-payment-silver",
+            "spark-commerce-order-silver",
+            "spark-commerce-product-silver",
+            "spark-commerce-customer-silver",
+            "spark-commerce-customer-scd2",
+            "spark-commerce-daily-gold",
+            "spark-commerce-current-gold"
+          ],
+          "verification": {
+            "status": "ready",
+            "table": "lakehouse.gold.commerce_daily",
+            "batch_id": "07525905a8767792",
+            "days": 2,
+            "orders": 2,
+            "captured_revenue_cents": 700
+          },
+          "checkpoint": {
+            "batch_id": "07525905a8767792",
+            "created": true,
+            "state": "C:\\Users\\qwe\\Documents\\Codex\\2026-10-15\\new-chat\\outputs\\lakehouse-ops-refund-scenario\\artifacts\\refund\\demo-r2\\acceptance\\checkpoint.json"
+          },
+          "durations_seconds": {
+            "planning": 0.04432249999990745,
+            "stages": {
+              "bronze-input-sync": 0.9066038999990269,
+              "spark-commerce-bronze": 12.809385000000475,
+              "spark-commerce-payment-silver": 10.633660699999382,
+              "spark-commerce-order-silver": 13.520915900000546,
+              "spark-commerce-product-silver": 10.681761399999232,
+              "spark-commerce-customer-silver": 10.706083000000945,
+              "spark-commerce-customer-scd2": 8.664811200000258,
+              "spark-commerce-daily-gold": 13.21757289999914,
+              "spark-commerce-current-gold": 13.202818699999625
+            },
+            "verification": 0.11895280000135244,
+            "checkpoint": 0.04532659999858879,
+            "total": 94.55221459999848
+          }
+        }
+      },
+      {
+        "batch_id": "36900ab69616dbda",
+        "status": "ready",
+        "oracle": {
+          "batch_id": "36900ab69616dbda",
+          "captured_revenue_cents": 1000,
+          "daily_revenue_cents": {
+            "2026-01-01": 700,
+            "2026-01-31": 0,
+            "2026-02-05": 300
+          },
+          "customer_history": [
+            {
+              "full_name": "Alice",
+              "valid_from": "2026-02-01T00:00:00Z",
+              "valid_to": "2026-02-02T00:00:00Z"
+            },
+            {
+              "full_name": "Alice Updated",
+              "valid_from": "2026-02-02T00:00:00Z",
+              "valid_to": null
+            }
+          ],
+          "historical_daily": [
+            {
+              "source_batch_id": "07525905a8767792",
+              "order_day": "2026-01-01",
+              "captured_revenue_cents": 700,
+              "order_count": 1
+            },
+            {
+              "source_batch_id": "07525905a8767792",
+              "order_day": "2026-01-31",
+              "captured_revenue_cents": 0,
+              "order_count": 1
+            },
+            {
+              "source_batch_id": "2f2efc7ad822cf99",
+              "order_day": "2026-01-31",
+              "captured_revenue_cents": 1500,
+              "order_count": 1
+            },
+            {
+              "source_batch_id": "36900ab69616dbda",
+              "order_day": "2026-01-01",
+              "captured_revenue_cents": 700,
+              "order_count": 1
+            },
+            {
+              "source_batch_id": "36900ab69616dbda",
+              "order_day": "2026-01-31",
+              "captured_revenue_cents": 0,
+              "order_count": 1
+            },
+            {
+              "source_batch_id": "36900ab69616dbda",
+              "order_day": "2026-02-05",
+              "captured_revenue_cents": 300,
+              "order_count": 1
+            },
+            {
+              "source_batch_id": "787f1740ab94d1c6",
+              "order_day": "2026-01-31",
+              "captured_revenue_cents": 0,
+              "order_count": 1
+            },
+            {
+              "source_batch_id": "9218da37b2756ecf",
+              "order_day": "2026-01-31",
+              "captured_revenue_cents": 1000,
+              "order_count": 1
+            }
+          ],
+          "payment_history": [
+            {
+              "source_batch_id": "07525905a8767792",
+              "payment_id": "PAY0000000001",
+              "status": "refunded",
+              "amount_cents": 1500
+            },
+            {
+              "source_batch_id": "07525905a8767792",
+              "payment_id": "PAY0000000002",
+              "status": "captured",
+              "amount_cents": 700
+            },
+            {
+              "source_batch_id": "2f2efc7ad822cf99",
+              "payment_id": "PAY0000000001",
+              "status": "captured",
+              "amount_cents": 1500
+            },
+            {
+              "source_batch_id": "36900ab69616dbda",
+              "payment_id": "PAY0000000001",
+              "status": "refunded",
+              "amount_cents": 1500
+            },
+            {
+              "source_batch_id": "36900ab69616dbda",
+              "payment_id": "PAY0000000002",
+              "status": "captured",
+              "amount_cents": 700
+            },
+            {
+              "source_batch_id": "36900ab69616dbda",
+              "payment_id": "PAY0000000003",
+              "status": "captured",
+              "amount_cents": 300
+            },
+            {
+              "source_batch_id": "787f1740ab94d1c6",
+              "payment_id": "PAY0000000001",
+              "status": "refunded",
+              "amount_cents": 1500
+            },
+            {
+              "source_batch_id": "9218da37b2756ecf",
+              "payment_id": "PAY0000000001",
+              "status": "captured",
+              "amount_cents": 1000
+            }
+          ]
+        },
+        "pipeline": {
+          "status": "ready",
+          "batch_id": "36900ab69616dbda",
+          "completed_stages": [
+            "bronze-input-sync",
+            "spark-commerce-bronze",
+            "spark-commerce-payment-silver",
+            "spark-commerce-order-silver",
+            "spark-commerce-product-silver",
+            "spark-commerce-customer-silver",
+            "spark-commerce-customer-scd2",
+            "spark-commerce-daily-gold",
+            "spark-commerce-current-gold"
+          ],
+          "verification": {
+            "status": "ready",
+            "table": "lakehouse.gold.commerce_daily",
+            "batch_id": "36900ab69616dbda",
+            "days": 3,
+            "orders": 3,
+            "captured_revenue_cents": 1000
+          },
+          "checkpoint": {
+            "batch_id": "36900ab69616dbda",
+            "created": true,
+            "state": "C:\\Users\\qwe\\Documents\\Codex\\2026-10-15\\new-chat\\outputs\\lakehouse-ops-refund-scenario\\artifacts\\refund\\demo-r2\\acceptance\\checkpoint.json"
+          },
+          "durations_seconds": {
+            "planning": 0.04543620000004012,
+            "stages": {
+              "bronze-input-sync": 0.8980154000000766,
+              "spark-commerce-bronze": 12.26858700000048,
+              "spark-commerce-payment-silver": 10.107905900000333,
+              "spark-commerce-order-silver": 11.173534399998971,
+              "spark-commerce-product-silver": 10.1354007000009,
+              "spark-commerce-customer-silver": 10.647592899998926,
+              "spark-commerce-customer-scd2": 8.693573399999877,
+              "spark-commerce-daily-gold": 13.70019880000109,
+              "spark-commerce-current-gold": 13.365826799999923
+            },
+            "verification": 0.1332022999995388,
+            "checkpoint": 0.048102700000526966,
+            "total": 91.21737650000068
+          }
+        }
+      }
+    ],
+    "landing": [
+      {
+        "batch_id": "9218da37b2756ecf",
+        "created": 5,
+        "objects": 5,
+        "path": "s3://lakehouse/landing/source=commerce/batch_id=9218da37b2756ecf/"
+      },
+      {
+        "batch_id": "2f2efc7ad822cf99",
+        "created": 5,
+        "objects": 5,
+        "path": "s3://lakehouse/landing/source=commerce/batch_id=2f2efc7ad822cf99/"
+      },
+      {
+        "batch_id": "787f1740ab94d1c6",
+        "created": 5,
+        "objects": 5,
+        "path": "s3://lakehouse/landing/source=commerce/batch_id=787f1740ab94d1c6/"
+      },
+      {
+        "batch_id": "07525905a8767792",
+        "created": 5,
+        "objects": 5,
+        "path": "s3://lakehouse/landing/source=commerce/batch_id=07525905a8767792/"
+      },
+      {
+        "batch_id": "36900ab69616dbda",
+        "created": 5,
+        "objects": 5,
+        "path": "s3://lakehouse/landing/source=commerce/batch_id=36900ab69616dbda/"
+      }
+    ],
+    "refund_replay": {
+      "status": "ready",
+      "snapshots": [
+        {
+          "snapshots": 3
+        }
+      ],
+      "oracle": {
+        "batch_id": "787f1740ab94d1c6",
+        "captured_revenue_cents": 0,
+        "daily_revenue_cents": {
+          "2026-01-31": 0
+        },
+        "customer_history": [
+          {
+            "full_name": "Alice",
+            "valid_from": "2026-02-01T00:00:00Z",
+            "valid_to": "2026-02-02T00:00:00Z"
+          },
+          {
+            "full_name": "Alice Updated",
+            "valid_from": "2026-02-02T00:00:00Z",
+            "valid_to": null
+          }
+        ],
+        "historical_daily": [
+          {
+            "source_batch_id": "2f2efc7ad822cf99",
+            "order_day": "2026-01-31",
+            "captured_revenue_cents": 1500,
+            "order_count": 1
+          },
+          {
+            "source_batch_id": "787f1740ab94d1c6",
+            "order_day": "2026-01-31",
+            "captured_revenue_cents": 0,
+            "order_count": 1
+          },
+          {
+            "source_batch_id": "9218da37b2756ecf",
+            "order_day": "2026-01-31",
+            "captured_revenue_cents": 1000,
+            "order_count": 1
+          }
+        ],
+        "payment_history": [
+          {
+            "source_batch_id": "2f2efc7ad822cf99",
+            "payment_id": "PAY0000000001",
+            "status": "captured",
+            "amount_cents": 1500
+          },
+          {
+            "source_batch_id": "787f1740ab94d1c6",
+            "payment_id": "PAY0000000001",
+            "status": "refunded",
+            "amount_cents": 1500
+          },
+          {
+            "source_batch_id": "9218da37b2756ecf",
+            "payment_id": "PAY0000000001",
+            "status": "captured",
+            "amount_cents": 1000
+          }
+        ]
+      }
+    },
+    "idle": {
+      "status": "idle",
+      "batch_id": null,
+      "completed_stages": []
+    },
+    "current_mart_replay": "snapshot_stable",
+    "scope": "five_full_snapshots_refund_reference_stack"
+  },
+  "project": "lakehouse-ops-linked-refund-demo-c00ef9b93c6e4749915d8e19098d61ac",
+  "stage_container_events": {
+    "completed": 47,
+    "launch_intent": 47
+  },
+  "retained_volumes": [
+    "lakehouse-ops-linked-refund-demo-c00ef9b93c6e4749915d8e19098d61ac_bronze-input",
+    "lakehouse-ops-linked-refund-demo-c00ef9b93c6e4749915d8e19098d61ac_metastore-db-data",
+    "lakehouse-ops-linked-refund-demo-c00ef9b93c6e4749915d8e19098d61ac_minio-data",
+    "lakehouse-ops-linked-refund-demo-c00ef9b93c6e4749915d8e19098d61ac_trino-coordinator-data",
+    "lakehouse-ops-linked-refund-demo-c00ef9b93c6e4749915d8e19098d61ac_trino-worker-data",
+    "lakehouse-ops-linked-refund-demo-c00ef9b93c6e4749915d8e19098d61ac_warehouse-data"
+  ],
+  "foreign_container_ids_unchanged": [
+    "15eb7a373f06",
+    "3b9b1aea1aee",
+    "403bdc9fb905",
+    "48db691fab79",
+    "68bda87d7fd6",
+    "6d2b53fac4bf",
+    "7308ecbd8c75",
+    "77503b91af79",
+    "7a9279bc129c",
+    "82f6c5a7e46b",
+    "95985e961be7",
+    "a8c08b1b3147",
+    "b0314c8757ee",
+    "ff0debd699f2"
+  ],
+  "cleanup": {
+    "network": "lakehouse-ops-linked-refund-demo-c00ef9b93c6e4749915d8e19098d61ac_default",
+    "status": "absent"
+  },
+  "timings_not_a_performance_comparison": true,
+  "excluded_trial": "demo-r1 passed runner checks but its final order event timestamp followed the snapshot timestamp. Preserved as a non-authoritative trial; demo-r2 corrects the fixture and reruns all five snapshots.",
+  "limits": "Synthetic full refunds only; not partial-refund ledger, order cancellation, inside-commit failure or distributed exactly-once."
+}

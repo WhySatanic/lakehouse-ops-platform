@@ -6,6 +6,8 @@ from pyspark.sql import Column, DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
 from spark_catalog import build_session, required_environment
 
+PAYMENT_STATES = ("captured", "pending", "declined", "failed", "cancelled", "refunded")
+
 
 def quality_errors() -> Column:
     candidates = F.array(
@@ -28,6 +30,12 @@ def quality_errors() -> Column:
         F.when(
             F.col("status").isNull() | (F.length(F.trim("status")) == 0),
             F.lit("missing_status"),
+        ),
+        F.when(
+            F.col("status").isNotNull()
+            & (F.length(F.trim("status")) > 0)
+            & ~F.col("status").isin(*PAYMENT_STATES),
+            F.lit("unknown_status"),
         ),
         F.when(F.col("paid_at").isNull(), F.lit("missing_paid_at")),
         F.when(F.col("_payment_id_count") > 1, F.lit("duplicate_payment_id")),

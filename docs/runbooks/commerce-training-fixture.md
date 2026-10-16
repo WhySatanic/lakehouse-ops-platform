@@ -1,5 +1,11 @@
 # Commerce training fixture
 
+For complete-snapshot payment corrections and full refunds, see the
+[five-snapshot runner acceptance](commerce-refund-scenario.md).
+
+See the [payment state and full-refund contract](commerce-payment-states.md) for
+accepted statuses, unknown-status quarantine and complete-snapshot revenue semantics.
+
 This local source fixture supplies the related data that the weather example cannot:
 customers, products, orders, and payments. It is intended for SQL joins, dimensional
 modeling, incremental processing, late-arriving-data drills, and later gold marts.

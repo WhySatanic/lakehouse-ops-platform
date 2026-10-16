@@ -17,6 +17,8 @@ from typing import Any
 PORT_NAMES = ("MINIO_API_PORT", "MINIO_CONSOLE_PORT", "HIVE_METASTORE_PORT", "TRINO_HTTP_PORT")
 SERVICES = ("minio", "metastore-db", "hive-metastore", "trino-coordinator", "trino-worker")
 SCENARIOS = {
+    "refund": ("commerce_linked_acceptance", "linked.json", "lakehouse-ops-linked-refund-demo-",
+               "five_full_snapshots_refund_fresh_reference_stack", 2400),
     "linked": ("commerce_linked_acceptance", "linked.json", "lakehouse-ops-linked-demo-",
                "three_linked_snapshots_fresh_reference_stack", 1800),
     "owner-exit": ("commerce_owner_exit", "owner-exit.json", "lakehouse-ops-owner-exit-demo-",
@@ -167,6 +169,7 @@ def demo(root: Path, output: Path, *, run: Any = subprocess.run,
                            "--output", str(output / "acceptance"), "--s3-endpoint-url",
                            f"http://localhost:{env['MINIO_API_PORT']}", "--server",
                            f"http://localhost:{env['TRINO_HTTP_PORT']}"] +
+                (["--refund"] if scenario == "refund" else []) +
                 (["--late-customer-history"] if scenario == "linked-history" else []) +
                 (["--inflight-late-arrival"] if inflight_late_arrival else []) +
                 (["--orders", *(str(value) for value in orders)] if orders else []) +
@@ -195,9 +198,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--inflight-late-arrival", action="store_true")
+    parser.add_argument("--refund", action="store_true")
     args = parser.parse_args()
     try:
-        report = demo(Path.cwd(), args.output, inflight_late_arrival=args.inflight_late_arrival)
+        report = demo(Path.cwd(), args.output, scenario="refund" if args.refund else "linked",
+                      inflight_late_arrival=args.inflight_late_arrival)
     except ValueError as error:
         parser.error(str(error))
     print(json.dumps(report, sort_keys=True))

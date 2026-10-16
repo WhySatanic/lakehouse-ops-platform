@@ -61,6 +61,12 @@ class TrinoQueryResult:
     stats: TrinoQueryStats
 
 
+@dataclass(frozen=True, slots=True)
+class TrinoPlanningObservation:
+    result: TrinoQueryResult
+    planning_time_ms: int | None
+
+
 class _DeadlineStream(httpx.SyncByteStream):
     def __init__(self, stream: httpx.SyncByteStream, deadline: float, stopped: Event) -> None:
         self._stream = stream
@@ -125,6 +131,19 @@ class TrinoClient:
         return list(self.query_with_stats(sql).rows)
 
     def query_with_stats(self, sql: str) -> TrinoQueryResult:
+        result, _ = self._query_result(sql)
+        return result
+
+    def query_with_planning(self, sql: str) -> TrinoPlanningObservation:
+        """Observe final coordinator planning time without changing legacy reports."""
+        result, stats = self._query_result(sql)
+        planning = (
+            _non_negative_integer(stats, "planningTimeMillis")
+            if "planningTimeMillis" in stats else None
+        )
+        return TrinoPlanningObservation(result=result, planning_time_ms=planning)
+
+    def _query_result(self, sql: str) -> tuple[TrinoQueryResult, dict[str, Any]]:
         deadline = (
             None if self._query_timeout is None else monotonic() + self._query_timeout
         )
@@ -190,11 +209,12 @@ class TrinoClient:
                     rows.append(dict(zip(columns, values, strict=True)))
 
             if not next_uri:
-                return TrinoQueryResult(
+                result = TrinoQueryResult(
                     query_id=query_id,
                     rows=tuple(rows),
                     stats=_query_stats(payload.get("stats")),
                 )
+                return result, payload["stats"]
             if page == 1000:
                 raise TrinoPageLimitError(query_id, self._cancel_query(cancellation_uri))
             response = request("GET", cancellation_uri, headers=self._headers)

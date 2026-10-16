@@ -1,3 +1,4 @@
 *.properties text eol=lf
 *.sh text eol=lf
 docs/evidence/scd2-validation-probe-2026-10-16.py.txt -text
+docs/evidence/audit-customer-history-50.py text eol=lf
