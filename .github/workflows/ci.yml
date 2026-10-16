@@ -52,6 +52,53 @@ jobs:
           path: artifacts/commerce-fixture-scale.json
           if-no-files-found: error
 
+  commerce-refund-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install uv and dependencies
+        run: |
+          python -m pip install uv
+          uv sync --frozen --dev
+          mkdir -p artifacts/commerce-refund-source
+          git rev-parse HEAD > artifacts/commerce-refund-source/sha.txt
+      - name: Build existing catalog and compute images
+        timeout-minutes: 15
+        run: >-
+          uv run --frozen python -m lakehouse_ops.verified_build --attempts 3
+          --maven-central-fallback --delay-seconds 5 -- docker compose
+          --profile catalog --profile compute build minio hive-metastore spark-bronze spark-silver
+      - name: Preload pinned core images
+        run: >-
+          docker compose --profile catalog --profile query pull
+          metastore-db trino-coordinator trino-worker
+      - name: Verify full snapshot refund through ordinary commerce runner
+        timeout-minutes: 25
+        run: >-
+          uv run --frozen python -m lakehouse_ops.commerce_linked_demo --refund
+          --output artifacts/commerce-refund-ci > artifacts/commerce-refund-ci.stdout.json
+      - name: Independently verify retained refund checkpoint and journal
+        env:
+          LAKEOPS_REFUND_DIRECTORY: artifacts/commerce-refund-ci/acceptance
+        run: >-
+          uv run --frozen pytest tests/integration/test_commerce_refund.py -q -o addopts=''
+      - name: Upload raw refund acceptance and failure evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          archive: true
+          name: commerce-refund-evidence
+          path: |
+            artifacts/commerce-refund-source/
+            artifacts/commerce-refund-ci/
+            artifacts/commerce-refund-ci.stdout.json
+          if-no-files-found: error
+
   serving-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -1311,7 +1358,8 @@ jobs:
           down --volumes
 
   release-readiness:
-    needs: [quality, serving-integration, ranger-integration, lakehouse-integration]
+    needs: [quality, serving-integration, ranger-integration, lakehouse-integration,
+            commerce-refund-integration]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
