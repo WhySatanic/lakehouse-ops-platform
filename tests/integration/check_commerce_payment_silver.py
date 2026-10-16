@@ -2,9 +2,47 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime
 
+from gold_commerce_daily import summarize
+from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
+from silver_commerce_payments import classify
 from spark_catalog import build_session
+
+
+def check_payment_states(spark: SparkSession) -> None:
+    """Literal status/revenue oracle, also run by the ordinary payment silver CI check."""
+    stamp = datetime(2026, 2, 1, 12)
+    states = [
+        ("captured", []), ("declined", []), ("pending", []),
+        ("failed", []), ("cancelled", []), ("refunded", []),
+        ("capturedd", ["unknown_status"]), ("CAPTURED", ["unknown_status"]),
+        (" captured ", ["unknown_status"]), ("partially_refunded", ["unknown_status"]),
+        (None, ["missing_status"]), ("   ", ["missing_status"]),
+    ]
+    source = spark.createDataFrame(
+        [(f"p{i}", "order", 125, state, stamp) for i, (state, _) in enumerate(states)],
+        "payment_id string, order_id string, amount_cents long, status string, paid_at timestamp",
+    )
+    observed = {row.payment_id: row.quality_errors for row in classify(source).collect()}
+    assert observed == {f"p{i}": errors for i, (_, errors) in enumerate(states)}, observed
+    orders = spark.createDataFrame(
+        [("snapshot", "order", "customer", 125, stamp, False)],
+        "source_batch_id string, order_id string, customer_id string, "
+        "total_cents long, event_at timestamp, is_late boolean",
+    )
+    rejects = spark.createDataFrame([], "reject_id string, order_id string")
+    # Same payment identity in successive complete snapshots, not additive refund events.
+    for state, revenue in [("captured", 125), ("refunded", 0), ("cancelled", 0)]:
+        payment = source.filter(F.col("payment_id") == "p0").withColumn("status", F.lit(state))
+        valid = classify(payment).filter(F.size("quality_errors") == 0)
+        row = summarize(orders, valid, rejects).first()
+        assert row.captured_revenue_cents == revenue, (state, row)
+        assert row.captured_payment_count == int(state == "captured")
+        assert row.noncaptured_payment_count == int(state != "captured")
+        assert row.order_count == 1 and row.ordered_amount_cents == 125
+        assert row.missing_payment_count == row.rejected_payment_count == 0
 
 
 def main() -> None:
@@ -14,6 +52,7 @@ def main() -> None:
     spark = build_session("lakehouse-ops-commerce-payment-silver-check")
     spark.sparkContext.setLogLevel("WARN")
     try:
+        check_payment_states(spark)
         valid = spark.table("lakehouse.silver.commerce_payments").filter(
             F.col("source_batch_id") == batch_id
         )
