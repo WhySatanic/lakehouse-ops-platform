@@ -43,6 +43,11 @@ semantics and literal SQL acceptance.
 
 ## Before maintenance
 
+The [cold restore rehearsal](commerce-cold-restore.md) records a verified copy of
+the retained 33-batch fixture, including catalog, MinIO and runner state. It is
+evidence for that stopped fixture, not an automatic backup service or a retention
+change.
+
 1. Establish exclusive writer ownership for the intended warehouse, catalog and
    checkpoint. Resolve any unfinished active intent using the normal runner before
    planning maintenance. Record the current source manifest inventory and accepted
