@@ -273,10 +273,76 @@ def workload_configs(orders: list[int], *, customers: int = 10,
     ) for index in range(batches)]
 
 
+def customer_history_observation(client, configs, revisions) -> dict[str, Any]:
+    """Check every synthetic customer's periods, including returns to an earlier state."""
+    periods = []
+    for config, revision in zip(configs, revisions, strict=True):
+        if not periods or periods[-1]["revision"] != revision:
+            start = datetime.fromisoformat(config.batch_at).astimezone(UTC)
+            if periods:
+                periods[-1]["valid_to"] = start.isoformat()
+                periods[-1]["is_current"] = False
+            periods.append({"valid_from": start.isoformat(), "valid_to": None,
+                            "is_current": True, "revision": revision})
+    cases = []
+    for period in periods:
+        start = datetime.fromisoformat(period["valid_from"]).replace(tzinfo=None).isoformat(" ")
+        suffix = f" revision {period['revision']}" if period["revision"] else ""
+        cases.append(f"WHEN valid_from = TIMESTAMP '{start}' THEN '{suffix}'")
+    customers = configs[0].customers
+    sql = (
+        "SELECT cast(valid_from AS varchar) AS valid_from, "
+        'cast(valid_to AS varchar) AS valid_to, is_current, count(*) AS "rows", '
+        "count(DISTINCT customer_id) AS customers, count_if("
+        "regexp_like(customer_id, '^C[0-9]{8}$') AND "
+        f"try_cast(substr(customer_id, 2) AS bigint) BETWEEN 1 AND {customers} AND "
+        "full_name = concat('Customer ', substr(customer_id, 2), CASE "
+        + " ".join(cases) + " END)) AS matching_customers "
+        "FROM lakehouse.gold.dim_customers_scd2 GROUP BY valid_from, valid_to, is_current "
+        "ORDER BY valid_from, valid_to, is_current LIMIT 101"
+    )
+    query = client.query_with_stats(sql)
+    observed = []
+    for row in query.rows:
+        if type(row["is_current"]) is not bool:
+            raise ValueError("customer history current flag is not boolean")
+        def timestamp(value):
+            if value is None:
+                return None
+            parsed = datetime.fromisoformat(value.removesuffix(" UTC") + (
+                "+00:00" if value.endswith(" UTC") else ""
+            ))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=UTC)
+            return parsed.astimezone(UTC).isoformat()
+        observed.append({"valid_from": timestamp(row["valid_from"]),
+                         "valid_to": timestamp(row["valid_to"]),
+                         "is_current": row["is_current"]})
+        if any(type(row[key]) is not int or row[key] != customers for key in (
+            "rows", "customers", "matching_customers",
+        )):
+            raise ValueError("customer history counts or synthetic states differ from input oracle")
+    expected = [{key: row[key] for key in ("valid_from", "valid_to", "is_current")}
+                for row in periods]
+    if observed != expected:
+        raise ValueError("customer history periods differ from input oracle")
+    return {"status": "verified", "expected_periods": periods, "rows": query.rows,
+            "total_rows": customers * len(periods), "current_rows": customers,
+            "query_id": query.query_id, "query_stats": asdict(query.stats), "sql": sql}
+
+
 def profile(output: Path, *, orders: list[int], endpoint: str, server: str,
             warehouse_client: Any = None, customers: int = 10,
-            batches: int = 2, retained_references: bool = False) -> dict[str, Any]:
+            batches: int = 2, retained_references: bool = False,
+            customer_revisions: list[int] | None = None) -> dict[str, Any]:
     configs = workload_configs(orders, customers=customers, batches=batches)
+    if customer_revisions is not None and (
+        len(customer_revisions) != batches or any(
+            type(value) is not int or not 0 <= value <= 10000 for value in customer_revisions
+        )
+    ):
+        raise ValueError("customer revisions require one integer 0..10000 for each batch")
+    revisions = [0] * batches if customer_revisions is None else list(customer_revisions)
     if retained_references and warehouse_client is None:
         raise ValueError("retained references require warehouse inventory")
     project = os.environ.get("COMPOSE_PROJECT_NAME", "")
@@ -305,6 +371,9 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str,
                         "fresh catalog is not proof of cold images or host/OS caches",
                         "each Spark stage starts a new process even on the warm stack"],
     }
+    if customer_revisions is not None:
+        report["workload"].update({"customer_revisions": revisions,
+                                   "customer_attributes": "explicit_revision_sequence"})
     try:
         with TrinoClient(server, user="lakehouse-performance") as client:
             if file_inventory(client):
@@ -313,7 +382,8 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str,
                 volume = config.orders
                 label = f"sample-{index + 1}"
                 fixture = generate_commerce_fixture(output / label, config,
-                                                     source_semantics="full_snapshot")
+                                                     source_semantics="full_snapshot",
+                                                     customer_revision=revisions[index])
                 # Independent of Spark and the SQL marts: read this synthetic input.
                 with (fixture.path / "orders.jsonl").open(encoding="utf-8") as stream:
                     order_ids = {json.loads(line)["order_id"] for line in stream}
@@ -372,6 +442,11 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str,
                             {"revenue": expected_revenue},
                         )):
                     raise ValueError("SQL results do not reconcile to independent input oracle")
+                history = None
+                if customer_revisions is not None:
+                    history = customer_history_observation(
+                        client, configs[:index + 1], revisions[:index + 1],
+                    )
                 idle = measure_idle_replay(client, command, output, f"{label}-idle")
                 storage = None
                 if warehouse_client is not None:
@@ -400,6 +475,7 @@ def profile(output: Path, *, orders: list[int], endpoint: str, server: str,
                     "input_expected": expected, "current_query": asdict(current),
                     "idle_replay_observation": idle,
                     "warehouse_storage": storage,
+                    **({"customer_history": history} if history is not None else {}),
                 })
                 (output / "profile.json").write_text(json.dumps(report, indent=2))
                 if stack_observation.get("status") != "observed":
@@ -424,6 +500,8 @@ def main() -> int:
                         help="customer cardinality per full snapshot (2..100000)")
     parser.add_argument("--batches", type=int, default=2,
                         help="chronological snapshots (2..100); repeats second order volume")
+    parser.add_argument("--customer-revisions", nargs="+", type=int,
+                        help="one customer attribute revision 0..10000 per batch; verifies SCD2")
     parser.add_argument("--s3-endpoint-url", required=True)
     parser.add_argument("--server", required=True)
     parser.add_argument("--warehouse-inventory", action="store_true",
@@ -447,6 +525,7 @@ def main() -> int:
         report = profile(args.output, orders=args.orders, endpoint=args.s3_endpoint_url,
                          server=args.server, warehouse_client=warehouse_client,
                          customers=args.customers, batches=args.batches,
+                         customer_revisions=args.customer_revisions,
                          retained_references=args.retained_references)
     except Exception as error:
         print(f"commerce pipeline profile failed: {error}", file=sys.stderr)
