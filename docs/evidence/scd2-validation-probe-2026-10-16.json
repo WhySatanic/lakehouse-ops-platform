@@ -1,0 +1,289 @@
+{
+  "schema_version": 1,
+  "independent_verification": {
+    "status": "verified_rejected_candidate",
+    "raw_experiment_sha256": "29164e4844c9e9a10b8e2eb40f31c2bb1feee14c90773595bb179c18cc9bf260",
+    "decision": "keep existing production validator",
+    "medians_seconds": {
+      "baseline": {
+        "stage": 5.8624940989993775,
+        "process": 10.62845389999984
+      },
+      "candidate": {
+        "stage": 5.5895362720002595,
+        "process": 10.631703799999741
+      }
+    },
+    "stage_reduction_fraction": 0.0465600173560442,
+    "process_reduction_fraction": -0.0003057735424623065,
+    "stage_jobs_baseline": 47,
+    "stage_jobs_candidate": 37,
+    "limitations": "three matched replay pairs, separate Spark JVMs, one compacted restored warehouse; not changed-batch MERGE or whole-runner throughput"
+  },
+  "decision_policy": {
+    "recorded_at_utc": "2026-10-16T16:25:13.848826+00:00",
+    "adopt_only_if": "all three pairs improve stage time; median stage and process reductions at least 10 percent; all correctness and unchanged warehouse checks pass",
+    "scope": "selected-batch replay only; no merge-write throughput claim"
+  },
+  "observed_experiment": {
+    "status": "ready",
+    "started_at_utc": "2026-10-16T16:23:56.428638+00:00",
+    "project": "lakehouse-ops-scale-restore-d726818e472145ebab90dfa06198972d",
+    "base_sha": "e2debb5b424bf3b9fb7aef9febd18400ca38d2ef",
+    "probe_sha256": "3bb895b31213fdd4633e5a0cc2c99fbc819cf4e9cc4bf4492c15e624aca71a85",
+    "prior_maintenance_sha256": "e82885c8293f8101b05a52b05952d3bee13f463697c3f5c7bbd9b5db368ff1e3",
+    "pairs": [
+      {
+        "pair": 1,
+        "order": [
+          "baseline",
+          "candidate"
+        ],
+        "runs": {
+          "baseline": {
+            "report": {
+              "status": "ready",
+              "mode": "baseline",
+              "stage_seconds": 6.148353552000117,
+              "spark_job_count": 47,
+              "result": {
+                "status": "ready",
+                "batch_id": "24e47c2864bd8fb4",
+                "source_rows": 10000,
+                "changed_rows": 0,
+                "target_rows_before": 330000,
+                "target_rows_after": 330000,
+                "rows_inserted": 0,
+                "current_rows_before": 10000,
+                "current_rows_after": 10000
+              }
+            },
+            "process_seconds": 11.575042899999971
+          },
+          "candidate": {
+            "report": {
+              "status": "ready",
+              "mode": "candidate",
+              "stage_seconds": 5.749684544999582,
+              "spark_job_count": 37,
+              "result": {
+                "status": "ready",
+                "batch_id": "24e47c2864bd8fb4",
+                "source_rows": 10000,
+                "changed_rows": 0,
+                "target_rows_before": 330000,
+                "target_rows_after": 330000,
+                "rows_inserted": 0,
+                "current_rows_before": 10000,
+                "current_rows_after": 10000
+              }
+            },
+            "process_seconds": 10.761336499999743
+          }
+        }
+      },
+      {
+        "pair": 2,
+        "order": [
+          "candidate",
+          "baseline"
+        ],
+        "runs": {
+          "candidate": {
+            "report": {
+              "status": "ready",
+              "mode": "candidate",
+              "stage_seconds": 5.5001681329995336,
+              "spark_job_count": 37,
+              "result": {
+                "status": "ready",
+                "batch_id": "24e47c2864bd8fb4",
+                "source_rows": 10000,
+                "changed_rows": 0,
+                "target_rows_before": 330000,
+                "target_rows_after": 330000,
+                "rows_inserted": 0,
+                "current_rows_before": 10000,
+                "current_rows_after": 10000
+              }
+            },
+            "process_seconds": 10.631703799999741
+          },
+          "baseline": {
+            "report": {
+              "status": "ready",
+              "mode": "baseline",
+              "stage_seconds": 5.8624940989993775,
+              "spark_job_count": 47,
+              "result": {
+                "status": "ready",
+                "batch_id": "24e47c2864bd8fb4",
+                "source_rows": 10000,
+                "changed_rows": 0,
+                "target_rows_before": 330000,
+                "target_rows_after": 330000,
+                "rows_inserted": 0,
+                "current_rows_before": 10000,
+                "current_rows_after": 10000
+              }
+            },
+            "process_seconds": 10.62845389999984
+          }
+        }
+      },
+      {
+        "pair": 3,
+        "order": [
+          "baseline",
+          "candidate"
+        ],
+        "runs": {
+          "baseline": {
+            "report": {
+              "status": "ready",
+              "mode": "baseline",
+              "stage_seconds": 5.698476593999658,
+              "spark_job_count": 47,
+              "result": {
+                "status": "ready",
+                "batch_id": "24e47c2864bd8fb4",
+                "source_rows": 10000,
+                "changed_rows": 0,
+                "target_rows_before": 330000,
+                "target_rows_after": 330000,
+                "rows_inserted": 0,
+                "current_rows_before": 10000,
+                "current_rows_after": 10000
+              }
+            },
+            "process_seconds": 10.57060619999993
+          },
+          "candidate": {
+            "report": {
+              "status": "ready",
+              "mode": "candidate",
+              "stage_seconds": 5.5895362720002595,
+              "spark_job_count": 37,
+              "result": {
+                "status": "ready",
+                "batch_id": "24e47c2864bd8fb4",
+                "source_rows": 10000,
+                "changed_rows": 0,
+                "target_rows_before": 330000,
+                "target_rows_after": 330000,
+                "rows_inserted": 0,
+                "current_rows_before": 10000,
+                "current_rows_after": 10000
+              }
+            },
+            "process_seconds": 10.560685099999318
+          }
+        }
+      }
+    ],
+    "spark_image": "sha256:ee19f0f26f627da53f951179a3d21ec8c4320923c7f0c3a8c38a2efca93abeb8",
+    "correctness": {
+      "report": {
+        "status": "ready",
+        "mode": "correctness",
+        "cases": [
+          {
+            "name": "empty",
+            "expected": true,
+            "baseline": true,
+            "candidate": true
+          },
+          {
+            "name": "current_only",
+            "expected": true,
+            "baseline": true,
+            "candidate": true
+          },
+          {
+            "name": "continuous",
+            "expected": true,
+            "baseline": true,
+            "candidate": true
+          },
+          {
+            "name": "many_customers",
+            "expected": true,
+            "baseline": true,
+            "candidate": true
+          },
+          {
+            "name": "missing_current",
+            "expected": false,
+            "baseline": false,
+            "candidate": false
+          },
+          {
+            "name": "duplicate_current",
+            "expected": false,
+            "baseline": false,
+            "candidate": false
+          },
+          {
+            "name": "reversed_period",
+            "expected": false,
+            "baseline": false,
+            "candidate": false
+          },
+          {
+            "name": "zero_period",
+            "expected": false,
+            "baseline": false,
+            "candidate": false
+          },
+          {
+            "name": "closed_current",
+            "expected": false,
+            "baseline": false,
+            "candidate": false
+          },
+          {
+            "name": "open_historical",
+            "expected": false,
+            "baseline": false,
+            "candidate": false
+          },
+          {
+            "name": "gap",
+            "expected": false,
+            "baseline": false,
+            "candidate": false
+          },
+          {
+            "name": "overlap",
+            "expected": false,
+            "baseline": false,
+            "candidate": false
+          },
+          {
+            "name": "null_current_only",
+            "expected": false,
+            "baseline": false,
+            "candidate": false
+          },
+          {
+            "name": "null_customer_current",
+            "expected": true,
+            "baseline": true,
+            "candidate": true
+          }
+        ]
+      },
+      "process_seconds": 14.566664500000115
+    },
+    "warehouse_metadata_unchanged": true,
+    "network_cleanup": {
+      "network": "lakehouse-ops-scale-restore-d726818e472145ebab90dfa06198972d_default",
+      "status": "absent"
+    },
+    "cleanup_verified": true,
+    "ended_at_utc": "2026-10-16T16:26:25.299602+00:00"
+  },
+  "probe_source": "scd2-validation-probe-2026-10-16.py",
+  "operator_script_sha256": "38b69d96f85423308bd1f78cdebb42ab3bf9c18cdec773de455b3d8c56f77b62",
+  "verification_script_sha256": "bfecf00afccae2f83859214471e9de2528714c94f1573f96b288609b1189ac49"
+}
