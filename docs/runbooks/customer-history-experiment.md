@@ -91,3 +91,69 @@ the raw artifact, compare its source/manifest/report hashes and independently ch
 the expected rows, checkpoint and storage sums. Local raw files are operator evidence;
 the linked CI artifact is the published raw run. Successful measurement does not
 replace the five mandatory exact-head checks required for merging.
+
+## Interrupted 50-snapshot attempt, 2026-10-16
+
+A local attempt requested 10000 customers, 100 canonical orders, 50 chronological
+full snapshots beginning 2026-02-01 and revisions 0 through 49. Source was
+`4902dc1aa8f9b0a1db51d45a2294b30844cde543`; pinned image inspections and operator/report hashes are
+preserved with the [partial evidence](../evidence/customer-history-depth-interrupted-2026-10-16.json).
+It used a fresh owned five-service stack with listing-only inventory credentials,
+the production nine-stage runner, both storage observers and a 10800-second child
+budget. The four-snapshot CI workflow above still has its original fixed inputs.
+
+The attempt did **not** complete. Only 32 full observations and 32 checkpoint entries
+were independently verified. The last observed state had 320000 history rows,
+10000 current customers and 32 SCD2 snapshots. Every completed observation verified
+all customer IDs/names, chronological half-open daily periods, row/current counts,
+100 orders, captured revenue 277225 cents, compute-free idle and reconciled storage.
+The independently checked stored SQL results do not establish current live state
+after interruption. Raw fixtures/manifests, SQL/results, logs and inventories remain
+local operator evidence, not an uploaded CI artifact or a volume backup.
+
+| Completed snapshot | History rows | Warehouse payload, B | Runner, s |
+|---|---:|---:|---:|
+| 1 | 10000 | 1964834 | 110.366 |
+| 4 | 40000 | 10950517 | 105.380 |
+| 8 | 80000 | 23869816 | 111.020 |
+| 16 | 160000 | 50806948 | 107.777 |
+| 24 | 240000 | 78825393 | 114.272 |
+| 32 | 320000 | 107959234 | 121.238 |
+
+At observation 32, current referenced data was 55092023 B, retained-only data
+36799870 B and metadata 16067341 B, totaling 107959234 B. Delete-reference and S3
+noncurrent payloads were zero. Current-only accounting would omit 52867211 B.
+These are versioned object payload bytes, not physical disk consumption/billing;
+metadata and objects outside selected file references are not proven orphans.
+Timings include process/JVM/SQL/IO; this single prefix is neither a matched A/B
+comparison nor a capacity limit or evidence of optimization.
+
+Sample 33 has fixtures and a Spark log ending with executor rejection at
+08:06:32 UTC, but no completed sample result. The operator session returned
+1073807364. At inspection the operator/profile processes were absent, the Docker
+Linux engine pipe was absent and the Docker Windows service was stopped. The
+cause of interruption remains unknown: these observations do not establish OOM,
+an application deadline, or failure inside an Iceberg commit. Reports still saying
+`running` are stale; no recovery/replay of sample 33 has been verified.
+
+Owned teardown and preservation of the seven original foreign container IDs could
+not be verified while Docker was unavailable. No broad Docker restart, prune or
+volume deletion was attempted. Before another local experiment, inspect this exact
+project after Docker is available and confirm that no writer is active:
+`lakehouse-ops-scale-depth-history-8756af0fa1094b1dbf30f1ada8bc8ea0`.
+Collect its service/task/exit-state logs before any owned cleanup. Scope cleanup
+only to that confirmed project and an empty owned network; preserve volumes and
+all foreign services. Then repeat the entire workload on a fresh owned project,
+with the memory overlay and listing observer used above, retaining provenance:
+
+```text
+uv run --frozen python -m lakehouse_ops.commerce_pipeline_profile --output artifacts/history-depth-repeat --orders 100 100 --customers 10000 --batches 50 --customer-revisions 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 --warehouse-inventory --retained-references --s3-endpoint-url <owned-minio-url> --server <owned-trino-url>
+```
+
+This command requires the existing isolated profile setup, owned Compose project
+environment and credentials; it is not a standalone stack launcher. Require all
+50 completed observations, exact checkpoint manifests, final 500000 history rows
+and 10000 current customers, literal periods/names for every snapshot, storage
+reconciliation, idle replay and verified owned cleanup before marking it ready.
+Do not restart against the partial catalog by bypassing the empty-catalog guard.
+The 50/100-snapshot acceptance criteria remain open.
