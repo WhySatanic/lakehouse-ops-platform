@@ -1,0 +1,110 @@
+{
+  "schema_version": "1.0",
+  "scope": "bounded_100_snapshot_admission_with_real_four_snapshot_compatibility_only",
+  "hundred_snapshot_observed": false,
+  "budgets": {
+    "four": {
+      "profile_seconds": 1800,
+      "step_minutes": 38,
+      "job_minutes": 60
+    },
+    "fifty": {
+      "profile_seconds": 10800,
+      "step_minutes": 190,
+      "job_minutes": 220
+    },
+    "hundred": {
+      "profile_seconds": 19500,
+      "step_minutes": 335,
+      "job_minutes": 360
+    }
+  },
+  "budget_basis": {
+    "observed_run_id": 38922050656,
+    "observed_fifty_profile_seconds": 9749.684965491,
+    "twice_observed_seconds": 19499.369930982,
+    "limitation": "Doubling the observation almost exhausts the 100 child budget. Not a forecast or capacity promise. A partial timeout is failed retained evidence."
+  },
+  "test_first": {
+    "red": "5 failed, 27 passed before allowing100",
+    "green": "32 passed",
+    "faults": [
+      "partial profile",
+      "wrong final history count",
+      "running profile",
+      "profile timeout preserves32 samples and rethrows",
+      "cleanup timeout keeps failed report",
+      "invalid depth before output or Docker"
+    ]
+  },
+  "full_local_suite": {
+    "passed": 1843,
+    "skipped": 42,
+    "coverage_percent": 92.86
+  },
+  "actual_four_snapshot_compatibility": {
+    "status": "verified",
+    "source_base": "128792862fdc59eb1869c49de5f08d2421680735",
+    "working_source_sha256": {
+      "tests/integration/test_customer_history_experiment.py": "38027c28e888657da424893d61a444f881ffc1a4b862a4ab1fc5f25dc223d58f",
+      ".github/workflows/customer-history-experiment.yml": "446330fcbf19fec15d9fecb4b6a67e52089155fdfebb013306c6c25097cc7575",
+      "tests/test_customer_history_experiment_exercise.py": "c274f0874f4908e363fab92b8901a7fc80875964ab5be53dd231af3bcab598c5"
+    },
+    "source_identity_note": "Base plus these modified working source files, not an already committed measurement head; hashes bind actual Windows bytes.",
+    "project": "lakehouse-ops-scale-history-1ced797718164e448aa97d8639c56112",
+    "experiment_sha256": "b2ae2e355c2c51a6280508ffe0834718752476e905a4b67ac04ae7ddca0cc158",
+    "profile_sha256": "b8e38c542e69cdc32382b8183fab1f02a245f3d02f27d9fbeb09915168e52240",
+    "checkpoint_sha256": "634bd2ad32af798f4a950c556008baf8772735cbfe49fa7e1ec55a8e88793185",
+    "history_rows": [
+      10000,
+      20000,
+      20000,
+      30000
+    ],
+    "current_customers": 10000,
+    "revenue_cents": [
+      277225,
+      277225,
+      277225,
+      277225
+    ],
+    "manifest_sha256": [
+      "eb9c34473e0bd42d7b0d5a5b9858bf2b48850801b305ffe195415e04ca33a7b1",
+      "fba5e215a3092eff68ca0bd4f7d81c7badc741c8886b6b1b866cf79602070400",
+      "c9de58959759133965167d8bc815c1be1e1fd897b0fae1382b83a99678974ee2",
+      "756bbc9f91cfbd30655c40e8654eeee548799c071a7ae12c4dc9178b23f7a858"
+    ],
+    "cleanup": {
+      "network": {
+        "network": "lakehouse-ops-scale-history-1ced797718164e448aa97d8639c56112_default",
+        "status": "absent"
+      },
+      "foreign_container_ids": [
+        "15eb7a373f06",
+        "3b9b1aea1aee",
+        "403bdc9fb905",
+        "48db691fab79",
+        "68bda87d7fd6",
+        "6d2b53fac4bf",
+        "7308ecbd8c75",
+        "77503b91af79",
+        "7a9279bc129c",
+        "82f6c5a7e46b",
+        "95985e961be7",
+        "a8c08b1b3147",
+        "b0314c8757ee",
+        "ff0debd699f2"
+      ],
+      "foreign_unchanged": true,
+      "retained_named_volumes": 6
+    }
+  },
+  "limitations": [
+    "100 snapshots not executed by this local check.",
+    "Synthetic100-count profiles in unit tests are not measured workload evidence.",
+    "Four-snapshot timings were not benchmarked; host tests ran concurrently.",
+    "Existing50 observation and resource budgets do not guarantee100 completes.",
+    "Hard job/runner termination can prevent finally/upload despite timeout hierarchy.",
+    "No production pipeline or release policy changes."
+  ]
+}

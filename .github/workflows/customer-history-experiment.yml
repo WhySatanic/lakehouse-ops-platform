@@ -4,13 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       snapshots:
-        description: Chronological snapshots (50 is a bounded history-depth experiment)
+        description: Chronological snapshots (50/100 are bounded history-depth experiments)
         type: choice
         required: true
         default: "4"
         options:
           - "4"
           - "50"
+          - "100"
   pull_request:
     paths:
       - .github/workflows/customer-history-experiment.yml
@@ -27,7 +28,7 @@ concurrency:
 jobs:
   customer-history-experiment:
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ inputs.snapshots == '50' && 220 || 60 }}
+    timeout-minutes: ${{ inputs.snapshots == '100' && 360 || inputs.snapshots == '50' && 220 || 60 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -58,7 +59,7 @@ jobs:
           docker compose --profile catalog --profile query pull
           metastore-db trino-coordinator trino-worker
       - name: Measure customer snapshots and retained warehouse
-        timeout-minutes: ${{ inputs.snapshots == '50' && 190 || 38 }}
+        timeout-minutes: ${{ inputs.snapshots == '100' && 335 || inputs.snapshots == '50' && 190 || 38 }}
         env:
           LAKEOPS_CUSTOMER_HISTORY_BATCHES: ${{ inputs.snapshots || '4' }}
         run: >-

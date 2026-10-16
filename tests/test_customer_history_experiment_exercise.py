@@ -16,7 +16,8 @@ def module():
 
 
 def completed_profile(batches=4):
-    totals = (10000, 20000, 20000, 30000) if batches == 4 else range(10000, 510000, 10000)
+    totals = ((10000, 20000, 20000, 30000) if batches == 4
+              else range(10000, (batches + 1) * 10000, 10000))
     return {"status": "ready", "samples": [{
         "batch_id": f"batch-{i}", "customer_history": {"status": "verified", "total_rows": rows,
                                                     "current_rows": 10000},
@@ -30,8 +31,9 @@ def completed_profile(batches=4):
 
 
 @pytest.mark.parametrize("fault", [None, "partial", "wrong_last_period_count", "running"])
-def test_depth_measurements_require_all_fifty_observed_snapshots(fault):
-    profile = completed_profile(50)
+@pytest.mark.parametrize("batches", [50, 100])
+def test_depth_measurements_require_every_observed_snapshot(fault, batches):
+    profile = completed_profile(batches)
     if fault == "partial":
         profile["samples"] = profile["samples"][:32]
     elif fault == "wrong_last_period_count":
@@ -40,14 +42,16 @@ def test_depth_measurements_require_all_fifty_observed_snapshots(fault):
         profile["status"] = "running"
     if fault:
         with pytest.raises(ValueError):
-            module()["measurements"](profile, batches=50)
+            module()["measurements"](profile, batches=batches)
     else:
-        result = module()["measurements"](profile, batches=50)
-        assert len(result) == 50
-        assert [sample["history_rows"] for sample in result] == list(range(10000, 510000, 10000))
+        result = module()["measurements"](profile, batches=batches)
+        assert len(result) == batches
+        assert [sample["history_rows"] for sample in result] == list(
+            range(10000, (batches + 1) * 10000, 10000)
+        )
 
 
-@pytest.mark.parametrize("batches", [0, 5, 100, True, 4.0, "50"])
+@pytest.mark.parametrize("batches", [0, 5, 101, True, 4.0, "50"])
 def test_invalid_depth_rejected_before_output_or_docker(tmp_path, batches):
     output = tmp_path / "invalid"
 
@@ -60,22 +64,26 @@ def test_invalid_depth_rejected_before_output_or_docker(tmp_path, batches):
 
 
 @pytest.mark.parametrize("fault", [None, "profile_timeout", "cleanup"])
-def test_fifty_snapshot_experiment_bounds_child_and_preserves_failure(tmp_path, fault):
+@pytest.mark.parametrize("batches,timeout", [(50, 10800), (100, 19500)])
+def test_depth_experiment_bounds_child_and_preserves_failure(tmp_path, fault, batches, timeout):
     output = tmp_path / "depth"
     calls = []
 
     def run(command, **options):
         calls.append(command)
         if command[1] == "-m":
-            assert options["timeout"] == 10800
-            assert command[command.index("--batches") + 1] == "50"
+            assert options["timeout"] == timeout
+            assert command[command.index("--batches") + 1] == str(batches)
             begin = command.index("--customer-revisions") + 1
             end = command.index("--warehouse-inventory")
-            assert command[begin:end] == [str(i) for i in range(50)]
-            if fault == "profile_timeout":
-                raise subprocess.TimeoutExpired(command, options["timeout"])
+            assert command[begin:end] == [str(i) for i in range(batches)]
             (output / "profile").mkdir()
-            (output / "profile/profile.json").write_text(json.dumps(completed_profile(50)))
+            if fault == "profile_timeout":
+                partial = completed_profile(batches)
+                partial.update(status="failed", samples=partial["samples"][:32])
+                (output / "profile/profile.json").write_text(json.dumps(partial))
+                raise subprocess.TimeoutExpired(command, options["timeout"])
+            (output / "profile/profile.json").write_text(json.dumps(completed_profile(batches)))
         if "down" in command and fault == "cleanup":
             raise subprocess.TimeoutExpired(command, options["timeout"])
         assert "--volumes" not in command and "prune" not in command
@@ -89,15 +97,18 @@ def test_fifty_snapshot_experiment_bounds_child_and_preserves_failure(tmp_path, 
 
     if fault == "profile_timeout":
         with pytest.raises(subprocess.TimeoutExpired):
-            module()["experiment"](tmp_path, output, run=run, batches=50)
+            module()["experiment"](tmp_path, output, run=run, batches=batches)
     else:
-        result = module()["experiment"](tmp_path, output, run=run, batches=50)
+        result = module()["experiment"](tmp_path, output, run=run, batches=batches)
         assert result["status"] == ("failed" if fault else "ready")
     evidence = json.loads((output / "experiment.json").read_text())
-    assert evidence["workload"]["batches"] == 50
-    assert evidence["workload"]["customer_revisions"] == list(range(50))
+    assert evidence["workload"]["batches"] == batches
+    assert evidence["workload"]["customer_revisions"] == list(range(batches))
     assert evidence["status"] == ("failed" if fault else "ready")
     assert any("down" in command for command in calls)
+    if fault == "profile_timeout":
+        assert "measurements" not in evidence
+        assert len(json.loads((output / "profile/profile.json").read_text())["samples"]) == 32
 
 
 @pytest.mark.parametrize("fault", [None, "rows", "current", "sum", "idle", "partial"])
@@ -176,8 +187,11 @@ def test_ci_experiment_preserves_required_ci_and_uploads_failure_evidence():
     assert "if: always()" in workflow and "artifacts/customer-history-ci/" in workflow
     assert "contents: read" in workflow and "secrets." not in workflow
     assert 'default: "4"' in workflow and '          - "50"' in workflow
-    assert "${{ inputs.snapshots == '50' && 220 || 60 }}" in workflow
-    assert "${{ inputs.snapshots == '50' && 190 || 38 }}" in workflow
+    assert '          - "100"' in workflow
+    assert ("${{ inputs.snapshots == '100' && 360 || "
+            "inputs.snapshots == '50' && 220 || 60 }}") in workflow
+    assert ("${{ inputs.snapshots == '100' && 335 || "
+            "inputs.snapshots == '50' && 190 || 38 }}") in workflow
     assert "LAKEOPS_CUSTOMER_HISTORY_BATCHES: ${{ inputs.snapshots || '4' }}" in workflow
     for job in ("quality", "serving-integration", "ranger-integration", "lakehouse-integration",
                 "release-readiness"):
