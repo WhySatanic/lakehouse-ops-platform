@@ -24,11 +24,23 @@ mc admin policy attach local lakehouse-warehouse-inventory --user lakeops-invent
 '''
 
 
-def measurements(profile):
-    if profile.get("status") != "ready" or len(profile.get("samples", [])) != 4:
-        raise ValueError("requires four completed profile samples")
+def history_workload(batches):
+    if type(batches) is not int or batches not in (4, 50):
+        raise ValueError("customer history experiment requires 4 or 50 snapshots")
+    return ([0, 1, 1, 2], 1800) if batches == 4 else (list(range(50)), 10800)
+
+
+def measurements(profile, *, batches=4):
+    revisions, _ = history_workload(batches)
+    totals = []
+    periods = 0
+    for index, revision in enumerate(revisions):
+        periods += index == 0 or revision != revisions[index - 1]
+        totals.append(periods * 10000)
+    if profile.get("status") != "ready" or len(profile.get("samples", [])) != batches:
+        raise ValueError(f"requires {batches} completed profile samples")
     result = []
-    for sample, total in zip(profile["samples"], (10000, 20000, 20000, 30000), strict=True):
+    for sample, total in zip(profile["samples"], totals, strict=True):
         history, storage = sample["customer_history"], sample["warehouse_storage"]
         accounting = storage["reference_accounting"]
         if (history["status"] != "verified" or history["total_rows"] != total
@@ -47,7 +59,8 @@ def measurements(profile):
     return result
 
 
-def experiment(root, output, run=subprocess.run):
+def experiment(root, output, run=subprocess.run, *, batches=4):
+    revisions, profile_timeout = history_workload(batches)
     root, output = root.resolve(), output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     project = "lakehouse-ops-scale-history-" + uuid.uuid4().hex
@@ -66,9 +79,9 @@ def experiment(root, output, run=subprocess.run):
     compose = ["docker", "compose", "--project-name", project,
                "--profile", "catalog", "--profile", "compute", "--profile", "query"]
     report = {"status": "failed", "source_sha": os.getenv("GITHUB_SHA"), "project": project,
-              "scope": "one_fresh_stack_four_snapshots_not_capacity_or_billing",
-              "workload": {"customers": 10000, "orders": 100, "batches": 4,
-                           "customer_revisions": [0, 1, 1, 2]}, "steps": []}
+              "scope": "one_fresh_stack_bounded_snapshots_not_capacity_or_billing",
+              "workload": {"customers": 10000, "orders": 100, "batches": batches,
+                           "customer_revisions": revisions}, "steps": []}
 
     def execute(label, command, timeout):
         step = {"name": label, "status": "failed", "timeout_seconds": timeout}
@@ -89,12 +102,14 @@ def experiment(root, output, run=subprocess.run):
                              "minio-init", "-ec", OBSERVER_SETUP], 60)
         execute("profile", [sys.executable, "-m", "lakehouse_ops.commerce_pipeline_profile",
                             "--output", str(output / "profile"), "--orders", "100", "100",
-                            "--customers", "10000", "--batches", "4", "--customer-revisions",
-                            "0", "1", "1", "2", "--warehouse-inventory", "--retained-references",
+                            "--customers", "10000", "--batches", str(batches),
+                            "--customer-revisions", *map(str, revisions),
+                            "--warehouse-inventory", "--retained-references",
                             "--s3-endpoint-url", f"http://localhost:{env['MINIO_API_PORT']}",
-                            "--server", f"http://localhost:{env['TRINO_HTTP_PORT']}"], 1800)
+                            "--server", f"http://localhost:{env['TRINO_HTTP_PORT']}"],
+                profile_timeout)
         raw = (output / "profile/profile.json").read_bytes()
-        report["measurements"] = measurements(json.loads(raw))
+        report["measurements"] = measurements(json.loads(raw), batches=batches)
         report["profile_sha256"] = hashlib.sha256(raw).hexdigest()
         report["status"] = "ready"
     except Exception as error:
@@ -116,6 +131,7 @@ def experiment(root, output, run=subprocess.run):
 
 @pytest.mark.skipif(os.getenv("LAKEOPS_RUN_CUSTOMER_HISTORY_EXPERIMENT") != "1",
                     reason="requires prebuilt images and one owned Docker experiment stack")
-def test_four_changing_customer_snapshots_and_retained_warehouse():
-    report = experiment(Path.cwd(), Path("artifacts/customer-history-ci"))
+def test_changing_customer_snapshots_and_retained_warehouse():
+    batches = int(os.getenv("LAKEOPS_CUSTOMER_HISTORY_BATCHES", "4"))
+    report = experiment(Path.cwd(), Path("artifacts/customer-history-ci"), batches=batches)
     assert report["status"] == "ready", report.get("cleanup_error")
