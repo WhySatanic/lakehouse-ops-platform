@@ -1,0 +1,65 @@
+name: Customer history experiment
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/customer-history-experiment.yml
+      - tests/integration/test_customer_history_experiment.py
+      - tests/test_customer_history_experiment_exercise.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: customer-history-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  customer-history-experiment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install uv and dependencies
+        run: |
+          python -m pip install uv
+          uv sync --frozen --dev
+      - name: Record source and runner resources
+        run: |
+          mkdir -p artifacts/customer-history-runner
+          git rev-parse HEAD > artifacts/customer-history-runner/source-sha.txt
+          uname -a > artifacts/customer-history-runner/kernel.txt
+          lscpu > artifacts/customer-history-runner/cpu.txt
+          free -b > artifacts/customer-history-runner/memory.txt
+          docker info > artifacts/customer-history-runner/docker-info.txt
+      - name: Build existing catalog and compute images
+        timeout-minutes: 15
+        run: >-
+          uv run --frozen python -m lakehouse_ops.verified_build --attempts 3
+          --maven-central-fallback --delay-seconds 5 -- docker compose
+          --profile catalog --profile compute build minio hive-metastore spark-bronze spark-silver
+      - name: Preload existing core images
+        timeout-minutes: 5
+        run: >-
+          docker compose --profile catalog --profile query pull
+          metastore-db trino-coordinator trino-worker
+      - name: Measure four customer snapshots and retained warehouse
+        timeout-minutes: 38
+        run: >-
+          LAKEOPS_RUN_CUSTOMER_HISTORY_EXPERIMENT=1 uv run --frozen pytest
+          tests/integration/test_customer_history_experiment.py -q -s -o addopts=''
+      - name: Upload raw experiment and partial failure evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          archive: true
+          name: customer-history-experiment
+          path: |
+            artifacts/customer-history-runner/
+            artifacts/customer-history-ci/
+          if-no-files-found: error
