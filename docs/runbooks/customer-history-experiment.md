@@ -3,7 +3,9 @@
 The separate `Customer history experiment` workflow uses one fresh GitHub runner
 and one uniquely named `lakehouse-ops-scale-history-*` stack. It runs for pull requests
 changing its workflow or experiment tests, and can be dispatched manually once the
-workflow is present on the default branch. Ordinary CI and its five mandatory gates
+workflow is present on the default branch. Manual dispatch accepts only `snapshots=4`
+(default) or `snapshots=50`; pull requests retain the four-snapshot baseline.
+Ordinary CI and its five mandatory gates
 are unchanged. This experiment is not a release candidate or capacity certification.
 
 Inputs are fixed: 100 canonical orders, 10000 customers per chronological full snapshot,
@@ -25,8 +27,8 @@ during each observation; multiple requests are not one atomic distributed snapsh
 Images are built/preloaded before the isolated experiment. Runner CPU, memory, kernel,
 Docker information and checkout SHA are saved separately. This is fresh services/catalog
 with locally available images, not a cold image download or cleared host cache.
-The child has a 1800-second total limit and the existing 300-second stage budgets.
-The job is bounded to 60 minutes including build and upload. Timeout, memory failure,
+The default child has a 1800-second total limit and the existing 300-second stage budgets.
+The default job is bounded to 60 minutes including build and upload. Timeout, memory failure,
 partial history or missing observations are failed evidence, not successful samples.
 
 Download the `customer-history-experiment` artifact from the workflow run. It retains
@@ -91,6 +93,32 @@ the raw artifact, compare its source/manifest/report hashes and independently ch
 the expected rows, checkpoint and storage sums. Local raw files are operator evidence;
 the linked CI artifact is the published raw run. Successful measurement does not
 replace the five mandatory exact-head checks required for merging.
+
+## Manual 50-snapshot CI experiment
+
+Dispatch the existing workflow with the bounded depth option:
+
+```text
+gh workflow run customer-history-experiment.yml --ref main -f snapshots=50
+```
+
+This uses 100 canonical orders and 10000 customers per chronological full snapshot,
+beginning February 1, 2026, with revisions 0 through 49. Production profile oracles
+check every customer's exact daily periods/names/current flags, order/revenue
+inputs, checkpoint and idle replay; storage/reference observations run after every
+sample. Expected history is 10000 times the snapshot number, ending at 500000 rows
+with 10000 current customers. It uses the same owned setup and cleanup as the
+four-snapshot baseline, a 10800-second profile limit, a 190-minute measurement-step
+limit and a 220-minute whole-job limit. Startup/log/cleanup budgets remain bounded.
+The long job is opt-in and does not replace or expand ordinary mandatory CI.
+
+Only 4 and 50 are accepted, before output creation or Docker startup. The 50 mode
+requires all 50 ready samples; the 32-snapshot prefix below, a running report,
+wrong final row counts or failed cleanup cannot produce ready outer evidence.
+Upload still runs after failure while the runner is available. Forced host/process
+termination can prevent finalization/upload and is not made recoverable by this
+wrapper. Record an actually completed artifact before claiming 50-snapshot support
+is measured; offline wrapper tests do not satisfy that acceptance criterion.
 
 ## Interrupted 50-snapshot attempt, 2026-10-16
 
