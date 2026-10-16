@@ -1,0 +1,2123 @@
+{
+  "schema_version": 1,
+  "scope": "single owned cold fixture restore, not hot backup or production disaster recovery",
+  "independent_verification": {
+    "status": "verified_cold_restore",
+    "raw_restore_sha256": "8e3c64cc720c5be7db5c41d9bf03f0c5aa751c67c9b90c00ae103fa1fe394b7c",
+    "archive_pairs_verified": 6,
+    "members_verified": 7779,
+    "regular_bytes_verified": 310409082,
+    "source_history_report_sha256": "0832931c302f7288636aa8b53969871bf1326dbe8f204087b2360497ed37947b",
+    "foreign_containers": 14
+  },
+  "observed_restore": {
+    "status": "ready",
+    "started_at_utc": "2026-10-16T15:44:12.381160+00:00",
+    "source_project": "lakehouse-ops-scale-depth-history-8756af0fa1094b1dbf30f1ada8bc8ea0",
+    "restored_project": "lakehouse-ops-scale-restore-d726818e472145ebab90dfa06198972d",
+    "helper_image": "postgres:17.10-alpine3.23@sha256:8189a1f6e40904781fc9e2612687877791d21679866db58b1de996b31fc312e4",
+    "source_sha": "cca72020cdfd480de6f7a7c0025973df848e0849",
+    "source_files_sha256_before": {
+      "checkpoint.json": "7edd67b352212331cda7f06b8b98df084e72e3755813fb1b9d1aff7810e3ca74",
+      "checkpoint.json.runs.sqlite3": "7467666539df8e71687c67bbf8fa78dba05e08ca3dbd11d6bdd40bc4ee151fba",
+      "recovery.json": "0832931c302f7288636aa8b53969871bf1326dbe8f204087b2360497ed37947b"
+    },
+    "backup_state_sha256": {
+      "checkpoint.json": "7edd67b352212331cda7f06b8b98df084e72e3755813fb1b9d1aff7810e3ca74",
+      "checkpoint.json.runs.sqlite3": "4392e59ecab7a7e9cdb70956ffafffd3b2ec03e108bae659d1286768f034c4b8"
+    },
+    "checkpoint": {
+      "processed_batches": {
+        "0f45efdf36d18f60": {
+          "batch_at": "2026-03-04T00:00:00Z",
+          "manifest_sha256": "21d097ab362452bb41a517e03914c74f656c44a4f176bc67874e101a8ca0c048"
+        },
+        "107fbfbd0560b897": {
+          "batch_at": "2026-02-10T00:00:00Z",
+          "manifest_sha256": "d8474b278e682bf883610dd471459d435d0ea58254251a9d08fc17c08c5361a8"
+        },
+        "10e98306f9708580": {
+          "batch_at": "2026-02-05T00:00:00Z",
+          "manifest_sha256": "1e0d0b8b7fb579b8fc5867a20c3ff982dd52df1577c6c5be8cadce44865d7194"
+        },
+        "24e47c2864bd8fb4": {
+          "batch_at": "2026-03-05T00:00:00Z",
+          "manifest_sha256": "74adea169fe1967d7c6128c1ff8e9eb3959b77025d4555e462c85375162e13b0"
+        },
+        "2781e59dcd75ca9b": {
+          "batch_at": "2026-02-07T00:00:00Z",
+          "manifest_sha256": "f9fa33323cf628684d46bcffd9aa7451c9e1565438babeee7971513b5da22ff8"
+        },
+        "27e515f952d2dbf9": {
+          "batch_at": "2026-03-03T00:00:00Z",
+          "manifest_sha256": "08b452c1d491a2fd596b8d05c03b463616f166749bffec281f0abee9b42bf66f"
+        },
+        "3099740c9723f479": {
+          "batch_at": "2026-02-15T00:00:00Z",
+          "manifest_sha256": "3b19de8aeaad496f22feaecc866b29e3369b33dfa9c47d506b89f68fb1371966"
+        },
+        "3ffa1522a63814d0": {
+          "batch_at": "2026-02-26T00:00:00Z",
+          "manifest_sha256": "301ae44615ab58de01ec9ebcd601c35389a9b6653a55d968598fd5b5fd86f0fa"
+        },
+        "6b5db467b326119f": {
+          "batch_at": "2026-02-23T00:00:00Z",
+          "manifest_sha256": "2b78b11d603b63b6315bc9749434809cb5143873cbd6432478a4f394e0d91407"
+        },
+        "70c8afe5d66f2231": {
+          "batch_at": "2026-02-02T00:00:00Z",
+          "manifest_sha256": "fba5e215a3092eff68ca0bd4f7d81c7badc741c8886b6b1b866cf79602070400"
+        },
+        "75fd5166524e2a90": {
+          "batch_at": "2026-03-01T00:00:00Z",
+          "manifest_sha256": "cd366d90cb65ead8630104ac7ea40f49a4d47c97178101e646e1fbe90b66be2c"
+        },
+        "76611bf26c45cb04": {
+          "batch_at": "2026-02-06T00:00:00Z",
+          "manifest_sha256": "ed1ed80a02b680036e68027ff38c375550b88b5f046fa8a5dd8d4db3bf91c794"
+        },
+        "798f5334a63f600c": {
+          "batch_at": "2026-02-13T00:00:00Z",
+          "manifest_sha256": "51ff3c526a5506abe2f2f3fae2792897cc338e99802c6125e3690ad081fd5e37"
+        },
+        "7f40ae16c9690844": {
+          "batch_at": "2026-02-24T00:00:00Z",
+          "manifest_sha256": "e8b2fcff66c6a1b912cb4b7bed2829c5549feb00dacfbc81519292b0f7e5a2f3"
+        },
+        "8687c4f76b6e9784": {
+          "batch_at": "2026-03-02T00:00:00Z",
+          "manifest_sha256": "4f44593d1e8977a57f73f31b61d5cbb9c8773ee258d5324d46027fb9b5c672e4"
+        },
+        "92dce353121fe41d": {
+          "batch_at": "2026-02-21T00:00:00Z",
+          "manifest_sha256": "13c0cce4d2dfcbe43a77012737222c1317ed2dd7861e441f132262b0ce5b1b34"
+        },
+        "938b8315ba1e1902": {
+          "batch_at": "2026-02-22T00:00:00Z",
+          "manifest_sha256": "9db1aada8cb5928cea4e9a6faca0f9c336a080466d7840d1a4f53c426c03834d"
+        },
+        "976663ce5443e810": {
+          "batch_at": "2026-02-16T00:00:00Z",
+          "manifest_sha256": "6cbaebe56ee25cabb07dda51593c7e6357c49aae794a2d61066317cf035f8160"
+        },
+        "9d4e71df57ed9eed": {
+          "batch_at": "2026-02-12T00:00:00Z",
+          "manifest_sha256": "2e025f5afc166b6f40376d32f834eb5862dc51804b48e9de6e827082a5e2d867"
+        },
+        "9ffef2002f19e7ea": {
+          "batch_at": "2026-02-18T00:00:00Z",
+          "manifest_sha256": "432bd28574801704f190de1e04ac58b7e81f2ef47bd8486fa3aba8327e1827b5"
+        },
+        "b540631f2f399109": {
+          "batch_at": "2026-02-08T00:00:00Z",
+          "manifest_sha256": "ac846db8958a1896266c14b9a0ce33ad4bd46a70a0dc73bad8b15cd1e84c3adb"
+        },
+        "b670244a7da91a3c": {
+          "batch_at": "2026-02-04T00:00:00Z",
+          "manifest_sha256": "5eb0ce00c690d4152c09b41a1196b3cc8dd598242fb450b6423e8402af9444bf"
+        },
+        "c0cf6b704f7ff09b": {
+          "batch_at": "2026-02-20T00:00:00Z",
+          "manifest_sha256": "1f21d8b8710f2332adda7336f578c0f4076872afc9663e1f15c6004b5920aa87"
+        },
+        "ceb7689d852c27d9": {
+          "batch_at": "2026-02-14T00:00:00Z",
+          "manifest_sha256": "6630215e3f507ab20a84046ab5c31956a4199f44ba39c104f04a2737defa53b9"
+        },
+        "d4e963d497ab3a65": {
+          "batch_at": "2026-02-03T00:00:00Z",
+          "manifest_sha256": "c98e517349ae612a6b15b8f311b1b98e1603f0c3bf9d90edfeed33090e7b13cf"
+        },
+        "d749684de1c1c70c": {
+          "batch_at": "2026-02-09T00:00:00Z",
+          "manifest_sha256": "79e9951c6f9a1f6e61e02cdb2a58286b0126777378cba7730ace44eaacb616ae"
+        },
+        "dba152ed29e929a1": {
+          "batch_at": "2026-02-27T00:00:00Z",
+          "manifest_sha256": "6bbd31d705c12f2ac12145699bce7ce778c95e1958a42cee8507cb882915a426"
+        },
+        "e5729acd8630dd2d": {
+          "batch_at": "2026-02-28T00:00:00Z",
+          "manifest_sha256": "30efa62c4c45e78622a24300fb30cb20c3a934e09576a25dad4759a838f60ab4"
+        },
+        "e60cdf35f15ee3dd": {
+          "batch_at": "2026-02-25T00:00:00Z",
+          "manifest_sha256": "fa2bcdd9fb07589c9d035da2274f48d0c62aadf8de8d505ea1aa361d85544d78"
+        },
+        "e9052c1eeadcf038": {
+          "batch_at": "2026-02-11T00:00:00Z",
+          "manifest_sha256": "568264a66ac91bc54ec95909b37e654547b0bcafe869e5bc57358031fa0253fe"
+        },
+        "efee3f00e914841d": {
+          "batch_at": "2026-02-01T00:00:00Z",
+          "manifest_sha256": "eb9c34473e0bd42d7b0d5a5b9858bf2b48850801b305ffe195415e04ca33a7b1"
+        },
+        "f3b878b84bd7760b": {
+          "batch_at": "2026-02-19T00:00:00Z",
+          "manifest_sha256": "75e9ae0f981c4e27906554bdeb3a37f36b2c9fd068ce96710e8626dcff8237d3"
+        },
+        "fb06cb490644d15e": {
+          "batch_at": "2026-02-17T00:00:00Z",
+          "manifest_sha256": "1907f5834149375b62b934b9fd207a27283b63de36ea54fefc3a44304cd0eb76"
+        }
+      },
+      "schema_version": 1
+    },
+    "volumes": [
+      {
+        "key": "bronze-input",
+        "source": "lakehouse-ops-scale-depth-history-8756af0fa1094b1dbf30f1ada8bc8ea0_bronze-input",
+        "restored": "lakehouse-ops-scale-restore-d726818e472145ebab90dfa06198972d_bronze-input",
+        "members": 200,
+        "regular_bytes": 50764507,
+        "archive_sha256": "380ccad16064c4cd700d601dabbf147cab92d4cc713693ff54a8e7ff461af92d",
+        "restored_archive_sha256": "94a9d5874acf771ff75a84dc2501b8a2c6413efde67dd6049256086dba686925",
+        "offline_contents_equal": true
+      },
+      {
+        "key": "metastore-db-data",
+        "source": "lakehouse-ops-scale-depth-history-8756af0fa1094b1dbf30f1ada8bc8ea0_metastore-db-data",
+        "restored": "lakehouse-ops-scale-restore-d726818e472145ebab90dfa06198972d_metastore-db-data",
+        "members": 1650,
+        "regular_bytes": 68096756,
+        "archive_sha256": "c40a84bd6298b9602c04932645e7a086ece84e72005b368d441f4670c71d776b",
+        "restored_archive_sha256": "cc276ae10065e618260382b573a7b896b1452f5481c72bdfc98184cec718f1cc",
+        "offline_contents_equal": true
+      },
+      {
+        "key": "minio-data",
+        "source": "lakehouse-ops-scale-depth-history-8756af0fa1094b1dbf30f1ada8bc8ea0_minio-data",
+        "restored": "lakehouse-ops-scale-restore-d726818e472145ebab90dfa06198972d_minio-data",
+        "members": 5910,
+        "regular_bytes": 163767719,
+        "archive_sha256": "8eaa67c3da3f8a61af7c9b1776bf7b491c6601d0507cdef218653b1be40c7654",
+        "restored_archive_sha256": "c7041ed6241bdab987b645f9315ddec41d76371d51a8963cda4a0a49631a687f",
+        "offline_contents_equal": true
+      },
+      {
+        "key": "trino-coordinator-data",
+        "source": "lakehouse-ops-scale-depth-history-8756af0fa1094b1dbf30f1ada8bc8ea0_trino-coordinator-data",
+        "restored": "lakehouse-ops-scale-restore-d726818e472145ebab90dfa06198972d_trino-coordinator-data",
+        "members": 9,
+        "regular_bytes": 11580852,
+        "archive_sha256": "60799fc00f4ff51bbe7ee66b662ecf8bc2e2d39b09bbf3ac0723e51c5c32e824",
+        "restored_archive_sha256": "961db9a8a8e3c5ff8556c6bdbfc6caa27d6b022749f56568850e0747f866e8dd",
+        "offline_contents_equal": true
+      },
+      {
+        "key": "trino-worker-data",
+        "source": "lakehouse-ops-scale-depth-history-8756af0fa1094b1dbf30f1ada8bc8ea0_trino-worker-data",
+        "restored": "lakehouse-ops-scale-restore-d726818e472145ebab90dfa06198972d_trino-worker-data",
+        "members": 9,
+        "regular_bytes": 16199248,
+        "archive_sha256": "0ed988c52846dd3dfd560d0b665bd3e3bd36f1e7bd1b6f0992084e206498a2b6",
+        "restored_archive_sha256": "2f3e4bb5b76b69f216f67f3d41f7e5660cafd6a2493687e2c3969bc8946b2ed2",
+        "offline_contents_equal": true
+      },
+      {
+        "key": "warehouse-data",
+        "source": "lakehouse-ops-scale-depth-history-8756af0fa1094b1dbf30f1ada8bc8ea0_warehouse-data",
+        "restored": "lakehouse-ops-scale-restore-d726818e472145ebab90dfa06198972d_warehouse-data",
+        "members": 1,
+        "regular_bytes": 0,
+        "archive_sha256": "f733fdec407cb5007d2cd7be6bfabad9b46e608a3a1017d07afeb5a5e7bc5af0",
+        "restored_archive_sha256": "f733fdec407cb5007d2cd7be6bfabad9b46e608a3a1017d07afeb5a5e7bc5af0",
+        "offline_contents_equal": true
+      }
+    ],
+    "helper_image_id": "sha256:8189a1f6e40904781fc9e2612687877791d21679866db58b1de996b31fc312e4",
+    "history": {
+      "status": "verified",
+      "expected_periods": [
+        {
+          "valid_from": "2026-02-01T00:00:00+00:00",
+          "valid_to": "2026-02-02T00:00:00+00:00",
+          "is_current": false,
+          "revision": 0
+        },
+        {
+          "valid_from": "2026-02-02T00:00:00+00:00",
+          "valid_to": "2026-02-03T00:00:00+00:00",
+          "is_current": false,
+          "revision": 1
+        },
+        {
+          "valid_from": "2026-02-03T00:00:00+00:00",
+          "valid_to": "2026-02-04T00:00:00+00:00",
+          "is_current": false,
+          "revision": 2
+        },
+        {
+          "valid_from": "2026-02-04T00:00:00+00:00",
+          "valid_to": "2026-02-05T00:00:00+00:00",
+          "is_current": false,
+          "revision": 3
+        },
+        {
+          "valid_from": "2026-02-05T00:00:00+00:00",
+          "valid_to": "2026-02-06T00:00:00+00:00",
+          "is_current": false,
+          "revision": 4
+        },
+        {
+          "valid_from": "2026-02-06T00:00:00+00:00",
+          "valid_to": "2026-02-07T00:00:00+00:00",
+          "is_current": false,
+          "revision": 5
+        },
+        {
+          "valid_from": "2026-02-07T00:00:00+00:00",
+          "valid_to": "2026-02-08T00:00:00+00:00",
+          "is_current": false,
+          "revision": 6
+        },
+        {
+          "valid_from": "2026-02-08T00:00:00+00:00",
+          "valid_to": "2026-02-09T00:00:00+00:00",
+          "is_current": false,
+          "revision": 7
+        },
+        {
+          "valid_from": "2026-02-09T00:00:00+00:00",
+          "valid_to": "2026-02-10T00:00:00+00:00",
+          "is_current": false,
+          "revision": 8
+        },
+        {
+          "valid_from": "2026-02-10T00:00:00+00:00",
+          "valid_to": "2026-02-11T00:00:00+00:00",
+          "is_current": false,
+          "revision": 9
+        },
+        {
+          "valid_from": "2026-02-11T00:00:00+00:00",
+          "valid_to": "2026-02-12T00:00:00+00:00",
+          "is_current": false,
+          "revision": 10
+        },
+        {
+          "valid_from": "2026-02-12T00:00:00+00:00",
+          "valid_to": "2026-02-13T00:00:00+00:00",
+          "is_current": false,
+          "revision": 11
+        },
+        {
+          "valid_from": "2026-02-13T00:00:00+00:00",
+          "valid_to": "2026-02-14T00:00:00+00:00",
+          "is_current": false,
+          "revision": 12
+        },
+        {
+          "valid_from": "2026-02-14T00:00:00+00:00",
+          "valid_to": "2026-02-15T00:00:00+00:00",
+          "is_current": false,
+          "revision": 13
+        },
+        {
+          "valid_from": "2026-02-15T00:00:00+00:00",
+          "valid_to": "2026-02-16T00:00:00+00:00",
+          "is_current": false,
+          "revision": 14
+        },
+        {
+          "valid_from": "2026-02-16T00:00:00+00:00",
+          "valid_to": "2026-02-17T00:00:00+00:00",
+          "is_current": false,
+          "revision": 15
+        },
+        {
+          "valid_from": "2026-02-17T00:00:00+00:00",
+          "valid_to": "2026-02-18T00:00:00+00:00",
+          "is_current": false,
+          "revision": 16
+        },
+        {
+          "valid_from": "2026-02-18T00:00:00+00:00",
+          "valid_to": "2026-02-19T00:00:00+00:00",
+          "is_current": false,
+          "revision": 17
+        },
+        {
+          "valid_from": "2026-02-19T00:00:00+00:00",
+          "valid_to": "2026-02-20T00:00:00+00:00",
+          "is_current": false,
+          "revision": 18
+        },
+        {
+          "valid_from": "2026-02-20T00:00:00+00:00",
+          "valid_to": "2026-02-21T00:00:00+00:00",
+          "is_current": false,
+          "revision": 19
+        },
+        {
+          "valid_from": "2026-02-21T00:00:00+00:00",
+          "valid_to": "2026-02-22T00:00:00+00:00",
+          "is_current": false,
+          "revision": 20
+        },
+        {
+          "valid_from": "2026-02-22T00:00:00+00:00",
+          "valid_to": "2026-02-23T00:00:00+00:00",
+          "is_current": false,
+          "revision": 21
+        },
+        {
+          "valid_from": "2026-02-23T00:00:00+00:00",
+          "valid_to": "2026-02-24T00:00:00+00:00",
+          "is_current": false,
+          "revision": 22
+        },
+        {
+          "valid_from": "2026-02-24T00:00:00+00:00",
+          "valid_to": "2026-02-25T00:00:00+00:00",
+          "is_current": false,
+          "revision": 23
+        },
+        {
+          "valid_from": "2026-02-25T00:00:00+00:00",
+          "valid_to": "2026-02-26T00:00:00+00:00",
+          "is_current": false,
+          "revision": 24
+        },
+        {
+          "valid_from": "2026-02-26T00:00:00+00:00",
+          "valid_to": "2026-02-27T00:00:00+00:00",
+          "is_current": false,
+          "revision": 25
+        },
+        {
+          "valid_from": "2026-02-27T00:00:00+00:00",
+          "valid_to": "2026-02-28T00:00:00+00:00",
+          "is_current": false,
+          "revision": 26
+        },
+        {
+          "valid_from": "2026-02-28T00:00:00+00:00",
+          "valid_to": "2026-03-01T00:00:00+00:00",
+          "is_current": false,
+          "revision": 27
+        },
+        {
+          "valid_from": "2026-03-01T00:00:00+00:00",
+          "valid_to": "2026-03-02T00:00:00+00:00",
+          "is_current": false,
+          "revision": 28
+        },
+        {
+          "valid_from": "2026-03-02T00:00:00+00:00",
+          "valid_to": "2026-03-03T00:00:00+00:00",
+          "is_current": false,
+          "revision": 29
+        },
+        {
+          "valid_from": "2026-03-03T00:00:00+00:00",
+          "valid_to": "2026-03-04T00:00:00+00:00",
+          "is_current": false,
+          "revision": 30
+        },
+        {
+          "valid_from": "2026-03-04T00:00:00+00:00",
+          "valid_to": "2026-03-05T00:00:00+00:00",
+          "is_current": false,
+          "revision": 31
+        },
+        {
+          "valid_from": "2026-03-05T00:00:00+00:00",
+          "valid_to": null,
+          "is_current": true,
+          "revision": 32
+        }
+      ],
+      "rows": [
+        {
+          "valid_from": "2026-02-01 00:00:00.000000 UTC",
+          "valid_to": "2026-02-02 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-02 00:00:00.000000 UTC",
+          "valid_to": "2026-02-03 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-03 00:00:00.000000 UTC",
+          "valid_to": "2026-02-04 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-04 00:00:00.000000 UTC",
+          "valid_to": "2026-02-05 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-05 00:00:00.000000 UTC",
+          "valid_to": "2026-02-06 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-06 00:00:00.000000 UTC",
+          "valid_to": "2026-02-07 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-07 00:00:00.000000 UTC",
+          "valid_to": "2026-02-08 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-08 00:00:00.000000 UTC",
+          "valid_to": "2026-02-09 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-09 00:00:00.000000 UTC",
+          "valid_to": "2026-02-10 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-10 00:00:00.000000 UTC",
+          "valid_to": "2026-02-11 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-11 00:00:00.000000 UTC",
+          "valid_to": "2026-02-12 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-12 00:00:00.000000 UTC",
+          "valid_to": "2026-02-13 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-13 00:00:00.000000 UTC",
+          "valid_to": "2026-02-14 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-14 00:00:00.000000 UTC",
+          "valid_to": "2026-02-15 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-15 00:00:00.000000 UTC",
+          "valid_to": "2026-02-16 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-16 00:00:00.000000 UTC",
+          "valid_to": "2026-02-17 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-17 00:00:00.000000 UTC",
+          "valid_to": "2026-02-18 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-18 00:00:00.000000 UTC",
+          "valid_to": "2026-02-19 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-19 00:00:00.000000 UTC",
+          "valid_to": "2026-02-20 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-20 00:00:00.000000 UTC",
+          "valid_to": "2026-02-21 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-21 00:00:00.000000 UTC",
+          "valid_to": "2026-02-22 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-22 00:00:00.000000 UTC",
+          "valid_to": "2026-02-23 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-23 00:00:00.000000 UTC",
+          "valid_to": "2026-02-24 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-24 00:00:00.000000 UTC",
+          "valid_to": "2026-02-25 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-25 00:00:00.000000 UTC",
+          "valid_to": "2026-02-26 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-26 00:00:00.000000 UTC",
+          "valid_to": "2026-02-27 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-27 00:00:00.000000 UTC",
+          "valid_to": "2026-02-28 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-02-28 00:00:00.000000 UTC",
+          "valid_to": "2026-03-01 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-03-01 00:00:00.000000 UTC",
+          "valid_to": "2026-03-02 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-03-02 00:00:00.000000 UTC",
+          "valid_to": "2026-03-03 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-03-03 00:00:00.000000 UTC",
+          "valid_to": "2026-03-04 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-03-04 00:00:00.000000 UTC",
+          "valid_to": "2026-03-05 00:00:00.000000 UTC",
+          "is_current": false,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        },
+        {
+          "valid_from": "2026-03-05 00:00:00.000000 UTC",
+          "valid_to": null,
+          "is_current": true,
+          "rows": 10000,
+          "customers": 10000,
+          "matching_customers": 10000
+        }
+      ],
+      "total_rows": 330000,
+      "current_rows": 10000,
+      "query_id": "20261016_154528_00000_g5bzy",
+      "query_stats": {
+        "state": "FINISHED",
+        "elapsed_time_ms": 3820,
+        "wall_time_ms": 24661,
+        "cpu_time_ms": 8794,
+        "processed_rows": 330000,
+        "processed_bytes": 38752432,
+        "physical_input_bytes": 25980191,
+        "peak_memory_bytes": 16918656,
+        "spilled_bytes": 0
+      },
+      "sql": "SELECT cast(valid_from AS varchar) AS valid_from, cast(valid_to AS varchar) AS valid_to, is_current, count(*) AS \"rows\", count(DISTINCT customer_id) AS customers, count_if(regexp_like(customer_id, '^C[0-9]{8}$') AND try_cast(substr(customer_id, 2) AS bigint) BETWEEN 1 AND 10000 AND full_name = concat('Customer ', substr(customer_id, 2), CASE WHEN valid_from = TIMESTAMP '2026-02-01 00:00:00' THEN '' WHEN valid_from = TIMESTAMP '2026-02-02 00:00:00' THEN ' revision 1' WHEN valid_from = TIMESTAMP '2026-02-03 00:00:00' THEN ' revision 2' WHEN valid_from = TIMESTAMP '2026-02-04 00:00:00' THEN ' revision 3' WHEN valid_from = TIMESTAMP '2026-02-05 00:00:00' THEN ' revision 4' WHEN valid_from = TIMESTAMP '2026-02-06 00:00:00' THEN ' revision 5' WHEN valid_from = TIMESTAMP '2026-02-07 00:00:00' THEN ' revision 6' WHEN valid_from = TIMESTAMP '2026-02-08 00:00:00' THEN ' revision 7' WHEN valid_from = TIMESTAMP '2026-02-09 00:00:00' THEN ' revision 8' WHEN valid_from = TIMESTAMP '2026-02-10 00:00:00' THEN ' revision 9' WHEN valid_from = TIMESTAMP '2026-02-11 00:00:00' THEN ' revision 10' WHEN valid_from = TIMESTAMP '2026-02-12 00:00:00' THEN ' revision 11' WHEN valid_from = TIMESTAMP '2026-02-13 00:00:00' THEN ' revision 12' WHEN valid_from = TIMESTAMP '2026-02-14 00:00:00' THEN ' revision 13' WHEN valid_from = TIMESTAMP '2026-02-15 00:00:00' THEN ' revision 14' WHEN valid_from = TIMESTAMP '2026-02-16 00:00:00' THEN ' revision 15' WHEN valid_from = TIMESTAMP '2026-02-17 00:00:00' THEN ' revision 16' WHEN valid_from = TIMESTAMP '2026-02-18 00:00:00' THEN ' revision 17' WHEN valid_from = TIMESTAMP '2026-02-19 00:00:00' THEN ' revision 18' WHEN valid_from = TIMESTAMP '2026-02-20 00:00:00' THEN ' revision 19' WHEN valid_from = TIMESTAMP '2026-02-21 00:00:00' THEN ' revision 20' WHEN valid_from = TIMESTAMP '2026-02-22 00:00:00' THEN ' revision 21' WHEN valid_from = TIMESTAMP '2026-02-23 00:00:00' THEN ' revision 22' WHEN valid_from = TIMESTAMP '2026-02-24 00:00:00' THEN ' revision 23' WHEN valid_from = TIMESTAMP '2026-02-25 00:00:00' THEN ' revision 24' WHEN valid_from = TIMESTAMP '2026-02-26 00:00:00' THEN ' revision 25' WHEN valid_from = TIMESTAMP '2026-02-27 00:00:00' THEN ' revision 26' WHEN valid_from = TIMESTAMP '2026-02-28 00:00:00' THEN ' revision 27' WHEN valid_from = TIMESTAMP '2026-03-01 00:00:00' THEN ' revision 28' WHEN valid_from = TIMESTAMP '2026-03-02 00:00:00' THEN ' revision 29' WHEN valid_from = TIMESTAMP '2026-03-03 00:00:00' THEN ' revision 30' WHEN valid_from = TIMESTAMP '2026-03-04 00:00:00' THEN ' revision 31' WHEN valid_from = TIMESTAMP '2026-03-05 00:00:00' THEN ' revision 32' END)) AS matching_customers FROM lakehouse.gold.dim_customers_scd2 GROUP BY valid_from, valid_to, is_current ORDER BY valid_from, valid_to, is_current LIMIT 101"
+    },
+    "snapshots": [
+      {
+        "table": "bronze.commerce_customers",
+        "snapshot_ids": [
+          158071226183070656,
+          581026115193520946,
+          992293929269289307,
+          1647694794183309072,
+          1714736236979837387,
+          2855385535114448337,
+          2870063705051693639,
+          2947435484420032222,
+          2975588997453264163,
+          3584081005207905029,
+          3646986422830229855,
+          3976116545256575793,
+          4830052007910370509,
+          4851168231104467954,
+          5190473240660726976,
+          5245474378642850276,
+          5436802780020393543,
+          5745526221960038027,
+          5779272491207651683,
+          6268990726944754125,
+          6743796186698566612,
+          6796491092228531538,
+          6810480355622695823,
+          7001301597591062108,
+          7100289175300803320,
+          7418140192572578012,
+          7488833057941527076,
+          7755115856479317749,
+          7773258251469450919,
+          8057338014571401201,
+          8064050353965498748,
+          8123890531156645392,
+          8216864412431449087,
+          8920953295021899727
+        ]
+      },
+      {
+        "table": "bronze.commerce_orders",
+        "snapshot_ids": [
+          419496858480926179,
+          663093401596616667,
+          832847173987592054,
+          937191659589444229,
+          1290614770162437367,
+          1306555601031139545,
+          1868881630190560050,
+          2715134208038261865,
+          2717075568580456133,
+          3350318728381817996,
+          3568712265164081959,
+          3945833578463614412,
+          4697239600093667918,
+          4792563016277864009,
+          4910286219084375547,
+          4958525562811691042,
+          5164245927608778900,
+          5688251746204863782,
+          6059622993980099361,
+          6145703093532638695,
+          6300174854426978356,
+          7018859663829397642,
+          7100231282960829435,
+          7153599939379979972,
+          7360839137712220571,
+          7475148139794507435,
+          7984372311929665524,
+          7993556101201829163,
+          8116568788759649072,
+          8414322561654144644,
+          8601057210243136357,
+          9001237417590583557,
+          9149142362777329343,
+          9196395942823118835
+        ]
+      },
+      {
+        "table": "bronze.commerce_payments",
+        "snapshot_ids": [
+          1620552825457647240,
+          1842848047155896668,
+          2271292122334044191,
+          2728493305854496804,
+          2931125813177641759,
+          3206191515016108195,
+          3245678966645513325,
+          3473790529902870490,
+          4813742266140276469,
+          4863511372263817034,
+          4970916652920571592,
+          5568013710188139753,
+          5621532875410511846,
+          5791673285271181204,
+          6009222671520433834,
+          6015976682988061592,
+          6091623904597281109,
+          6839168218639234066,
+          6893438649709132106,
+          7268227571613598165,
+          7329018022423173473,
+          7461339586445546624,
+          7553235432293286757,
+          7597169723344253964,
+          8032523199455800926,
+          8075653467670224560,
+          8128005360743131147,
+          8379382545739249212,
+          8426621929288235657,
+          8650856953297121933,
+          8791719701747490669,
+          8886469485194233522,
+          8906997522317898393,
+          9182777098199251959
+        ]
+      },
+      {
+        "table": "bronze.commerce_products",
+        "snapshot_ids": [
+          492583281915273853,
+          1108415607841189692,
+          1123168311993503130,
+          1197208881942923999,
+          2179958536205505715,
+          2471387212241679900,
+          2694850230886237464,
+          2945485261511023728,
+          3030531097911254953,
+          3091337145236732795,
+          3296982548045681285,
+          3622543818213053624,
+          4283572105288043878,
+          4811327050083388212,
+          4822343675668223315,
+          4981709117674400174,
+          5000698053026457244,
+          5466623330028544159,
+          6464401042083608967,
+          6524362661991488876,
+          6774522802344600146,
+          6831631908690740101,
+          6857934841782897906,
+          7035822715000556387,
+          7409187174128732470,
+          7926444014153902289,
+          8287146339686418491,
+          8326209853920213971,
+          8472691217204999113,
+          8623375795494007744,
+          8770773867904004708,
+          8858631415952479618,
+          8884761810140747735,
+          9006193867391542564
+        ]
+      },
+      {
+        "table": "gold.commerce_current_daily",
+        "snapshot_ids": [
+          498168276933302686,
+          629800173882222430,
+          792033173913696801,
+          858094072923162695,
+          1650056470737998010,
+          1703981873389174283,
+          2124100984554024706,
+          2419410408490733891,
+          2677350501296454668,
+          2871952270597014577,
+          2914924690191207954,
+          2977760450434095555,
+          3504622941251540356,
+          3771998622277608024,
+          3853746073042736926,
+          3893846844867550812,
+          4579592777068139280,
+          4758730081634865586,
+          5513750960906939793,
+          6392017160160056628,
+          6589198455302631828,
+          6628529946176670767,
+          6636731076849490946,
+          6998024735369564578,
+          7208615364111090508,
+          7219289127280359580,
+          7720273117581848112,
+          7764546497954210606,
+          8190999932905225665,
+          8476425003667228932,
+          8901816244329924910,
+          9060010674237252866,
+          9190638974223177748
+        ]
+      },
+      {
+        "table": "gold.commerce_daily",
+        "snapshot_ids": [
+          154359842446554517,
+          327254672330128118,
+          1034004503298096853,
+          1104434683028985181,
+          1200588224438891638,
+          1691553234443135272,
+          2223834453227178770,
+          3192799775699189027,
+          3471644138313427678,
+          3912856763722048340,
+          4004458204540923868,
+          4141948575876575547,
+          4211389686620674652,
+          4733072472442083290,
+          5052263672136749030,
+          5252873926105683134,
+          5312458378816322274,
+          5322392320637491572,
+          5438881248938521686,
+          5457596831618721211,
+          5905753888615938863,
+          6130519259608484097,
+          6487365478188425584,
+          7269079647557276741,
+          7586705438518436857,
+          7668170101905874286,
+          7808047923315045856,
+          8116798824530816119,
+          8254385061048821991,
+          8490545786081393143,
+          8765146285597177285,
+          8902428302565632461,
+          8905235913662573889
+        ]
+      },
+      {
+        "table": "gold.dim_customers_scd2",
+        "snapshot_ids": [
+          61630344865905170,
+          413911852180637490,
+          900334834024761393,
+          918320187335102728,
+          1848643459064826598,
+          1998749197090193284,
+          2054739136318631877,
+          2544812398347933720,
+          2961836304565080257,
+          3326010922360786434,
+          3539281851158322864,
+          3600962494897619734,
+          3738243377166343326,
+          3788794773357465022,
+          4080505965285324963,
+          4251045769984044734,
+          4516891200958738094,
+          5268643959120318612,
+          5740619732918777546,
+          5751220749339158486,
+          6020636688003644961,
+          6565274771959974709,
+          7159037989032751302,
+          7391576880766566353,
+          7403808943411470232,
+          7432307169469597877,
+          7609103973544648197,
+          7763637754916977584,
+          8133795084182943898,
+          8351359002716733808,
+          8374227173410167698,
+          8546734494893107335,
+          8570490321409391326
+        ]
+      },
+      {
+        "table": "silver.commerce_customer_rejects",
+        "snapshot_ids": [
+          124843583060553572,
+          146241540137401556,
+          197215422324880007,
+          697702270327037034,
+          1008049410474098981,
+          1508362787102306213,
+          1743356620311340154,
+          2256820069526909255,
+          2341984643736474054,
+          2460911693986609242,
+          2830713945199277512,
+          2837248699978842239,
+          3270522614942847692,
+          3636954307057090736,
+          3797359380945122254,
+          4129992324470847172,
+          4660407211874473797,
+          4678677906097641048,
+          4722261515628479467,
+          5562415904621995671,
+          5596959722129700140,
+          5891902368831618761,
+          6536639027019598122,
+          6563597159416155365,
+          6747488263901359387,
+          7047706048888060756,
+          7174590929771635609,
+          7341380171261194286,
+          7469554227620982454,
+          7477249994831459790,
+          7503418298775001387,
+          7592171667667437972,
+          8454587727398378347
+        ]
+      },
+      {
+        "table": "silver.commerce_customers",
+        "snapshot_ids": [
+          95239522265895987,
+          449019792977398778,
+          466111237786605586,
+          913515163868756824,
+          1182009858990527754,
+          1373150498452937583,
+          1898073414825914126,
+          1914897960017933034,
+          1942719719904953394,
+          2333075766411856733,
+          2699456501680056579,
+          2705762865639776292,
+          3470661312309016057,
+          3524944223946322981,
+          5307293430050795139,
+          5686345002526857909,
+          5695211462224893174,
+          5782826589829620524,
+          5823974946227526874,
+          5953647014435149246,
+          6036222393782962296,
+          6149670236815106343,
+          6645993854405826838,
+          6895747268313221228,
+          6961817807464389762,
+          6966985103304168664,
+          7094832294658444190,
+          7167885786010516080,
+          7195113900290547534,
+          7368188305989915216,
+          7508123705393011244,
+          7606999946976065916,
+          7768532894633195008
+        ]
+      },
+      {
+        "table": "silver.commerce_order_rejects",
+        "snapshot_ids": [
+          160081019269725993,
+          493799868722671515,
+          798352242232682086,
+          1969014076674072124,
+          2024435949576987197,
+          2043873614524036393,
+          2135869506039703257,
+          2150906122921767069,
+          2360898119538128127,
+          2660843349624108789,
+          2825857699554019292,
+          3150934270406890883,
+          3314176279505348430,
+          3611632118523302933,
+          3779321761489455098,
+          4189421655932580346,
+          4341408369460235962,
+          4557362791689308647,
+          4881502458235875005,
+          5131360663952909947,
+          5917503199157606732,
+          6003644346888096007,
+          6030103081488855790,
+          6129109910071521897,
+          6412981829825735836,
+          6769322946410455978,
+          6912645243426525572,
+          7104965345278306417,
+          7347253048166412528,
+          8607126181615425363,
+          8763551520881742353,
+          8869300664896428479,
+          9084320441916994468
+        ]
+      },
+      {
+        "table": "silver.commerce_orders",
+        "snapshot_ids": [
+          315125876171385971,
+          629733934472831745,
+          664423672720040068,
+          722153586400644275,
+          839923065985991384,
+          1080865946914717362,
+          1294118608852869180,
+          1565177197448514264,
+          1727486663046285938,
+          2366178869361624187,
+          2553742786855609771,
+          2815200530061242245,
+          3337564439667533498,
+          3459382499464152139,
+          3782368262122582321,
+          3949947984062158107,
+          4211721390675937188,
+          4515248831475411096,
+          4588277089824661107,
+          5711263489262196122,
+          5818959319682716766,
+          6006570037443033284,
+          6045062473941081258,
+          6117079956435578744,
+          6377984614801896518,
+          6580552313194302491,
+          6653028579431308218,
+          6659974066909159960,
+          6952259813470311465,
+          7607028197716587079,
+          8022554700066589833,
+          8144388109690867677,
+          8356250633299850933
+        ]
+      },
+      {
+        "table": "silver.commerce_payment_rejects",
+        "snapshot_ids": [
+          241847416814116775,
+          857667675460485289,
+          1593766392436538068,
+          2085415094153570038,
+          2310078547194423605,
+          3118991284924950034,
+          3220497316231618681,
+          3270343889351219910,
+          3877193823899590401,
+          3999377423068410333,
+          4054457581331946111,
+          4146994081732941426,
+          4694112622450152241,
+          5359584387732698996,
+          5461856264103778567,
+          5519860436246006933,
+          5566107911484848706,
+          5602255688402054172,
+          5913189254307609102,
+          6021433788755914582,
+          6651742552276520475,
+          7293497688745658746,
+          7298713823031613262,
+          7331845701946041502,
+          7438744455445389888,
+          7478551218215408858,
+          7602684535801162196,
+          7711719044038146337,
+          7813113820361225659,
+          7911820295957320887,
+          8001525950826555112,
+          8214954212616933482,
+          8467342082021953094
+        ]
+      },
+      {
+        "table": "silver.commerce_payments",
+        "snapshot_ids": [
+          67634048644369672,
+          841474159280505721,
+          864753548698290589,
+          1214726378851988455,
+          1590201525215858882,
+          2550437043341264961,
+          2701523966594046061,
+          3441411842331750723,
+          3594589012435786486,
+          3632011642197484476,
+          3639181094761826888,
+          3759724682730052355,
+          3980968795841918456,
+          4203825884793543424,
+          4241641062928135178,
+          4289000505130986700,
+          4906590171516990923,
+          5084141847311940297,
+          5661510291242378680,
+          6030076937003636895,
+          6121646605310838790,
+          6524470141922088539,
+          7328912282324754361,
+          7459548370529698901,
+          7772366901116450934,
+          7812638694048030343,
+          8533052301471683370,
+          8537111187891475711,
+          8696225579428802334,
+          9023239662345123368,
+          9102439649301301098,
+          9114494122284417859,
+          9169403712264633315
+        ]
+      },
+      {
+        "table": "silver.commerce_product_rejects",
+        "snapshot_ids": [
+          39115224066632767,
+          210198052647320551,
+          1609107216137585990,
+          2123781340818700056,
+          2167297054668571422,
+          2346908750492809708,
+          2435821182914023177,
+          2876186437446010569,
+          3214138717687996654,
+          3419318390815404812,
+          4207450549629899572,
+          4281042482070789500,
+          4346624386680740879,
+          4750427911244505251,
+          5013130972690414278,
+          5165613187790221290,
+          5179910476933452807,
+          5530756927538386946,
+          5838572503819170348,
+          5984754393446548448,
+          6094347092981541985,
+          6271127941283810159,
+          6490563834105665196,
+          6673689919600413758,
+          6932390912908672098,
+          7160554117149548288,
+          7186276007508206202,
+          7505204593669335389,
+          7826253715382365946,
+          8111319099528487353,
+          8428091309384974856,
+          8809710652948018536,
+          8997251843122486912
+        ]
+      },
+      {
+        "table": "silver.commerce_products",
+        "snapshot_ids": [
+          222345362303070727,
+          355675105585977856,
+          941824831173368752,
+          1517625044561529900,
+          2019133301112323645,
+          2280579848151827557,
+          2700505751997349848,
+          2808468301145614415,
+          2824485936226068084,
+          2914141684432492932,
+          3447978505190924282,
+          3638384136846452655,
+          3977724773080264829,
+          4147332961867735576,
+          4957630276250598083,
+          5181763232583022480,
+          5230234237614624780,
+          5597344858647324295,
+          5712187132882110029,
+          6250528739498857490,
+          6309728126512559501,
+          6318436196702101667,
+          6568551159626635254,
+          7005223929882579125,
+          7438031792070267344,
+          7565858418368802879,
+          7686341750346169905,
+          8077556226118413025,
+          8168417353196670424,
+          8941497348936898820,
+          8992576302832179389,
+          8995880781218624149,
+          9104576826315722993
+        ]
+      }
+    ],
+    "files": [
+      {
+        "table": "bronze.commerce_customers",
+        "files": 33,
+        "bytes": 14577227
+      },
+      {
+        "table": "bronze.commerce_orders",
+        "files": 33,
+        "bytes": 325677
+      },
+      {
+        "table": "bronze.commerce_payments",
+        "files": 33,
+        "bytes": 263192
+      },
+      {
+        "table": "bronze.commerce_products",
+        "files": 33,
+        "bytes": 127969
+      },
+      {
+        "table": "gold.commerce_current_daily",
+        "files": 1,
+        "bytes": 5476
+      },
+      {
+        "table": "gold.commerce_daily",
+        "files": 33,
+        "bytes": 140457
+      },
+      {
+        "table": "gold.dim_customers_scd2",
+        "files": 44,
+        "bytes": 25980191
+      },
+      {
+        "table": "silver.commerce_customer_rejects",
+        "files": 0,
+        "bytes": 0
+      },
+      {
+        "table": "silver.commerce_customers",
+        "files": 33,
+        "bytes": 14416640
+      },
+      {
+        "table": "silver.commerce_order_rejects",
+        "files": 33,
+        "bytes": 182163
+      },
+      {
+        "table": "silver.commerce_orders",
+        "files": 33,
+        "bytes": 298638
+      },
+      {
+        "table": "silver.commerce_payment_rejects",
+        "files": 33,
+        "bytes": 146515
+      },
+      {
+        "table": "silver.commerce_payments",
+        "files": 33,
+        "bytes": 227823
+      },
+      {
+        "table": "silver.commerce_product_rejects",
+        "files": 0,
+        "bytes": 0
+      },
+      {
+        "table": "silver.commerce_products",
+        "files": 33,
+        "bytes": 94344
+      }
+    ],
+    "query_costs": {
+      "scope": "single_detail_then_daily_query_not_capacity",
+      "detail": {
+        "query_id": "20261016_154536_00033_g5bzy",
+        "rows": [
+          {
+            "orders": 100,
+            "revenue": 277225
+          }
+        ],
+        "stats": {
+          "state": "FINISHED",
+          "elapsed_time_ms": 358,
+          "wall_time_ms": 125,
+          "cpu_time_ms": 105,
+          "processed_rows": 298,
+          "processed_bytes": 21160,
+          "physical_input_bytes": 15978,
+          "peak_memory_bytes": 131216,
+          "spilled_bytes": 0
+        }
+      },
+      "daily": {
+        "query_id": "20261016_154537_00034_g5bzy",
+        "rows": [
+          {
+            "orders": 100,
+            "revenue": 277225
+          }
+        ],
+        "stats": {
+          "state": "FINISHED",
+          "elapsed_time_ms": 69,
+          "wall_time_ms": 14,
+          "cpu_time_ms": 9,
+          "processed_rows": 31,
+          "processed_bytes": 4330,
+          "physical_input_bytes": 4260,
+          "peak_memory_bytes": 184,
+          "spilled_bytes": 0
+        }
+      }
+    },
+    "current_query": {
+      "query_id": "20261016_154537_00035_g5bzy",
+      "rows": [
+        {
+          "orders": 100,
+          "revenue": 277225
+        }
+      ],
+      "stats": {
+        "state": "FINISHED",
+        "elapsed_time_ms": 55,
+        "wall_time_ms": 8,
+        "cpu_time_ms": 7,
+        "processed_rows": 31,
+        "processed_bytes": 5546,
+        "physical_input_bytes": 5476,
+        "peak_memory_bytes": 184,
+        "spilled_bytes": 0
+      }
+    },
+    "idle": {
+      "status": "verified",
+      "elapsed_seconds": 2.3433601000001545,
+      "scope": "single_idle_child_wall_time_including_startup_not_capacity",
+      "completed_stages": [],
+      "files": [
+        {
+          "table": "bronze.commerce_customers",
+          "files": 33,
+          "bytes": 14577227
+        },
+        {
+          "table": "bronze.commerce_orders",
+          "files": 33,
+          "bytes": 325677
+        },
+        {
+          "table": "bronze.commerce_payments",
+          "files": 33,
+          "bytes": 263192
+        },
+        {
+          "table": "bronze.commerce_products",
+          "files": 33,
+          "bytes": 127969
+        },
+        {
+          "table": "gold.commerce_current_daily",
+          "files": 1,
+          "bytes": 5476
+        },
+        {
+          "table": "gold.commerce_daily",
+          "files": 33,
+          "bytes": 140457
+        },
+        {
+          "table": "gold.dim_customers_scd2",
+          "files": 44,
+          "bytes": 25980191
+        },
+        {
+          "table": "silver.commerce_customer_rejects",
+          "files": 0,
+          "bytes": 0
+        },
+        {
+          "table": "silver.commerce_customers",
+          "files": 33,
+          "bytes": 14416640
+        },
+        {
+          "table": "silver.commerce_order_rejects",
+          "files": 33,
+          "bytes": 182163
+        },
+        {
+          "table": "silver.commerce_orders",
+          "files": 33,
+          "bytes": 298638
+        },
+        {
+          "table": "silver.commerce_payment_rejects",
+          "files": 33,
+          "bytes": 146515
+        },
+        {
+          "table": "silver.commerce_payments",
+          "files": 33,
+          "bytes": 227823
+        },
+        {
+          "table": "silver.commerce_product_rejects",
+          "files": 0,
+          "bytes": 0
+        },
+        {
+          "table": "silver.commerce_products",
+          "files": 33,
+          "bytes": 94344
+        }
+      ],
+      "snapshots": [
+        {
+          "table": "bronze.commerce_customers",
+          "snapshot_ids": [
+            158071226183070656,
+            581026115193520946,
+            992293929269289307,
+            1647694794183309072,
+            1714736236979837387,
+            2855385535114448337,
+            2870063705051693639,
+            2947435484420032222,
+            2975588997453264163,
+            3584081005207905029,
+            3646986422830229855,
+            3976116545256575793,
+            4830052007910370509,
+            4851168231104467954,
+            5190473240660726976,
+            5245474378642850276,
+            5436802780020393543,
+            5745526221960038027,
+            5779272491207651683,
+            6268990726944754125,
+            6743796186698566612,
+            6796491092228531538,
+            6810480355622695823,
+            7001301597591062108,
+            7100289175300803320,
+            7418140192572578012,
+            7488833057941527076,
+            7755115856479317749,
+            7773258251469450919,
+            8057338014571401201,
+            8064050353965498748,
+            8123890531156645392,
+            8216864412431449087,
+            8920953295021899727
+          ]
+        },
+        {
+          "table": "bronze.commerce_orders",
+          "snapshot_ids": [
+            419496858480926179,
+            663093401596616667,
+            832847173987592054,
+            937191659589444229,
+            1290614770162437367,
+            1306555601031139545,
+            1868881630190560050,
+            2715134208038261865,
+            2717075568580456133,
+            3350318728381817996,
+            3568712265164081959,
+            3945833578463614412,
+            4697239600093667918,
+            4792563016277864009,
+            4910286219084375547,
+            4958525562811691042,
+            5164245927608778900,
+            5688251746204863782,
+            6059622993980099361,
+            6145703093532638695,
+            6300174854426978356,
+            7018859663829397642,
+            7100231282960829435,
+            7153599939379979972,
+            7360839137712220571,
+            7475148139794507435,
+            7984372311929665524,
+            7993556101201829163,
+            8116568788759649072,
+            8414322561654144644,
+            8601057210243136357,
+            9001237417590583557,
+            9149142362777329343,
+            9196395942823118835
+          ]
+        },
+        {
+          "table": "bronze.commerce_payments",
+          "snapshot_ids": [
+            1620552825457647240,
+            1842848047155896668,
+            2271292122334044191,
+            2728493305854496804,
+            2931125813177641759,
+            3206191515016108195,
+            3245678966645513325,
+            3473790529902870490,
+            4813742266140276469,
+            4863511372263817034,
+            4970916652920571592,
+            5568013710188139753,
+            5621532875410511846,
+            5791673285271181204,
+            6009222671520433834,
+            6015976682988061592,
+            6091623904597281109,
+            6839168218639234066,
+            6893438649709132106,
+            7268227571613598165,
+            7329018022423173473,
+            7461339586445546624,
+            7553235432293286757,
+            7597169723344253964,
+            8032523199455800926,
+            8075653467670224560,
+            8128005360743131147,
+            8379382545739249212,
+            8426621929288235657,
+            8650856953297121933,
+            8791719701747490669,
+            8886469485194233522,
+            8906997522317898393,
+            9182777098199251959
+          ]
+        },
+        {
+          "table": "bronze.commerce_products",
+          "snapshot_ids": [
+            492583281915273853,
+            1108415607841189692,
+            1123168311993503130,
+            1197208881942923999,
+            2179958536205505715,
+            2471387212241679900,
+            2694850230886237464,
+            2945485261511023728,
+            3030531097911254953,
+            3091337145236732795,
+            3296982548045681285,
+            3622543818213053624,
+            4283572105288043878,
+            4811327050083388212,
+            4822343675668223315,
+            4981709117674400174,
+            5000698053026457244,
+            5466623330028544159,
+            6464401042083608967,
+            6524362661991488876,
+            6774522802344600146,
+            6831631908690740101,
+            6857934841782897906,
+            7035822715000556387,
+            7409187174128732470,
+            7926444014153902289,
+            8287146339686418491,
+            8326209853920213971,
+            8472691217204999113,
+            8623375795494007744,
+            8770773867904004708,
+            8858631415952479618,
+            8884761810140747735,
+            9006193867391542564
+          ]
+        },
+        {
+          "table": "gold.commerce_current_daily",
+          "snapshot_ids": [
+            498168276933302686,
+            629800173882222430,
+            792033173913696801,
+            858094072923162695,
+            1650056470737998010,
+            1703981873389174283,
+            2124100984554024706,
+            2419410408490733891,
+            2677350501296454668,
+            2871952270597014577,
+            2914924690191207954,
+            2977760450434095555,
+            3504622941251540356,
+            3771998622277608024,
+            3853746073042736926,
+            3893846844867550812,
+            4579592777068139280,
+            4758730081634865586,
+            5513750960906939793,
+            6392017160160056628,
+            6589198455302631828,
+            6628529946176670767,
+            6636731076849490946,
+            6998024735369564578,
+            7208615364111090508,
+            7219289127280359580,
+            7720273117581848112,
+            7764546497954210606,
+            8190999932905225665,
+            8476425003667228932,
+            8901816244329924910,
+            9060010674237252866,
+            9190638974223177748
+          ]
+        },
+        {
+          "table": "gold.commerce_daily",
+          "snapshot_ids": [
+            154359842446554517,
+            327254672330128118,
+            1034004503298096853,
+            1104434683028985181,
+            1200588224438891638,
+            1691553234443135272,
+            2223834453227178770,
+            3192799775699189027,
+            3471644138313427678,
+            3912856763722048340,
+            4004458204540923868,
+            4141948575876575547,
+            4211389686620674652,
+            4733072472442083290,
+            5052263672136749030,
+            5252873926105683134,
+            5312458378816322274,
+            5322392320637491572,
+            5438881248938521686,
+            5457596831618721211,
+            5905753888615938863,
+            6130519259608484097,
+            6487365478188425584,
+            7269079647557276741,
+            7586705438518436857,
+            7668170101905874286,
+            7808047923315045856,
+            8116798824530816119,
+            8254385061048821991,
+            8490545786081393143,
+            8765146285597177285,
+            8902428302565632461,
+            8905235913662573889
+          ]
+        },
+        {
+          "table": "gold.dim_customers_scd2",
+          "snapshot_ids": [
+            61630344865905170,
+            413911852180637490,
+            900334834024761393,
+            918320187335102728,
+            1848643459064826598,
+            1998749197090193284,
+            2054739136318631877,
+            2544812398347933720,
+            2961836304565080257,
+            3326010922360786434,
+            3539281851158322864,
+            3600962494897619734,
+            3738243377166343326,
+            3788794773357465022,
+            4080505965285324963,
+            4251045769984044734,
+            4516891200958738094,
+            5268643959120318612,
+            5740619732918777546,
+            5751220749339158486,
+            6020636688003644961,
+            6565274771959974709,
+            7159037989032751302,
+            7391576880766566353,
+            7403808943411470232,
+            7432307169469597877,
+            7609103973544648197,
+            7763637754916977584,
+            8133795084182943898,
+            8351359002716733808,
+            8374227173410167698,
+            8546734494893107335,
+            8570490321409391326
+          ]
+        },
+        {
+          "table": "silver.commerce_customer_rejects",
+          "snapshot_ids": [
+            124843583060553572,
+            146241540137401556,
+            197215422324880007,
+            697702270327037034,
+            1008049410474098981,
+            1508362787102306213,
+            1743356620311340154,
+            2256820069526909255,
+            2341984643736474054,
+            2460911693986609242,
+            2830713945199277512,
+            2837248699978842239,
+            3270522614942847692,
+            3636954307057090736,
+            3797359380945122254,
+            4129992324470847172,
+            4660407211874473797,
+            4678677906097641048,
+            4722261515628479467,
+            5562415904621995671,
+            5596959722129700140,
+            5891902368831618761,
+            6536639027019598122,
+            6563597159416155365,
+            6747488263901359387,
+            7047706048888060756,
+            7174590929771635609,
+            7341380171261194286,
+            7469554227620982454,
+            7477249994831459790,
+            7503418298775001387,
+            7592171667667437972,
+            8454587727398378347
+          ]
+        },
+        {
+          "table": "silver.commerce_customers",
+          "snapshot_ids": [
+            95239522265895987,
+            449019792977398778,
+            466111237786605586,
+            913515163868756824,
+            1182009858990527754,
+            1373150498452937583,
+            1898073414825914126,
+            1914897960017933034,
+            1942719719904953394,
+            2333075766411856733,
+            2699456501680056579,
+            2705762865639776292,
+            3470661312309016057,
+            3524944223946322981,
+            5307293430050795139,
+            5686345002526857909,
+            5695211462224893174,
+            5782826589829620524,
+            5823974946227526874,
+            5953647014435149246,
+            6036222393782962296,
+            6149670236815106343,
+            6645993854405826838,
+            6895747268313221228,
+            6961817807464389762,
+            6966985103304168664,
+            7094832294658444190,
+            7167885786010516080,
+            7195113900290547534,
+            7368188305989915216,
+            7508123705393011244,
+            7606999946976065916,
+            7768532894633195008
+          ]
+        },
+        {
+          "table": "silver.commerce_order_rejects",
+          "snapshot_ids": [
+            160081019269725993,
+            493799868722671515,
+            798352242232682086,
+            1969014076674072124,
+            2024435949576987197,
+            2043873614524036393,
+            2135869506039703257,
+            2150906122921767069,
+            2360898119538128127,
+            2660843349624108789,
+            2825857699554019292,
+            3150934270406890883,
+            3314176279505348430,
+            3611632118523302933,
+            3779321761489455098,
+            4189421655932580346,
+            4341408369460235962,
+            4557362791689308647,
+            4881502458235875005,
+            5131360663952909947,
+            5917503199157606732,
+            6003644346888096007,
+            6030103081488855790,
+            6129109910071521897,
+            6412981829825735836,
+            6769322946410455978,
+            6912645243426525572,
+            7104965345278306417,
+            7347253048166412528,
+            8607126181615425363,
+            8763551520881742353,
+            8869300664896428479,
+            9084320441916994468
+          ]
+        },
+        {
+          "table": "silver.commerce_orders",
+          "snapshot_ids": [
+            315125876171385971,
+            629733934472831745,
+            664423672720040068,
+            722153586400644275,
+            839923065985991384,
+            1080865946914717362,
+            1294118608852869180,
+            1565177197448514264,
+            1727486663046285938,
+            2366178869361624187,
+            2553742786855609771,
+            2815200530061242245,
+            3337564439667533498,
+            3459382499464152139,
+            3782368262122582321,
+            3949947984062158107,
+            4211721390675937188,
+            4515248831475411096,
+            4588277089824661107,
+            5711263489262196122,
+            5818959319682716766,
+            6006570037443033284,
+            6045062473941081258,
+            6117079956435578744,
+            6377984614801896518,
+            6580552313194302491,
+            6653028579431308218,
+            6659974066909159960,
+            6952259813470311465,
+            7607028197716587079,
+            8022554700066589833,
+            8144388109690867677,
+            8356250633299850933
+          ]
+        },
+        {
+          "table": "silver.commerce_payment_rejects",
+          "snapshot_ids": [
+            241847416814116775,
+            857667675460485289,
+            1593766392436538068,
+            2085415094153570038,
+            2310078547194423605,
+            3118991284924950034,
+            3220497316231618681,
+            3270343889351219910,
+            3877193823899590401,
+            3999377423068410333,
+            4054457581331946111,
+            4146994081732941426,
+            4694112622450152241,
+            5359584387732698996,
+            5461856264103778567,
+            5519860436246006933,
+            5566107911484848706,
+            5602255688402054172,
+            5913189254307609102,
+            6021433788755914582,
+            6651742552276520475,
+            7293497688745658746,
+            7298713823031613262,
+            7331845701946041502,
+            7438744455445389888,
+            7478551218215408858,
+            7602684535801162196,
+            7711719044038146337,
+            7813113820361225659,
+            7911820295957320887,
+            8001525950826555112,
+            8214954212616933482,
+            8467342082021953094
+          ]
+        },
+        {
+          "table": "silver.commerce_payments",
+          "snapshot_ids": [
+            67634048644369672,
+            841474159280505721,
+            864753548698290589,
+            1214726378851988455,
+            1590201525215858882,
+            2550437043341264961,
+            2701523966594046061,
+            3441411842331750723,
+            3594589012435786486,
+            3632011642197484476,
+            3639181094761826888,
+            3759724682730052355,
+            3980968795841918456,
+            4203825884793543424,
+            4241641062928135178,
+            4289000505130986700,
+            4906590171516990923,
+            5084141847311940297,
+            5661510291242378680,
+            6030076937003636895,
+            6121646605310838790,
+            6524470141922088539,
+            7328912282324754361,
+            7459548370529698901,
+            7772366901116450934,
+            7812638694048030343,
+            8533052301471683370,
+            8537111187891475711,
+            8696225579428802334,
+            9023239662345123368,
+            9102439649301301098,
+            9114494122284417859,
+            9169403712264633315
+          ]
+        },
+        {
+          "table": "silver.commerce_product_rejects",
+          "snapshot_ids": [
+            39115224066632767,
+            210198052647320551,
+            1609107216137585990,
+            2123781340818700056,
+            2167297054668571422,
+            2346908750492809708,
+            2435821182914023177,
+            2876186437446010569,
+            3214138717687996654,
+            3419318390815404812,
+            4207450549629899572,
+            4281042482070789500,
+            4346624386680740879,
+            4750427911244505251,
+            5013130972690414278,
+            5165613187790221290,
+            5179910476933452807,
+            5530756927538386946,
+            5838572503819170348,
+            5984754393446548448,
+            6094347092981541985,
+            6271127941283810159,
+            6490563834105665196,
+            6673689919600413758,
+            6932390912908672098,
+            7160554117149548288,
+            7186276007508206202,
+            7505204593669335389,
+            7826253715382365946,
+            8111319099528487353,
+            8428091309384974856,
+            8809710652948018536,
+            8997251843122486912
+          ]
+        },
+        {
+          "table": "silver.commerce_products",
+          "snapshot_ids": [
+            222345362303070727,
+            355675105585977856,
+            941824831173368752,
+            1517625044561529900,
+            2019133301112323645,
+            2280579848151827557,
+            2700505751997349848,
+            2808468301145614415,
+            2824485936226068084,
+            2914141684432492932,
+            3447978505190924282,
+            3638384136846452655,
+            3977724773080264829,
+            4147332961867735576,
+            4957630276250598083,
+            5181763232583022480,
+            5230234237614624780,
+            5597344858647324295,
+            5712187132882110029,
+            6250528739498857490,
+            6309728126512559501,
+            6318436196702101667,
+            6568551159626635254,
+            7005223929882579125,
+            7438031792070267344,
+            7565858418368802879,
+            7686341750346169905,
+            8077556226118413025,
+            8168417353196670424,
+            8941497348936898820,
+            8992576302832179389,
+            8995880781218624149,
+            9104576826315722993
+          ]
+        }
+      ]
+    },
+    "network_cleanup": {
+      "network": "lakehouse-ops-scale-restore-d726818e472145ebab90dfa06198972d_default",
+      "status": "absent"
+    },
+    "source_files_sha256_after": {
+      "checkpoint.json": "7edd67b352212331cda7f06b8b98df084e72e3755813fb1b9d1aff7810e3ca74",
+      "checkpoint.json.runs.sqlite3": "7467666539df8e71687c67bbf8fa78dba05e08ca3dbd11d6bdd40bc4ee151fba",
+      "recovery.json": "0832931c302f7288636aa8b53969871bf1326dbe8f204087b2360497ed37947b"
+    },
+    "owned_cleanup_verified": true,
+    "foreign_container_ids": [
+      "15eb7a373f06",
+      "3b9b1aea1aee",
+      "403bdc9fb905",
+      "48db691fab79",
+      "68bda87d7fd6",
+      "6d2b53fac4bf",
+      "7308ecbd8c75",
+      "77503b91af79",
+      "7a9279bc129c",
+      "82f6c5a7e46b",
+      "95985e961be7",
+      "a8c08b1b3147",
+      "b0314c8757ee",
+      "ff0debd699f2"
+    ],
+    "ended_at_utc": "2026-10-16T15:45:53.310771+00:00"
+  },
+  "operator_script_sha256": "975496d14d368c39258363958b718a24d9475fe77dd69d21fdbfacd46e42a492",
+  "verification_script_sha256": "a6482ad8802ab05ff99a54f495e96cbbb7da2d448fd029e76ddd54118554d5c4",
+  "rejected_first_attempt": {
+    "raw_sha256": "c16a80bd6554c88b14530a7f416f304f912dd12e324bc26d0d35cbb3674aef5f",
+    "error": "BusyBox tar changed three Trino symlink owners from 1000:1000 to 0:0; rejected before startup",
+    "correction": "Restore symlink ownership with chown -h and repeat in fresh volumes; all members reverified"
+  }
+}
