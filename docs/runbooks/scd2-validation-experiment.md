@@ -8,8 +8,10 @@ experiment artifact, not a runtime flag or an adopted job change.
 The [report](../evidence/scd2-validation-probe-2026-10-16.json) records the decision,
 14 correctness cases, three matched stage pairs, timings, job counts, source/image
 identity and cleanup. The exact hash-bound
-[probe source](../evidence/scd2-validation-probe-2026-10-16.py) is retained so the
-rejected algorithm and measurement can be reviewed and reproduced.
+[probe source](../evidence/scd2-validation-probe-2026-10-16.py.txt) is retained so the
+rejected algorithm and measurement can be reviewed and reproduced. Its `.py.txt`
+suffix preserves the exact measured bytes as historical evidence, outside runtime
+source discovery. Copy it to `probe.py` for execution as described below.
 
 ## Hypothesis and decision boundary
 

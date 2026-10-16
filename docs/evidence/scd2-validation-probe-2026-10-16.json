@@ -283,7 +283,7 @@
     "cleanup_verified": true,
     "ended_at_utc": "2026-10-16T16:26:25.299602+00:00"
   },
-  "probe_source": "scd2-validation-probe-2026-10-16.py",
+  "probe_source": "scd2-validation-probe-2026-10-16.py.txt",
   "operator_script_sha256": "38b69d96f85423308bd1f78cdebb42ab3bf9c18cdec773de455b3d8c56f77b62",
   "verification_script_sha256": "bfecf00afccae2f83859214471e9de2528714c94f1573f96b288609b1189ac49"
 }
