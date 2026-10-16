@@ -56,6 +56,10 @@ The [Trino compaction experiment](trino-compaction-experiment.md) captures the s
 read-only workload before and after this operation. Its comparison report rejects
 snapshot or file-count evidence that does not match the applied maintenance report.
 
+The [retained commerce experiment](commerce-maintenance-experiment.md) applies this
+guarded action to 330,000 customer-history versions after a cold restore rehearsal.
+It records fewer current files alongside increased retained warehouse payload.
+
 ## Failure handling
 
 - `current snapshot does not match`: discard the stale plan, recollect metadata, and
