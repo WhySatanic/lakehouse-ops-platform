@@ -1,5 +1,8 @@
 # Commerce training fixture
 
+Use the [commerce test map](../commerce-test-map.md) to connect transformations and
+business invariants to real Spark checks, runner failures and retained evidence.
+
 For complete-snapshot payment corrections and full refunds, see the
 [five-snapshot runner acceptance](commerce-refund-scenario.md).
 
