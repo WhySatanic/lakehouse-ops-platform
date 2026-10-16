@@ -67,10 +67,32 @@ def release_demo_network(project: str, root: Path, env: dict[str, str], run: Any
 
 def demo(root: Path, output: Path, *, run: Any = subprocess.run,
          scenario: str = "linked", orders: tuple[int, int] | None = None,
-         inflight_late_arrival: bool = False) -> dict[str, Any]:
+         inflight_late_arrival: bool = False, customers: int | None = None,
+         batches: int | None = None,
+         customer_revisions: list[int] | None = None) -> dict[str, Any]:
     if scenario not in SCENARIOS:
         raise ValueError("unsupported reference-stack scenario")
     module, retained, prefix, scope, timeout = SCENARIOS[scenario]
+    history_requested = any(value is not None for value in (customers, batches, customer_revisions))
+    history_args = []
+    if history_requested:
+        if scenario != "profile":
+            raise ValueError("history workload options are only supported for the profile scenario")
+        selected_customers = 10 if customers is None else customers
+        selected_batches = 2 if batches is None else batches
+        if type(selected_customers) is not int or not 2 <= selected_customers <= 100000:
+            raise ValueError("customers must be an integer between 2 and 100000")
+        if type(selected_batches) is not int or not 2 <= selected_batches <= 100:
+            raise ValueError("batches must be an integer between 2 and 100")
+        if customer_revisions is not None and (
+            len(customer_revisions) != selected_batches or any(
+                type(value) is not int or not 0 <= value <= 10000 for value in customer_revisions
+            )
+        ):
+            raise ValueError("customer revisions require one integer 0..10000 for each batch")
+        history_args = ["--customers", str(selected_customers), "--batches", str(selected_batches)]
+        if customer_revisions is not None:
+            history_args += ["--customer-revisions", *(str(value) for value in customer_revisions)]
     if inflight_late_arrival:
         if scenario != "linked":
             raise ValueError("in-flight arrival is only supported for the linked scenario")
@@ -83,6 +105,11 @@ def demo(root: Path, output: Path, *, run: Any = subprocess.run,
             scope = "same_volume_fresh_then_warm_reference_stack"
     elif orders is not None:
         raise ValueError("order volumes are only supported for the profile scenario")
+    if history_requested:
+        if selected_batches > 2:
+            scope = "sequential_snapshot_history_fresh_reference_stack"
+        if customer_revisions is not None:
+            scope = "customer_revision_history_fresh_reference_stack"
     root, output = root.resolve(), output.resolve()
     if not (root / f"src/lakehouse_ops/{module}.py").is_file():
         raise ValueError("requires the lakehouse-ops-platform checkout root")
@@ -108,6 +135,9 @@ def demo(root: Path, output: Path, *, run: Any = subprocess.run,
     report: dict[str, Any] = {"status": "failed", "project": project, "steps": [],
                               "ports": {name: env[name] for name in PORT_NAMES},
                               "scope": scope}
+    if history_requested:
+        report["workload"] = {"customers": selected_customers, "batches": selected_batches,
+                              "customer_revisions": customer_revisions}
     started = False
 
     def execute(name: str, command: list[str], timeout: int) -> None:
@@ -139,7 +169,8 @@ def demo(root: Path, output: Path, *, run: Any = subprocess.run,
                            f"http://localhost:{env['TRINO_HTTP_PORT']}"] +
                 (["--late-customer-history"] if scenario == "linked-history" else []) +
                 (["--inflight-late-arrival"] if inflight_late_arrival else []) +
-                (["--orders", *(str(value) for value in orders)] if orders else []), timeout)
+                (["--orders", *(str(value) for value in orders)] if orders else []) +
+                history_args, timeout)
         acceptance = json.loads((output / f"acceptance/{retained}").read_text())
         if acceptance.get("status") != "ready":
             raise RuntimeError(f"{scenario} acceptance did not retain a ready report")

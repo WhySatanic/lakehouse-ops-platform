@@ -17,6 +17,47 @@ raise container memory limits. Check available Docker VM memory first and run
 only one measurement stack at a time; a permitted input size is not a capacity
 guarantee. Failed or partial runs remain diagnostic evidence, not measurements
 to include in a successful comparison. Keep the default small run for setup.
+
+## Select customer cardinality and snapshot history
+
+The same isolated lifecycle can pass the existing profile's workload options to its
+single measurement child. For a bounded changing-attribute experiment:
+
+```powershell
+uv run --frozen python -m lakehouse_ops.commerce_pipeline_profile_demo `
+  --output artifacts/customer-history-10000-round-1 --orders 100 100 `
+  --customers 10000 --batches 4 --customer-revisions 0 1 1 2
+```
+
+`--customers` accepts 2..100000, `--batches` accepts 2..100, and an explicit revision
+schedule requires one integer 0..10000 per batch. Validation runs before creating
+output or contacting Docker. Recovery demos reject these measurement-only options.
+The first snapshot uses the first order volume; later snapshots repeat the second.
+All snapshots have chronological source times. Omitting the revision schedule keeps
+customer attributes stable; batch history alone is not changing-attribute SCD2 growth.
+
+With the example schedule the child verifies expected SCD2 row totals
+10000/20000/20000/30000 and 10000 current rows after each snapshot, including the
+repeated unchanged revision. These are expected oracles, not measured results from
+this documentation. The child retains actual SQL, results, query IDs/statistics,
+runner timings, memory, checkpoint and idle checks in `acceptance/profile.json` and
+adjacent evidence. It still runs the normal nine stages and full-snapshot rules.
+
+An explicit workload is recorded in `demo.json`; changing attributes and multiple
+snapshots use distinct scopes from the default fresh/warm pair. With no new options,
+the original two-volume command, report shape and scope remain unchanged. Startup,
+child and teardown are still separately timed. The whole-child timeout stays 3600
+seconds, with the same stage budgets and resource limits; accepting 100 batches
+does not promise they fit in one hour or memory. A timeout or failed history oracle
+keeps failed/partial child files and still attempts only the owned stack's teardown.
+
+This wrapper does not enable the standalone profile's warehouse inventory/reference
+flags or provision an observer identity. Use the existing standalone profile and
+its documented observer setup for retained-storage accounting. A successful run of
+the example alone is not complete retained warehouse cost evidence.
+
+## Default fresh/warm comparison
+
 For a matched fresh/warm pair, pass the same volume twice:
 
 ```powershell
