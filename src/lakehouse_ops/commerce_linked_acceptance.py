@@ -73,23 +73,76 @@ def verify_snapshot(
                   f"FROM {CURRENT_TABLE} ORDER BY order_day")
     revenue = sum(row["captured_revenue_cents"] for row in daily)
     days = {str(row["order_day"]): row["captured_revenue_cents"] for row in daily}
-    wanted_days = (expected["latest_daily_revenue_cents"] if index == 2 else
+    refund = expected.get("scenario") == "refund"
+    wanted_days = (expected["snapshot_daily_revenue_cents"][index] if refund else
+                   expected["latest_daily_revenue_cents"] if index == 2 else
                    {"2026-01-31": expected["snapshot_revenue_cents"][index]})
+    wanted_count = expected["snapshot_order_counts"][index] if refund else (2 if index == 2 else 1)
     if (days != wanted_days or revenue != expected["snapshot_revenue_cents"][index]
-            or sum(row["order_count"] for row in daily) != (2 if index == 2 else 1)
+            or sum(row["order_count"] for row in daily) != wanted_count
             or any(row["source_batch_id"] != batch_id for row in daily)):
         raise ValueError("current gold differs from literal snapshot oracle")
     wanted = expected["customer_history"] if index else [
         {**expected["customer_history"][0], "valid_to": None},
     ]
     actual = verify_customer_history(query, wanted)
-    if index == 2:
+    if index == len(expected["batches"]) - 1:
         orders = query("SELECT order_id, total_cents FROM lakehouse.silver.commerce_orders "
                        f"WHERE source_batch_id = '{batch_id}' ORDER BY order_id")
         if orders != expected["latest_orders"]:
             raise ValueError("latest orders differ from literal correction oracle")
-    return {"batch_id": batch_id, "captured_revenue_cents": revenue,
-            "daily_revenue_cents": days, "customer_history": actual}
+    result = {"batch_id": batch_id, "captured_revenue_cents": revenue,
+              "daily_revenue_cents": days, "customer_history": actual}
+    if refund:
+        historical = query(
+            "SELECT source_batch_id, CAST(order_day AS varchar) AS order_day, "
+            "captured_revenue_cents, order_count FROM lakehouse.gold.commerce_daily "
+            "ORDER BY source_batch_id, order_day"
+        )
+        wanted_history = sorted([
+            {"source_batch_id": batch["batch_id"], "order_day": day,
+             "captured_revenue_cents": value, "order_count": 1}
+            for ordinal, batch in enumerate(expected["batches"][:index + 1])
+            for day, value in expected["snapshot_daily_revenue_cents"][ordinal].items()
+        ], key=lambda row: (row["source_batch_id"], row["order_day"]))
+        if historical != wanted_history:
+            raise ValueError("historical gold differs from literal refund oracle")
+        payments = query(
+            "SELECT source_batch_id, payment_id, status, amount_cents "
+            "FROM lakehouse.silver.commerce_payments ORDER BY source_batch_id, payment_id"
+        )
+        wanted_payments = sorted([
+            {"source_batch_id": batch["batch_id"], "payment_id": payment_id,
+             "status": status, "amount_cents": amount}
+            for ordinal, batch in enumerate(expected["batches"][:index + 1])
+            for payment_id, status, amount in expected["snapshot_payment_states"][ordinal]
+        ], key=lambda row: (row["source_batch_id"], row["payment_id"]))
+        if payments != wanted_payments:
+            raise ValueError("payment history differs from literal refund oracle")
+        result.update(historical_daily=historical, payment_history=payments)
+    return result
+
+
+def replay_current_snapshot(query, run_stage, expected, index, batch, output):
+    snapshots_sql = ('SELECT count(*) AS snapshots FROM lakehouse.gold.'
+                     '"commerce_current_daily$snapshots"')
+    replay = CommerceRunJournal(output / "run-journal.sqlite3")
+    replay.record("replay", "selected", batch=batch)
+    try:
+        before = query(snapshots_sql)
+        replay.record(CURRENT_STAGE, "started")
+        run_stage(CURRENT_STAGE, batch, journal=replay)
+        replay.record(CURRENT_STAGE, "completed")
+        replay.record("verification", "started")
+        oracle = verify_snapshot(query, expected, index, batch["batch_id"])
+        if query(snapshots_sql) != before:
+            raise ValueError("current mart replay added a snapshot")
+        replay.record("verification", "completed")
+    except BaseException as error:
+        replay.record(replay.phase, "failed", error_type=type(error).__name__)
+        raise
+    replay.record("run", "ready")
+    return {"status": "ready", "snapshots": before, "oracle": oracle}
 
 
 def exercise_linked_batches(
@@ -97,11 +150,13 @@ def exercise_linked_batches(
     run_stage: LinkedStageRunner, expected: dict[str, Any],
     output: Path, report: dict[str, Any],
 ) -> None:
-    pending = planner.plan(max_batches=4)["batches"]
+    pending = planner.plan(max_batches=len(expected["batches"]) + 1)["batches"]
     if [batch["batch_id"] for batch in pending] != [
         batch["batch_id"] for batch in expected["batches"]
     ]:
-        raise ValueError("requires exactly the three chronological pending scenario batches")
+        raise ValueError("requires exactly the three chronological pending scenario batches"
+                         if expected.get("scenario") != "refund" else
+                         "requires exactly five chronological pending refund batches")
     report["samples"] = []
     for index, batch in enumerate(pending):
         journal = CommerceRunJournal(output / "run-journal.sqlite3")
@@ -126,24 +181,11 @@ def exercise_linked_batches(
         if sample["pipeline"]["status"] != "ready" or "oracle" not in sample:
             raise ValueError("linked batch did not reach verified checkpoint")
         sample["status"] = "ready"
-    snapshots_sql = ('SELECT count(*) AS snapshots FROM lakehouse.gold.'
-                     '"commerce_current_daily$snapshots"')
-    replay = CommerceRunJournal(output / "run-journal.sqlite3")
-    replay.record("replay", "selected", batch=pending[-1])
-    try:
-        before = query(snapshots_sql)
-        replay.record(CURRENT_STAGE, "started")
-        run_stage(CURRENT_STAGE, pending[-1], journal=replay)
-        replay.record(CURRENT_STAGE, "completed")
-        replay.record("verification", "started")
-        verify_snapshot(query, expected, 2, pending[-1]["batch_id"])
-        if query(snapshots_sql) != before:
-            raise ValueError("current mart replay added a snapshot")
-        replay.record("verification", "completed")
-    except BaseException as error:
-        replay.record(replay.phase, "failed", error_type=type(error).__name__)
-        raise
-    replay.record("run", "ready")
+        if expected.get("scenario") == "refund" and index == 2:
+            report["refund_replay"] = replay_current_snapshot(
+                query, run_stage, expected, index, batch, output,
+            )
+    replay_current_snapshot(query, run_stage, expected, len(pending) - 1, pending[-1], output)
 
     def no_compute(*_: Any) -> None:
         raise ValueError("idle checkpoint replay started compute")
@@ -152,7 +194,9 @@ def exercise_linked_batches(
     if report["idle"]["status"] != "idle":
         raise ValueError("linked scenario did not reach idle")
     report.update(status="ready", current_mart_replay="snapshot_stable",
-                  scope="three_full_snapshots_reference_stack")
+                  scope=("five_full_snapshots_refund_reference_stack"
+                         if expected.get("scenario") == "refund" else
+                         "three_full_snapshots_reference_stack"))
 
 
 def exercise_inflight_arrival(
@@ -279,6 +323,8 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--s3-endpoint-url", required=True)
     parser.add_argument("--server", required=True)
+    parser.add_argument("--refund", action="store_true",
+                        help="Verify five complete payment correction/refund snapshots")
     parser.add_argument("--late-customer-history", action="store_true",
                         help="After the three batches, run a manual late history correction drill")
     parser.add_argument("--inflight-late-arrival", action="store_true",
@@ -286,6 +332,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.inflight_late_arrival and args.late_customer_history:
         parser.error("choose either in-flight arrival or the manual history correction drill")
+    if args.refund and (args.inflight_late_arrival or args.late_customer_history):
+        parser.error("refund acceptance cannot be combined with a recovery drill")
     if not os.environ.get("COMPOSE_PROJECT_NAME", "").startswith("lakehouse-ops-linked"):
         parser.error("requires a dedicated lakehouse-ops-linked Compose project")
     if args.output.exists() and any(args.output.iterdir()):
@@ -303,7 +351,8 @@ def main() -> int:
                                  "OR table_name='dim_customers_scd2')")
             if tables:
                 raise ValueError("requires fresh commerce catalog")
-            generate_change_scenario(args.output / "scenario")
+            generate_change_scenario(args.output / "scenario",
+                                     scenario="refund" if args.refund else "correction")
             expected = json.loads((args.output / "scenario" / "expected.json").read_text())
             s3 = boto3.client("s3", endpoint_url=args.s3_endpoint_url, region_name="us-east-1")
             landing = CommerceS3LandingZone(s3, bucket="lakehouse")

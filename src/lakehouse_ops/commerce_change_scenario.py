@@ -17,14 +17,23 @@ def _json(value: Any) -> bytes:
     return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
 
 
-def _scenario_files() -> tuple[dict[str, bytes], list[dict[str, str]]]:
+def _scenario_files(scenario: str = "correction") -> tuple[dict[str, bytes], list[dict[str, str]]]:
+    if scenario not in {"correction", "refund"}:
+        raise ValueError("unsupported commerce change scenario")
     files: dict[str, bytes] = {}
     batches = []
-    for day, label, total, name in (
+    observations = (
         (1, "initial", 1000, "Alice"),
         (2, "correction", 1500, "Alice Updated"),
         (3, "late-arrival", 1500, "Alice Updated"),
-    ):
+    ) if scenario == "correction" else (
+        (1, "initial", 1000, "Alice"),
+        (2, "correction", 1500, "Alice Updated"),
+        (3, "refund", 1500, "Alice Updated"),
+        (4, "late-arrival", 1500, "Alice Updated"),
+        (5, "following", 1500, "Alice Updated"),
+    )
+    for day, label, total, name in observations:
         batch_at = f"2026-02-0{day}T00:00:00Z"
         orders = [
             {
@@ -38,7 +47,8 @@ def _scenario_files() -> tuple[dict[str, bytes], list[dict[str, str]]]:
                 "ingested_at": batch_at,
             }
         ]
-        if day == 3:
+        late_present = day == 3 if scenario == "correction" else day >= 4
+        if late_present:
             orders.append(
                 {
                     "order_id": "O0000000002",
@@ -51,6 +61,13 @@ def _scenario_files() -> tuple[dict[str, bytes], list[dict[str, str]]]:
                     "ingested_at": batch_at,
                 }
             )
+        if scenario == "refund" and day == 5:
+            orders.append({
+                "order_id": "O0000000003", "customer_id": "C00000001",
+                "product_id": "P000001", "quantity": 1, "unit_price_cents": 300,
+                "total_cents": 300, "event_at": "2026-02-05T00:00:00Z",
+                "ingested_at": batch_at,
+            })
         rows = {
             "customers": [
                 {
@@ -74,7 +91,8 @@ def _scenario_files() -> tuple[dict[str, bytes], list[dict[str, str]]]:
                     "payment_id": f"PAY{index:010d}",
                     "order_id": order["order_id"],
                     "amount_cents": order["total_cents"],
-                    "status": "captured",
+                    "status": ("refunded" if scenario == "refund" and day >= 3 and index == 1
+                               else "captured"),
                     "paid_at": batch_at,
                 }
                 for index, order in enumerate(orders, start=1)
@@ -84,7 +102,8 @@ def _scenario_files() -> tuple[dict[str, bytes], list[dict[str, str]]]:
         batch_id = hashlib.sha256(
             _json(
                 {
-                    "scenario": "commerce-snapshots-v1",
+                    "scenario": ("commerce-snapshots-v1" if scenario == "correction"
+                                 else "commerce-refund-snapshots-v1"),
                     "batch_at": batch_at,
                     "tables": {
                         table: hashlib.sha256(body).hexdigest() for table, body in bodies.items()
@@ -111,7 +130,7 @@ def _scenario_files() -> tuple[dict[str, bytes], list[dict[str, str]]]:
                 "quality_cases": {
                     "null_customer_emails": 0,
                     "duplicate_order_rows": 0,
-                    "late_orders": int(day == 3),
+                    "late_orders": int(late_present),
                     "invalid_payment_amounts": 0,
                 },
             }
@@ -144,12 +163,38 @@ def _scenario_files() -> tuple[dict[str, bytes], list[dict[str, str]]]:
             ],
         }
     )
+    if scenario == "refund":
+        expected = json.loads(files["expected.json"])
+        expected.update(
+            scenario="refund", snapshot_revenue_cents=[1000, 1500, 0, 700, 1000],
+            snapshot_order_counts=[1, 1, 1, 2, 3],
+            snapshot_daily_revenue_cents=[
+                {"2026-01-31": 1000}, {"2026-01-31": 1500}, {"2026-01-31": 0},
+                {"2026-01-01": 700, "2026-01-31": 0},
+                {"2026-01-01": 700, "2026-01-31": 0, "2026-02-05": 300},
+            ],
+            snapshot_payment_states=[
+                [["PAY0000000001", "captured", 1000]],
+                [["PAY0000000001", "captured", 1500]],
+                [["PAY0000000001", "refunded", 1500]],
+                [["PAY0000000001", "refunded", 1500], ["PAY0000000002", "captured", 700]],
+                [["PAY0000000001", "refunded", 1500], ["PAY0000000002", "captured", 700],
+                 ["PAY0000000003", "captured", 300]],
+            ],
+            latest_orders=[
+                {"order_id": "O0000000001", "total_cents": 1500},
+                {"order_id": "O0000000002", "total_cents": 700},
+                {"order_id": "O0000000003", "total_cents": 300},
+            ],
+            latest_daily_revenue_cents={"2026-01-01": 700, "2026-01-31": 0, "2026-02-05": 300},
+        )
+        files["expected.json"] = _json(expected)
     return files, batches
 
 
-def generate_change_scenario(output: Path) -> dict[str, Any]:
+def generate_change_scenario(output: Path, *, scenario: str = "correction") -> dict[str, Any]:
     """Publish the complete scenario, or verify an identical existing copy."""
-    files, batches = _scenario_files()
+    files, batches = _scenario_files(scenario)
     if output.is_symlink():
         raise ValueError("scenario output must not be a symlink")
     if output.exists():
@@ -194,9 +239,10 @@ def generate_change_scenario(output: Path) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--scenario", choices=("correction", "refund"), default="correction")
     args = parser.parse_args(argv)
     try:
-        report = generate_change_scenario(args.output)
+        report = generate_change_scenario(args.output, scenario=args.scenario)
     except (OSError, ValueError) as error:
         print(f"commerce change scenario failed: {error}", file=sys.stderr)
         return 2

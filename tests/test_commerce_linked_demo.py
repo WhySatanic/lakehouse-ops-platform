@@ -26,7 +26,7 @@ def checkout(root):
                                     "malformed_report"])
 @pytest.mark.parametrize("scenario,inflight", [("linked", False), ("linked", True),
                                               ("owner-exit", False), ("linked-history", False),
-                                              ("profile", False)])
+                                              ("profile", False), ("refund", False)])
 def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Path, failure,
                                                                   monkeypatch, scenario, inflight):
     checkout(tmp_path)
@@ -47,7 +47,8 @@ def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Pa
         commands.append(name)
         project = kwargs["env"]["COMPOSE_PROJECT_NAME"]
         projects.append(project)
-        prefix = "scale" if scenario == "profile" else scenario
+        prefix = ("scale" if scenario == "profile" else
+                  "linked-refund" if scenario == "refund" else scenario)
         assert project.startswith(f"lakehouse-ops-{prefix}-demo-")
         assert kwargs["cwd"] == tmp_path and kwargs["timeout"] > 0
         expected_files = [str(tmp_path / "compose.yaml")]
@@ -75,13 +76,15 @@ def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Pa
         if name == "linked":
             expected = {"linked": "commerce_linked_acceptance", "owner-exit": "commerce_owner_exit",
                         "linked-history": "commerce_linked_acceptance",
+                        "refund": "commerce_linked_acceptance",
                         "profile": "commerce_pipeline_profile"}[scenario]
             assert command[2] == f"lakehouse_ops.{expected}"
             expected_timeout = {"linked": 1800, "owner-exit": 6600, "linked-history": 2400,
-                                "profile": 3600}[scenario]
+                                "profile": 3600, "refund": 2400}[scenario]
             assert kwargs["timeout"] == expected_timeout
             assert ("--late-customer-history" in command) == (scenario == "linked-history")
             assert ("--inflight-late-arrival" in command) == inflight
+            assert ("--refund" in command) == (scenario == "refund")
             if scenario == "profile":
                 assert command[-3:] == ["--orders", "100", "1000"]
             else:
@@ -95,6 +98,7 @@ def test_scoped_demo_retains_failure_and_always_stops_started_stack(tmp_path: Pa
                 acceptance.mkdir()
                 retained = {"linked": "linked.json", "owner-exit": "owner-exit.json",
                             "linked-history": "linked.json",
+                            "refund": "linked.json",
                             "profile": "profile.json"}[scenario]
                 (acceptance / retained).write_text(json.dumps({
                     "status": "failed" if failure == "bad_report" else "ready",
@@ -160,7 +164,7 @@ def test_entrypoint_returns_demo_outcome(tmp_path: Path, monkeypatch, capsys,
     assert json.loads(capsys.readouterr().out) == {"status": status}
 
 
-@pytest.mark.parametrize("scenario", ["linked-history", "profile", "owner-exit"])
+@pytest.mark.parametrize("scenario", ["linked-history", "profile", "owner-exit", "refund"])
 def test_inflight_option_cannot_mutate_other_demo_scenarios(tmp_path, scenario):
     with pytest.raises(ValueError, match="only supported for the linked"):
         demo(tmp_path, tmp_path / "absent", scenario=scenario, inflight_late_arrival=True)
