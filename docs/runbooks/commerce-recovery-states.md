@@ -74,8 +74,11 @@ manifest, then collect:
    current versions, then checkpoint identity. Do not require equal snapshot counts.
 5. A final idle replay that launches no compute. Retain failed attempts as evidence.
 
-This document prepares that experiment; it does not report an active-stage test as
-executed or establish durability across host/power failure.
+This map does not itself establish durability across host/power failure. The
+[active Spark acceptance](commerce-active-spark.md) implements a separate scoped
+interruption drill. The [observed outage retry](commerce-outage-retry.md) records
+recovery of a retained 33rd batch after Docker became available; its outage cause
+and interrupted commit boundary remain unknown.
 
 ## Recheck local state boundaries
 
