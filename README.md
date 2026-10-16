@@ -2,6 +2,37 @@
 
 [![CI](https://github.com/WhySatanic/lakehouse-ops-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/WhySatanic/lakehouse-ops-platform/actions/workflows/ci.yml)
 
+Load commerce snapshots, correct customer history, recover a failed batch, and
+check the resulting Iceberg tables through Trino using the same runner as CI.
+
+## Start here
+
+Use Python 3.12+, `uv`, and local Docker with Compose. First complete the
+[one-time image preparation](#supported-commerce-walkthrough). From the repository
+root, choose a new empty output directory and run:
+
+```powershell
+uv run --frozen python -m lakehouse_ops.commerce_history_correction_demo --output artifacts/commerce-history-correction-demo
+```
+
+The final `commerce_current_daily` SQL result is **700 cents on January 1 and
+1500 on January 31**, totalling **2200 cents**. Each full snapshot replaces current
+business state; earlier snapshot totals are not added. See the
+[query and acceptance steps](#supported-commerce-walkthrough).
+
+Success requires `artifacts/commerce-history-correction-demo/demo.json` to report
+`ready`, including scoped shutdown. On failure, start with that report and the
+logs in the same directory; `acceptance/linked.json`, `acceptance/stages.log` and
+`acceptance/run-journal.sqlite3` identify the acceptance checks and stage attempts.
+The [recovery runbook](docs/runbooks/commerce-history-correction-demo.md) explains
+the retained evidence. The demo stops its SQL endpoint and keeps evidence and
+named volumes; use a new directory for a fresh run.
+
+Choose a deeper path: [architecture](docs/architecture.md),
+[measurements and recovery drills](#commerce-measurements-and-separate-recovery-drills),
+[refund semantics](docs/runbooks/commerce-refund-scenario.md), or
+[weather and operational profiles](#weather-and-operational-profiles).
+
 A production-like reference platform for operating an Apache Iceberg lakehouse, not
 just starting containers. The project combines a reproducible local data platform
 with a Python control plane for ingestion, table health, maintenance, access policy,
