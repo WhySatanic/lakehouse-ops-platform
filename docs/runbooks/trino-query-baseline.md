@@ -64,3 +64,8 @@ This first baseline deliberately does not enforce latency thresholds.
 
 Protocol behavior follows the official
 [Trino client REST API reference](https://trino.io/docs/current/develop/client-protocol.html).
+
+## Optional planning observation
+
+Use the separate [planning observation](trino-planning-observation.md) API to record
+the final coordinator planning counter without changing the baseline report schema.
