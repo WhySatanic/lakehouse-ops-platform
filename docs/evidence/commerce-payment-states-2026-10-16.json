@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "scope": "production Spark classification and gold aggregation; not runner/catalog proof",
+  "baseline_commit": "6fa674b1b05f671108a8be63246cc976a8566353",
+  "image_id": "sha256:ee19f0f26f627da53f951179a3d21ec8c4320923c7f0c3a8c38a2efca93abeb8",
+  "execution": {
+    "master": "local[2]",
+    "network": "none",
+    "spark_local_ip": "127.0.0.1",
+    "cpus": 2,
+    "memory": "2g",
+    "warehouse_services_started": false,
+    "container_removal": "--rm"
+  },
+  "regression": {
+    "before": "AssertionError: four unknown statuses accepted",
+    "after": "PAYMENT_STATE_CONTRACT_READY",
+    "classification_cases": 12,
+    "unknown_rejections": [
+      "capturedd",
+      "CAPTURED",
+      " captured ",
+      "partially_refunded"
+    ],
+    "revenue_oracle": [
+      [
+        "captured",
+        125
+      ],
+      [
+        "refunded",
+        0
+      ],
+      [
+        "cancelled",
+        0
+      ]
+    ]
+  },
+  "source_sha256": {
+    "jobs/spark/silver_commerce_payments.py": "8617b67513b38eeb46b6b8431fafead0f17ea10a413a7332db32b3e07d3d47e5",
+    "tests/integration/check_commerce_payment_silver.py": "7d23bd59e5ba3472b39980b7ffb0f34f1143ca6474b59357dba184588426f76c"
+  },
+  "logs_sha256": {
+    "bootstrap-failed.log": "f978b9abb35ac1ab31e7af3131a4bc6fe43c6e3e6a76e30f6e1f3eace32418d5",
+    "red.log": "e30d65cdfb41cc8cdb153ef9b09dd540a5d4776cac727eeb90dfbd252e5abaf7",
+    "green.log": "f0f82cf87dd6f0e128de658192f845231dce3b067afdad6f9eca31a227821c09"
+  },
+  "bootstrap_failure": "Initial network-none JVM lacked SPARK_LOCAL_IP and failed hostname resolution before test. Recorded separately; not defect evidence.",
+  "next_step": "Full snapshot refund sequence through ordinary runner and literal current/history SQL."
+}
