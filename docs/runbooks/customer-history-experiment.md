@@ -1,5 +1,9 @@
 # Bounded customer history and retained warehouse experiment
 
+The separately [audited 50-snapshot observation](customer-history-50-observation.md)
+completed on October 16. Its source, resources, 500000 history versions and full
+retained payload are recorded separately from the four-snapshot baseline below.
+
 The separate `Customer history experiment` workflow uses one fresh GitHub runner
 and one uniquely named `lakehouse-ops-scale-history-*` stack. It runs for pull requests
 changing its workflow or experiment tests, and can be dispatched manually once the
