@@ -1,0 +1,296 @@
+{
+  "status": "failed_experiment_with_verified_completed_prefix",
+  "run_url": "https://github.com/WhySatanic/lakehouse-ops-platform/actions/runs/38969869281",
+  "run_id": 38969869281,
+  "run_attempt": 1,
+  "source_sha": "6459ed9595b2a387c7ff60f36727484160efedaa",
+  "artifact": {
+    "id": 12087127273,
+    "name": "customer-history-experiment",
+    "compressed_bytes": 43691675,
+    "api_digest": "sha256:7af8ce88a0e1b1f45a2e3c044b9688d19107f07d3c3fd60feda147c87948ea38",
+    "digest_scope": "recorded API metadata; extracted input files checked separately"
+  },
+  "workload": {
+    "customers": 10000,
+    "orders": 100,
+    "batches": 100,
+    "customer_revisions": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63,
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86,
+      87,
+      88,
+      89,
+      90,
+      91,
+      92,
+      93,
+      94,
+      95,
+      96,
+      97,
+      98,
+      99
+    ]
+  },
+  "runner_resources": {
+    "logical_cpus": 4,
+    "reported_memory_bytes": 16766414848,
+    "scope": "hosted runner observation; fresh isolated services with preloaded images, not capacity certification"
+  },
+  "experiment_steps": [
+    {
+      "name": "start",
+      "status": "ready",
+      "timeout_seconds": 240,
+      "returncode": 0,
+      "elapsed_seconds": 59.557833673999994
+    },
+    {
+      "name": "observer",
+      "status": "ready",
+      "timeout_seconds": 60,
+      "returncode": 0,
+      "elapsed_seconds": 0.6163727429999994
+    },
+    {
+      "name": "profile",
+      "status": "failed",
+      "timeout_seconds": 19500,
+      "elapsed_seconds": 19500.020593831
+    },
+    {
+      "name": "services",
+      "status": "ready",
+      "timeout_seconds": 30,
+      "returncode": 0,
+      "elapsed_seconds": 0.5690494369991939
+    },
+    {
+      "name": "stop",
+      "status": "ready",
+      "timeout_seconds": 120,
+      "returncode": 0,
+      "elapsed_seconds": 13.27924269000141
+    }
+  ],
+  "completed_prefix": {
+    "samples": 90,
+    "checkpoint_entries": 90,
+    "last_history_rows": 900000,
+    "last_current_customers": 10000,
+    "orders_per_sample": 100,
+    "revenue_cents_per_sample": 277225,
+    "last_observation": {
+      "snapshot": 90,
+      "batch_id": "c0bb74bcb367aaa8",
+      "history_rows": 900000,
+      "warehouse_bytes": 355526825,
+      "groups": {
+        "current_data": {
+          "versions": 1120,
+          "bytes": 153818073
+        },
+        "current_delete": {
+          "versions": 0,
+          "bytes": 0
+        },
+        "retained_only_data": {
+          "versions": 178,
+          "bytes": 110150894
+        },
+        "retained_only_delete": {
+          "versions": 0,
+          "bytes": 0
+        },
+        "latest_not_in_selected_file_references": {
+          "versions": 4065,
+          "bytes": 91557858
+        },
+        "s3_noncurrent": {
+          "versions": 0,
+          "bytes": 0
+        }
+      }
+    },
+    "selected_samples": [
+      {
+        "snapshot": 1,
+        "history_rows": 10000,
+        "runner_seconds": 175.17709256400002,
+        "scd2_seconds": 16.82190561699997,
+        "warehouse_payload_bytes": 1964846
+      },
+      {
+        "snapshot": 25,
+        "history_rows": 250000,
+        "runner_seconds": 184.007035222,
+        "scd2_seconds": 23.45567906799988,
+        "warehouse_payload_bytes": 82450984
+      },
+      {
+        "snapshot": 50,
+        "history_rows": 500000,
+        "runner_seconds": 196.07963873799963,
+        "scd2_seconds": 27.4580870030004,
+        "warehouse_payload_bytes": 178114449
+      },
+      {
+        "snapshot": 75,
+        "history_rows": 750000,
+        "runner_seconds": 203.33547560700026,
+        "scd2_seconds": 30.489197225999305,
+        "warehouse_payload_bytes": 285438263
+      },
+      {
+        "snapshot": 90,
+        "history_rows": 900000,
+        "runner_seconds": 211.0721583559971,
+        "scd2_seconds": 32.937759059997916,
+        "warehouse_payload_bytes": 355526825
+      }
+    ],
+    "completed_runner_total_seconds": 17349.28723067299,
+    "runner_median_seconds": 194.89379050000025,
+    "largest_sampled_stack_bytes": 4449873428
+  },
+  "uncompleted_batch": {
+    "batch_at": "2026-05-02T00:00:00Z",
+    "batch_id": "0f45ea4572fab65f",
+    "manifest_sha256": "9396e5b16ce952a9b1d4cf2aa855afab7c3c6a5393c4a34b9ed19807bbb0ce81",
+    "path": "s3://lakehouse/landing/source=commerce/batch_id=0f45ea4572fab65f/"
+  },
+  "cleanup": {
+    "status": "incomplete",
+    "error": "demo network has attached containers; network retained",
+    "compose_stop_returncode": 0,
+    "limitation": "base services stopped; network remained attached; no final catalog or successful active-stage containment claim"
+  },
+  "audit": {
+    "status": "failed_experiment_completed_prefix_verified",
+    "raw_files_unchanged": 1195,
+    "input_index_sha256": "22c1b9824bfaac152069379d1ba56e8c1f306dae48f175f49776fcc6130a122e",
+    "metadata_sha256": {
+      "experiment.json": "b1b8e78b2016a428777ff3adefe55750aec0a1de6d329fb32fc14786ae9cf208",
+      "profile/profile.json": "53366be0540a3528dbd24323b9306517475593f4aca5a590bc019f233d55d9c1",
+      "profile/checkpoint.json": "ce0a5074ec93ced39c09ed67872376cac21080b0c44cd784c0539fa519bf40f1",
+      "profile/checkpoint.json.active.json": "56bd27b3ef99ed549ac095b21aa7b63a95428838c6b41ccb1459d991597fe76c"
+    },
+    "scripts_sha256": {
+      "audit-customer-history.py": "9397ad59e810731b83e2650dcc29afef8bf70a54cd2778ca4b40b30291d0513a",
+      "audit-customer-history-100-prefix.py": "038e86c11da1c7646e139e8f2d2abf8bb730e6f09db3d4f90eb5e43e3d050dda",
+      "check-customer-history-100-prefix-faults.py": "4757854466361da5a1f8dc53dff5c11baf19ae5821f57b83cfd086256f4f8495"
+    },
+    "script_digest_scope": "LF-normalized source text",
+    "semantic_faults": {
+      "status": "verified",
+      "semantic_corruptions_rejected": [
+        "source",
+        "partial_count",
+        "checkpoint",
+        "active_manifest",
+        "period",
+        "revenue",
+        "storage_groups",
+        "cleanup_claim"
+      ],
+      "raw_files_unchanged": 1195,
+      "method": "in-memory load substitutions"
+    },
+    "full_hundred_auditor": "refused failed experiment as required"
+  },
+  "limits": [
+    "not successful 100-snapshot run",
+    "last observation is not final catalog state",
+    "active intent does not establish commit outcome",
+    "payload is not physical disk or billing",
+    "not a universal 90-snapshot maximum",
+    "not a measured optimization or matched A/B comparison",
+    "not in-commit failure injection or distributed exactly-once"
+  ]
+}
