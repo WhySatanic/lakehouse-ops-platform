@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from lakehouse_ops.commerce_container_inspection import inspect_containers
 from lakehouse_ops.commerce_linked_demo import SERVICES, free_ports, release_demo_network
 
 OBSERVER_SETUP = '''
@@ -116,6 +117,27 @@ def experiment(root, output, run=subprocess.run, *, batches=4):
         report["status"] = "ready"
     except Exception as error:
         report.update(error_type=type(error).__name__, error=str(error))
+        try:
+            def inspect(command, **options):
+                return run(command, cwd=root, env=dict(env), **options)
+
+            observation = inspect_containers(
+                output / "profile/checkpoint.json.runs.sqlite3", project=project,
+                limit=3, run=inspect,
+            )
+        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as probe_error:
+            observation = {
+                "status": "incomplete", "project": project, "limit": 3,
+                "scope": "recorded_containers_not_owner_liveness_or_recovery",
+                "error_type": type(probe_error).__name__,
+            }
+        report["failure_containers"] = observation
+        try:
+            (output / "containers-at-failure.json").write_text(
+                json.dumps(observation, indent=2), encoding="utf-8",
+            )
+        except OSError as write_error:
+            report["failure_containers_write_error"] = type(write_error).__name__
         raise
     finally:
         try:

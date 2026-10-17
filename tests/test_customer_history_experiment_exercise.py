@@ -196,3 +196,123 @@ def test_ci_experiment_preserves_required_ci_and_uploads_failure_evidence():
     for job in ("quality", "serving-integration", "ranger-integration", "lakehouse-integration",
                 "release-readiness"):
         assert f"  {job}:" in Path(".github/workflows/ci.yml").read_text()
+
+
+@pytest.mark.parametrize("inspection_fault", [None, "daemon", "ownership"])
+def test_profile_timeout_retains_read_only_container_evidence_before_teardown(
+    tmp_path, inspection_fault,
+):
+    from lakehouse_ops.commerce_run_journal import CommerceRunJournal
+
+    exercise = module()
+    output = tmp_path / "failure"
+    calls = []
+    state = {}
+    error = subprocess.TimeoutExpired(["profile-child"], 1800)
+
+    def run(command, **options):
+        calls.append(command)
+        project = options["env"]["COMPOSE_PROJECT_NAME"]
+        if command[1] == "-m":
+            profile = output / "profile"
+            profile.mkdir()
+            (profile / "checkpoint.json.active.json").write_text('{"active": true}')
+            journal = CommerceRunJournal(profile / "checkpoint.json.runs.sqlite3")
+            journal.record_container("spark-commerce-order-silver", "owned-stage", "launch_intent",
+                                     batch={"batch_id": "a" * 16, "manifest_sha256": "b" * 64},
+                                     project_hint=project)
+            state.update(journal=journal, bytes=journal.path.read_bytes())
+            raise error
+        if command[:3] == ["docker", "container", "inspect"]:
+            assert command == ["docker", "container", "inspect", "--", "owned-stage"]
+            assert options["timeout"] == 5
+            if inspection_fault == "daemon":
+                raise subprocess.TimeoutExpired(command, 5)
+            return SimpleNamespace(returncode=0, stdout=json.dumps([{
+                "Name": "/owned-stage", "Id": "d" * 64, "State": {"Status": "running"},
+                "Config": {"Env": ["SECRET=must-not-be-persisted"], "Labels": {
+                    "lakehouse.ops.run_id": state["journal"].run_id,
+                    "lakehouse.ops.batch_id": "a" * 16,
+                    "lakehouse.ops.manifest_sha256": "b" * 64,
+                    "com.docker.compose.project": "foreign" if inspection_fault == "ownership"
+                                                    else project,
+                    "com.docker.compose.service": "spark-commerce-order-silver",
+                }},
+            }]))
+        if command[1:3] == ["network", "inspect"]:
+            return SimpleNamespace(returncode=0, stdout=json.dumps([{
+                "Name": command[-1], "Containers": {"d" * 64: {}},
+                "Labels": {"com.docker.compose.project": project},
+            }]))
+        return SimpleNamespace(returncode=0)
+
+    with pytest.raises(subprocess.TimeoutExpired) as caught:
+        exercise["experiment"](tmp_path, output, run=run)
+    assert caught.value is error
+    report = json.loads((output / "experiment.json").read_text())
+    observed = report["failure_containers"]
+    assert observed == json.loads((output / "containers-at-failure.json").read_text())
+    assert observed["limit"] == 3
+    item = observed["containers"][0]
+    assert item["observation"] == {None: "running", "daemon": "inspect_failed",
+                                    "ownership": "ownership_mismatch"}[inspection_fault]
+    if inspection_fault is None:
+        assert item["container_id"] == "d" * 64
+    else:
+        assert "container_id" not in item
+    assert state["journal"].path.read_bytes() == state["bytes"]
+    assert (output / "profile/checkpoint.json.active.json").read_text() == '{"active": true}'
+    inspected = next(i for i, c in enumerate(calls) if c[:3] == ["docker", "container", "inspect"])
+    stopped = next(i for i, c in enumerate(calls) if "down" in c)
+    assert inspected < stopped
+    assert "SECRET" not in json.dumps(report)
+    assert not any(c[:2] == ["docker", "rm"] or "kill" in c or "prune" in c for c in calls)
+
+
+@pytest.mark.parametrize("write_failure", [False, True])
+def test_missing_journal_and_diagnostic_write_failure_keep_original_timeout(
+    tmp_path, monkeypatch, write_failure,
+):
+    exercise = module()
+    output = tmp_path / "missing-journal"
+    error = subprocess.TimeoutExpired(["profile-child"], 1800)
+    write_text = Path.write_text
+
+    def write(path, *args, **kwargs):
+        if write_failure and path.name == "containers-at-failure.json":
+            raise OSError("simulated diagnostic write failure")
+        return write_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", write)
+
+    def run(command, **options):
+        if command[1] == "-m":
+            raise error
+        if command[1:3] == ["network", "inspect"]:
+            return SimpleNamespace(returncode=1, stderr=f"network {command[-1]} not found")
+        assert command[:3] != ["docker", "container", "inspect"]
+        return SimpleNamespace(returncode=0)
+
+    with pytest.raises(subprocess.TimeoutExpired) as caught:
+        exercise["experiment"](tmp_path, output, run=run)
+    assert caught.value is error
+    report = json.loads((output / "experiment.json").read_text())
+    assert report["failure_containers"]["status"] == "incomplete"
+    assert not (output / "profile/checkpoint.json.runs.sqlite3").exists()
+    if write_failure:
+        assert report["failure_containers_write_error"] == "OSError"
+
+
+def test_timeout_smoke_refuses_existing_output_before_docker(tmp_path, monkeypatch):
+    smoke = runpy.run_path(str(Path(__file__).parent / "integration" /
+                              "exercise_customer_history_timeout.py"))
+    evidence = tmp_path / "timeout-smoke.json"
+    evidence.write_bytes(b"existing")
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("existing output must be refused before Docker")
+
+    monkeypatch.setattr(subprocess, "run", forbidden)
+    with pytest.raises(ValueError, match="new evidence"):
+        smoke["exercise"](tmp_path)
+    assert evidence.read_bytes() == b"existing"
