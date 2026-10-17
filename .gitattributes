@@ -2,4 +2,5 @@
 *.sh text eol=lf
 docs/evidence/scd2-validation-probe-2026-10-16.py.txt -text
 docs/evidence/audit-customer-history-50.py text eol=lf
-docs/evidence/customer-dimension-100k-*.py.txt -text
+# Preserve literal historical CRLF source bytes, including blank-line indentation.
+docs/evidence/customer-dimension-100k-*.py.txt -text whitespace=cr-at-eol,-blank-at-eol
