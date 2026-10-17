@@ -39,6 +39,38 @@ The default child has a 1800-second total limit and the existing 300-second stag
 The default job is bounded to 60 minutes including build and upload. Timeout, memory failure,
 partial history or missing observations are failed evidence, not successful samples.
 
+## Audit downloaded extended evidence
+
+The read-only [depth auditor](../evidence/audit-customer-history.py) accepts the
+two explicitly admitted experiment identities: 50 snapshots at source
+`d53976d2378ed578e7fb19df18de10c8436070a7` (run `38922050656`), and 100 at source
+`6459ed9595b2a387c7ff60f36727484160efedaa` (run `38969869281`). Use the extracted
+artifact directory containing `customer-history-ci/` and `customer-history-runner/`:
+
+```powershell
+uv run --frozen python docs/evidence/audit-customer-history.py artifacts/downloaded-history
+uv run --frozen python docs/evidence/audit-customer-history.py artifacts/downloaded-history --snapshots 100
+```
+
+The default remains the actual 50-snapshot identity. Other depths and a different
+source are refused, including internally matching source files with an unapproved
+SHA. Run without Python's `-O` option because verification uses assertions.
+The original hash-bound `audit-customer-history-50.py` remains unchanged.
+
+Successful verification requires every snapshot, all manifest/input hashes, literal
+customer IDs/names/periods/current flags, detail/daily/current revenue, all nine
+stages, completed checkpoint entries and no active intent. The same storage-group,
+referenced-object/size, memory-observation and idle file/snapshot checks apply at
+both depths. A partial or still-running report fails verification; retain its raw
+diagnostics separately instead of treating its completed prefix as a full run.
+
+The new auditor rechecked all 50 actual samples and left all 665 raw files unchanged.
+Its 100-snapshot tests use synthetic reports and input files. Corruption tests reach
+the last snapshot and also reject missing checkpoint state and unapproved source.
+This is tool compatibility evidence, **not an observed 100-snapshot Spark run**.
+Confirm the Actions run/artifact identity and immutable checkout SHA independently
+before interpreting an audit result; JSON alone does not authenticate its origin.
+
 ## Extended workload budgets
 
 | Snapshots | Customer revisions | Profile child limit | CI measurement step | Whole job |
