@@ -1,0 +1,97 @@
+{
+  "status": "verified_bounded_diagnostic_compatibility",
+  "trigger": {
+    "run_id": 38993270590,
+    "attempt": 1,
+    "source_sha": "a523f4eb88a8ba10dfe581dff12d5e83a522e210",
+    "job_id": 117280067779,
+    "error_type": "TimeoutError",
+    "error": "active Spark boundary was not observed; no verified retry",
+    "correction_stage_seconds": 12.465368,
+    "original_probe_cause": "not recoverable from old artifact"
+  },
+  "local": {
+    "project": "lakehouse-ops-active-spark-a3224b63f2f346229a27ddd4e4568dcc",
+    "base_sha": "a523f4eb88a8ba10dfe581dff12d5e83a522e210",
+    "source_kind": "base checkout plus diagnostic changes identified by exact working file hashes",
+    "working_source_sha256": {
+      "tests/integration/exercise_commerce_active_spark.py": "8ff3b9cac8498e95c6eafb4ae7c80cf006a0c93f376badfe3b801667ab37627b",
+      "tests/test_commerce_active_spark.py": "727cc4507b50655726be7879592c307b04a17e3a6c9f3a1c55c2e0fea8e46d18"
+    },
+    "completed_batches": 3,
+    "checkpoint_unchanged_on_failure": true,
+    "idle": {
+      "status": "idle",
+      "batch_id": null,
+      "completed_stages": []
+    },
+    "interruption": {
+      "container_id": "981b0f4fead4ae0b53a8bbf936c383d3dbd1e3c65a24022953ca1cb74255537c",
+      "run_id": "765a06e03254460082bedd82437a90cc",
+      "observed_at": "2026-10-17T02:59:41.593846+00:00",
+      "kill_accepted_at": "2026-10-17T02:59:41.963603+00:00",
+      "stage_error_type": "CommercePipelineError",
+      "observer_diagnostics": {
+        "attempts": 13,
+        "outcomes": {
+          "launch_pending": 1,
+          "container_observed": 1,
+          "probe_failed": 4,
+          "no_active_tasks": 6,
+          "kill_accepted": 1
+        },
+        "last_probe": {
+          "outcome": "kill_accepted",
+          "state": "running",
+          "jobs_count": 1,
+          "jobs": [
+            {
+              "status": "RUNNING",
+              "numActiveTasks": 1,
+              "application_id": "local-1792205977084"
+            }
+          ],
+          "elapsed_seconds": 0.9060000000026776
+        },
+        "elapsed_seconds": 7.656999999999243,
+        "stage_failed": true
+      }
+    },
+    "foreign_container_count": 14,
+    "foreign_states_preserved": true,
+    "cleanup": "owned containers/network removed; named volumes retained",
+    "raw_sha256": {
+      "acceptance/active-spark.json": "805702e3eed584e8e686b56fa9a704dfffffa1e0b03dcf288ecfbc6cd7e58922",
+      "acceptance/journal.sqlite3": "6c62cd661ff20245bf23c7e5bc97f46153aa60dd1f96cd3466a63a665ff1702e",
+      "operator.json": "ee129b611bc025b791b2ebbe90b23d8f4bf8d00d74e908b547366ea701efe875",
+      "driver.log": "c64fb4c5430c87fb0d0ac6742bec587beb025a6aff9ddce033367bc526cac2c6",
+      "start.log": "b55eebd2be9e122dd4cbe4990a099715f378035b212c60dd7b6d045ac5dd1833",
+      "init.log": "bec61da5d1f5f8969f11d4a5fc950f11255ab9a278e6ef087198c3ddf79556e8",
+      "infra.log": "3d8bf9fcdac101f73268009a0407453398819d4495850e57c4ebcf0adea056ae",
+      "down.log": "9863d0865b6242eaa0dec2f1aec25a39a0969bcc5f4a36b511abbed9096dda7d"
+    }
+  },
+  "checks": {
+    "initial_test_first": {
+      "failed": 3,
+      "passed": 18
+    },
+    "live_found_success_field_collision_test_first": {
+      "failed": 2
+    },
+    "final_focused_passed": 21,
+    "final_full_quality": {
+      "checks_passed": 7,
+      "tests_passed": 1846,
+      "tests_skipped": 42,
+      "coverage_percent": 92.86
+    }
+  },
+  "limits": [
+    "diagnostics do not eliminate sampling misses",
+    "old miss is not a proven Iceberg commit failure",
+    "not injection inside Iceberg commit",
+    "not distributed exactly-once",
+    "one final-code local compatibility run; not reliability rate or capacity"
+  ]
+}

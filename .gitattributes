@@ -5,3 +5,6 @@ docs/evidence/audit-customer-history-50.py text eol=lf
 docs/evidence/audit-customer-history.py text eol=lf
 # Preserve literal historical CRLF source bytes, including blank-line indentation.
 docs/evidence/customer-dimension-100k-*.py.txt -text whitespace=cr-at-eol,-blank-at-eol
+
+docs/evidence/audit-customer-history-100-prefix.py text eol=lf
+docs/evidence/check-customer-history-100-prefix-faults.py text eol=lf

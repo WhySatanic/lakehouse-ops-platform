@@ -1,0 +1,77 @@
+{
+  "status": "verified_read_only_failure_container_observation",
+  "change_base_sha": "f87b3d7222ba18e95ce4fed0026a98ef84b83dce",
+  "scope": "real Docker sleeper, injected Python child timeout; no Spark or Iceberg",
+  "trigger": {
+    "run_id": 38969869281,
+    "source_sha": "6459ed9595b2a387c7ff60f36727484160efedaa",
+    "last_journal_launch_service": "spark-commerce-order-silver",
+    "recorded_failure": "profile TimeoutExpired; network retained with attached container",
+    "missing_proof": "no retained Docker immutable-ID/state inspection at failure"
+  },
+  "local": {
+    "image_id": "sha256:ee19f0f26f627da53f951179a3d21ec8c4320923c7f0c3a8c38a2efca93abeb8",
+    "observation": {
+      "status": "observed",
+      "scope": "recorded_containers_not_owner_liveness_or_recovery",
+      "journal": "profile/checkpoint.json.runs.sqlite3",
+      "project": "lakehouse-ops-scale-history-97dab90b006448a2b7cc2dd1414f7cab",
+      "limit": 3,
+      "has_more": false,
+      "counts": {
+        "running": 1
+      },
+      "containers": [
+        {
+          "run_id": "1f5e04953aca469b8695c0373c74bd47",
+          "batch_id": "aaaaaaaaaaaaaaaa",
+          "manifest_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "service": "spark-commerce-order-silver",
+          "container_name": "lakeops-commerce-97dab90b006448a2b7cc2dd1414f7cab",
+          "project_hint": "lakehouse-ops-scale-history-97dab90b006448a2b7cc2dd1414f7cab",
+          "observation": "running",
+          "container_id": "bf59154b56457064bddbb6ba45f1f13861c15a01911d791e919dd6b17edbfdeb"
+        }
+      ]
+    },
+    "original_timeout_preserved": true,
+    "checkpoint_and_intent_unchanged": true,
+    "wrapper_cleanup": "still incomplete with attached sleeper; observation does not authorize deletion",
+    "operator_cleanup": "only rechecked owned immutable container/network IDs removed",
+    "foreign_states_preserved": true,
+    "foreign_container_count": 14,
+    "raw_sha256": {
+      "experiment.json": "69e5e90e099285151173356918f0948afd8a7a7113b2f49396ada4afe80d8560",
+      "containers-at-failure.json": "7cb3f377d29dfd8e273eae579cad10fc02b67d8ff9b1fc5197d22f1f10e2e73b",
+      "timeout-smoke.json": "9a559d1902190f0ff826df91185d6b8471b7a7b152650082aaba7da61832b713",
+      "profile/checkpoint.json.runs.sqlite3": "9764f36f7d267da70505431a50819a3e748972570ec8eb210c5bda68034a92fe",
+      "profile/checkpoint.json": "563bfd5893e2ad75034687bd27fdc726871f155afe5d4aacb9b38536dc0f1b42",
+      "profile/checkpoint.json.active.json": "89a174b4d9e4c94e26fa0173e4a5dcc341b1bb0d61171aa7de275eaa68ce6176"
+    },
+    "measured_wrapper_working_sha256": "5946abb482e8ce69dad2e66b80a77dfea3211b9e569c624c78fa98e2d81716f0"
+  },
+  "normalized_source_sha256": {
+    "tests/integration/test_customer_history_experiment.py": "baab13556070a13f00d7e848c0c795da822c2a5e76ba9be13ce6e1ac77d8ee8a",
+    "tests/integration/exercise_customer_history_timeout.py": "5bb85ec68b96329d84016e5991221daea811c8fceb6b6697c67eddc4327823c4",
+    "tests/test_customer_history_experiment_exercise.py": "e65cf0dafabd00c8f310f2c137caeec88b6021b9ceb9fe828e3f3cf4633e3eef"
+  },
+  "tests": {
+    "baseline_new_cases_failed": 3,
+    "focused_final_passed": 38,
+    "cases": [
+      "owned running ID before teardown",
+      "Docker timeout preserves original exception",
+      "ownership mismatch supplies no trusted ID",
+      "missing journal is not created",
+      "diagnostic write failure preserves original timeout",
+      "smoke refuses existing evidence before Docker"
+    ]
+  },
+  "limits": [
+    "injected child timeout with real Docker sleeper, not Spark or Iceberg execution",
+    "latest three journal launches only; may be truncated",
+    "not owner liveness or final commit state",
+    "not automatic active-stage containment or verified recovery",
+    "not distributed exactly-once"
+  ]
+}
