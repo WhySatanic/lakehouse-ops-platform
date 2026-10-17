@@ -4,6 +4,10 @@ The separately [audited 50-snapshot observation](customer-history-50-observation
 completed on October 16. Its source, resources, 500000 history versions and full
 retained payload are recorded separately from the four-snapshot baseline below.
 
+The [actual 100-snapshot attempt](customer-history-100-budget-observation.md)
+exhausted its 325-minute profile budget with a verified 90-snapshot prefix, active
+intent for the next batch and incomplete network cleanup. It did not complete 100.
+
 A separate [local 100000-customer observation](customer-dimension-100k-observation.md)
 completed two changing-attribute snapshots with 100 orders each. It measures the
 dimension-cardinality axis, independently of the history-depth workflow below.
