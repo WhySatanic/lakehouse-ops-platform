@@ -1,0 +1,302 @@
+{
+  "schema_version": "1.0",
+  "scope": "one_local_100000_customer_two_snapshot_observation_not_capacity_or_optimization",
+  "source_sha": "8535dc5ff28c40767d286fcd268d1e59fb215bea",
+  "project": "lakehouse-ops-scale-dimension-c9cd19f5d97044c5bce49074134825ea",
+  "workload": {
+    "customers": 100000,
+    "orders": 100,
+    "batches": 2,
+    "customer_revisions": [
+      0,
+      1
+    ]
+  },
+  "literal_oracles": {
+    "current_customers": 100000,
+    "history_rows": [
+      100000,
+      200000
+    ],
+    "orders": 100,
+    "captured_revenue_cents": 267012,
+    "periods": [
+      [
+        "2026-02-01/open"
+      ],
+      [
+        "2026-02-01/2026-02-02",
+        "2026-02-02/open"
+      ]
+    ]
+  },
+  "runner": {
+    "docker_cpus": 12,
+    "docker_memory_bytes": 16637538304,
+    "spark_image": "sha256:ee19f0f26f627da53f951179a3d21ec8c4320923c7f0c3a8c38a2efca93abeb8",
+    "resource_limits": "Unmodified Compose stage configuration; no explicit Spark service mem_limit in compose.yaml. Docker VM memory is the outer bound."
+  },
+  "measurements": [
+    {
+      "snapshot": 1,
+      "revision": 0,
+      "history_rows": 100000,
+      "batch_id": "76dbefb0cc019b44",
+      "manifest_sha256": "982c29eac964a45481f3c00d822663b7e3966b699f776d5686a82ac7445c2bb3",
+      "orders": 100,
+      "captured_revenue_cents": 267012,
+      "runner_seconds": 106.97729480000271,
+      "stage_seconds": {
+        "bronze-input-sync": 1.1006392999988748,
+        "spark-commerce-bronze": 16.980990399999428,
+        "spark-commerce-current-gold": 13.457123799998953,
+        "spark-commerce-customer-scd2": 12.805427300001611,
+        "spark-commerce-customer-silver": 12.205179500000668,
+        "spark-commerce-daily-gold": 14.42457789999753,
+        "spark-commerce-order-silver": 12.192180500001996,
+        "spark-commerce-payment-silver": 11.700390899997728,
+        "spark-commerce-product-silver": 10.668414799998573
+      },
+      "idle_seconds": 0.7568467000019155,
+      "stack_peak_bytes": 3989831679,
+      "max_stage_cgroup_peak_bytes": 1385873408,
+      "warehouse_payload_bytes": 17458817,
+      "versions": {
+        "latest": {
+          "objects": 73,
+          "bytes": 17458817
+        },
+        "noncurrent": {
+          "objects": 0,
+          "bytes": 0
+        }
+      },
+      "groups": {
+        "current_data": {
+          "versions": 13,
+          "bytes": 17228435
+        },
+        "current_delete": {
+          "versions": 0,
+          "bytes": 0
+        },
+        "retained_only_data": {
+          "versions": 0,
+          "bytes": 0
+        },
+        "retained_only_delete": {
+          "versions": 0,
+          "bytes": 0
+        },
+        "latest_not_in_selected_file_references": {
+          "versions": 60,
+          "bytes": 230382
+        },
+        "s3_noncurrent": {
+          "versions": 0,
+          "bytes": 0
+        }
+      },
+      "layout": {
+        "metadata": {
+          "objects": 57,
+          "bytes": 230382
+        },
+        "data": {
+          "objects": 13,
+          "bytes": 17228435
+        },
+        "other": {
+          "objects": 3,
+          "bytes": 0
+        }
+      },
+      "customer_query_id": "20261017_010426_00022_ge5fh",
+      "customer_query_stats": {
+        "state": "FINISHED",
+        "elapsed_time_ms": 537,
+        "wall_time_ms": 749,
+        "cpu_time_ms": 699,
+        "processed_rows": 100000,
+        "processed_bytes": 3371174,
+        "physical_input_bytes": 669169,
+        "peak_memory_bytes": 1387280,
+        "spilled_bytes": 0
+      }
+    },
+    {
+      "snapshot": 2,
+      "revision": 1,
+      "history_rows": 200000,
+      "batch_id": "5a4e705f97296bb4",
+      "manifest_sha256": "5f5eeb40294d5f8d1e9384320d253a290f7eda76632b4c6b0d6fca4294575d47",
+      "orders": 100,
+      "captured_revenue_cents": 267012,
+      "runner_seconds": 112.30529319999914,
+      "stage_seconds": {
+        "bronze-input-sync": 0.977458100001968,
+        "spark-commerce-bronze": 15.011050000000978,
+        "spark-commerce-current-gold": 16.232121399996686,
+        "spark-commerce-customer-scd2": 15.056014100002358,
+        "spark-commerce-customer-silver": 12.748507100004645,
+        "spark-commerce-daily-gold": 15.801020699997025,
+        "spark-commerce-order-silver": 12.854310399998212,
+        "spark-commerce-payment-silver": 12.33128520000173,
+        "spark-commerce-product-silver": 10.813683299995319
+      },
+      "idle_seconds": 0.8461136999976588,
+      "stack_peak_bytes": 4324591666,
+      "max_stage_cgroup_peak_bytes": 1510232064,
+      "warehouse_payload_bytes": 42631752,
+      "versions": {
+        "latest": {
+          "objects": 132,
+          "bytes": 42631752
+        },
+        "noncurrent": {
+          "objects": 0,
+          "bytes": 0
+        }
+      },
+      "groups": {
+        "current_data": {
+          "versions": 25,
+          "bytes": 34072956
+        },
+        "current_delete": {
+          "versions": 0,
+          "bytes": 0
+        },
+        "retained_only_data": {
+          "versions": 2,
+          "bytes": 8084196
+        },
+        "retained_only_delete": {
+          "versions": 0,
+          "bytes": 0
+        },
+        "latest_not_in_selected_file_references": {
+          "versions": 105,
+          "bytes": 474600
+        },
+        "s3_noncurrent": {
+          "versions": 0,
+          "bytes": 0
+        }
+      },
+      "layout": {
+        "metadata": {
+          "objects": 102,
+          "bytes": 474600
+        },
+        "data": {
+          "objects": 27,
+          "bytes": 42157152
+        },
+        "other": {
+          "objects": 3,
+          "bytes": 0
+        }
+      },
+      "customer_query_id": "20261017_010640_00200_ge5fh",
+      "customer_query_stats": {
+        "state": "FINISHED",
+        "elapsed_time_ms": 378,
+        "wall_time_ms": 1927,
+        "cpu_time_ms": 1676,
+        "processed_rows": 200000,
+        "processed_bytes": 7703278,
+        "physical_input_bytes": 1096259,
+        "peak_memory_bytes": 1071320,
+        "spilled_bytes": 0
+      }
+    }
+  ],
+  "lifecycle": [
+    {
+      "name": "start",
+      "status": "ready",
+      "timeout_seconds": 240,
+      "returncode": 0,
+      "elapsed_seconds": 49.35295220000262
+    },
+    {
+      "name": "observer",
+      "status": "ready",
+      "timeout_seconds": 60,
+      "returncode": 0,
+      "elapsed_seconds": 1.1589346999971895
+    },
+    {
+      "name": "profile",
+      "status": "ready",
+      "timeout_seconds": 3600,
+      "returncode": 0,
+      "elapsed_seconds": 265.16201379999984
+    },
+    {
+      "name": "services",
+      "status": "ready",
+      "timeout_seconds": 30,
+      "returncode": 0,
+      "elapsed_seconds": 0.3739731000023312
+    },
+    {
+      "name": "stop",
+      "status": "ready",
+      "timeout_seconds": 120,
+      "returncode": 0,
+      "elapsed_seconds": 5.213099499997043
+    }
+  ],
+  "cleanup": {
+    "network": {
+      "network": "lakehouse-ops-scale-dimension-c9cd19f5d97044c5bce49074134825ea_default",
+      "status": "absent"
+    },
+    "own_containers_remaining": 0,
+    "foreign_containers_preserved": 14,
+    "named_volumes_retained": true
+  },
+  "provenance": {
+    "experiment_sha256": "4547d119f4cccfbeacd8bfd94ed60e5627104ae3679da7af6d68629fcd188be7",
+    "profile_sha256": "2456c5bcbd159f302758941aa7ba5306d76eccf31346fd9328815be2e5c13be4",
+    "checkpoint_sha256": "fc825d6a625022218595a336ed17021889eb62b75b333e3c16aaf05c4c3f1895",
+    "provenance_sha256": "bb81828c880d23eacc2a5004551d18cda98aad4d0dc4f3b2d3ba0d0f011a0af0",
+    "historical_sources": {
+      "customer-dimension-100k-operator.py.txt": "5ec42e8a402201030dce1d751e4bdf76c89c385c45da6e6726325a659d7e3de8",
+      "customer-dimension-100k-audit.py.txt": "29e012caac9d7ce7dc67398a48c3881aa93c9a85644b16783de7199ef1973303",
+      "customer-dimension-100k-faults.py.txt": "10a07279ccf41e23190e5b551ce89e75d26b7942e3e65b88a60285675c22ec95"
+    }
+  },
+  "limits": [
+    "One local fresh project with two sequential snapshots; second catalog is warm.",
+    "Cached images and host caches; no cold-host, A/B or throughput claim.",
+    "Customer cardinality changes seeded order selection, so revenue differs from the 10000-customer fixture.",
+    "Payload bytes include all listed object versions; not disk usage or billing. Latest unselected references are not automatically orphan files.",
+    "Sampled Docker memory is not simultaneous RSS peak; Spark cgroup peaks are separate.",
+    "The independent remote 100-snapshot run is not evidence for this workload.",
+    "One unrelated Trino worker remained running; this was not an isolated-host benchmark."
+  ],
+  "audit_probes": {
+    "baseline": "verified",
+    "corruptions": {
+      "current_revenue": "rejected",
+      "history_total": "rejected",
+      "history_boundary": "rejected",
+      "history_matching_names": "rejected",
+      "partial_profile": "rejected",
+      "idle_starts_compute": "rejected",
+      "warehouse_total": "rejected",
+      "missing_stage": "rejected"
+    },
+    "raw_files_unchanged": 37
+  },
+  "validation": {
+    "local_quality": "7/7 passed",
+    "pytest": "1843 passed, 42 skipped",
+    "coverage_percent": 92.86,
+    "real_stack": "two snapshots complete; independent auditor verified",
+    "semantic_probes": "8 rejected; 37 raw files unchanged"
+  }
+}

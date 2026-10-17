@@ -1,0 +1,143 @@
+"""Verify a ready raw experiment against literal periods and immutable input files."""
+from pathlib import Path
+from datetime import UTC, datetime
+import argparse
+import hashlib
+import json
+from urllib.parse import urlsplit
+
+from lakehouse_ops.commerce_pipeline import COMMERCE_STAGES, CURRENT_STAGE
+from lakehouse_ops.warehouse_references import reconcile_references
+
+def audit(root):
+    root = root.resolve()
+    outer = json.loads((root / 'experiment.json').read_bytes())
+    raw = (root / 'profile/profile.json').read_bytes()
+    profile = json.loads(raw)
+    assert outer['status'] == profile['status'] == 'ready'
+    assert outer['source_sha'] == '8535dc5ff28c40767d286fcd268d1e59fb215bea'
+    assert outer['network_cleanup']['status'] in ('released', 'absent')
+    assert next(step for step in outer['steps'] if step['name'] == 'stop')['status'] == 'ready'
+    assert outer['profile_sha256'] == hashlib.sha256(raw).hexdigest()
+    assert profile['source_semantics'] == 'full_snapshot'
+    assert len(profile['samples']) == 2
+    
+    
+    def timestamp(text):
+        if text is None:
+            return None
+        if text.endswith(' UTC'):
+            text = text[:-4] + '+00:00'
+        value = datetime.fromisoformat(text)
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+    
+    
+    feb1, feb2, feb4 = [datetime(2026, 2, day, tzinfo=UTC) for day in (1, 2, 4)]
+    literal_periods = [
+        [(feb1, None, True)],
+        [(feb1, feb2, False), (feb2, None, True)],
+    ]
+    measurements = []
+    for i, (sample, total, revision) in enumerate(zip(
+        profile['samples'], (100000, 200000), (0, 1), strict=True,
+    ), 1):
+        fixture = root / f'profile/sample-{i}' / ('batch_id=' + sample['batch_id'])
+        manifest_bytes = (fixture / 'manifest.json').read_bytes()
+        manifest = json.loads(manifest_bytes)
+        assert manifest['batch_id'] == sample['batch_id']
+        config = manifest['config']
+        assert config['customers'] == 100000 and config['orders'] == 100
+        assert config['source_semantics'] == 'full_snapshot'
+        assert config.get('customer_revision', 0) == revision
+        assert timestamp(config['batch_at']) == datetime(2026, 2, i, tzinfo=UTC)
+        assert set(manifest['tables']) == {'customers', 'orders', 'products', 'payments'}
+        inputs = {}
+        for table, spec in manifest['tables'].items():
+            assert spec['file'] == table + '.jsonl'
+            payload = (fixture / spec['file']).read_bytes()
+            assert hashlib.sha256(payload).hexdigest() == spec['sha256']
+            inputs[table] = [json.loads(line) for line in payload.splitlines()]
+            assert len(inputs[table]) == spec['rows']
+        assert len(inputs['customers']) == 100000
+        for n, customer in enumerate(inputs['customers'], 1):
+            assert customer['customer_id'] == f'C{n:08d}'
+            assert customer['full_name'] == f'Customer {n:08d}' + (
+                f' revision {revision}' if revision else ''
+            )
+        orders = {row['order_id'] for row in inputs['orders']}
+        revenue = sum(row['amount_cents'] for row in inputs['payments']
+                      if row['order_id'] in orders and row['status'] == 'captured'
+                      and type(row['amount_cents']) is int and row['amount_cents'] >= 0)
+        expected = {'orders': 100, 'revenue': revenue}
+        assert revenue == 267012
+        assert len(orders) == 100 and sample['input_expected'] == expected
+        assert sample['current_query']['rows'] == [expected]
+        assert sample['query_costs']['detail']['rows'] == [expected]
+        assert sample['query_costs']['daily']['rows'] == [expected]
+        history = sample['customer_history']
+        assert history['status'] == 'verified' and history['total_rows'] == total
+        assert history['current_rows'] == 100000 and history['query_id']
+        assert [(timestamp(row['valid_from']), timestamp(row['valid_to']), row['is_current'])
+                for row in history['rows']] == literal_periods[i - 1]
+        for row in history['rows']:
+            assert all(row[key] == 100000 for key in ('rows', 'customers', 'matching_customers'))
+        assert sample['run']['completed_stages'] == [*COMMERCE_STAGES, CURRENT_STAGE]
+        assert sample['idle_replay'] == 'verified'
+        assert sample['idle_replay_observation']['completed_stages'] == []
+        assert sample['stack_memory']['status'] == 'observed'
+        assert len(sample['memory']) == 8 and all(m['status'] == 'observed' for m in sample['memory'])
+        storage = sample['warehouse_storage']
+        accounting = storage['reference_accounting']
+        assert reconcile_references(storage, accounting['references']) == accounting
+        assert sum(row['bytes'] for row in storage['objects']) == storage['total_payload_bytes']
+        assert sum(g['bytes'] for g in accounting['groups'].values()) == storage['total_payload_bytes']
+        assert sample['idle_replay_observation']['files'] == sample['cumulative_current_files']
+        idle_snapshots = {r['table']: set(r['snapshot_ids']) for r in sample['idle_replay_observation']['snapshots']}
+        latest = {r['key']: r for r in storage['objects'] if r['is_latest']}
+        for table in accounting['references']:
+            assert idle_snapshots[table['table']] == {r['snapshot_id'] for r in table['snapshots']}
+            for ref in table['current'] + table['retained']:
+                key = urlsplit(ref['file_path']).path.lstrip('/')
+                assert latest[key]['bytes'] == ref['bytes']
+
+        measurements.append({
+            'snapshot': i, 'revision': revision, 'history_rows': total,
+            'batch_id': sample['batch_id'], 'manifest_sha256': hashlib.sha256(manifest_bytes).hexdigest(),
+            'orders': 100, 'captured_revenue_cents': revenue,
+            'runner_seconds': sample['run']['durations_seconds']['total'],
+            'stage_seconds': sample['run']['durations_seconds']['stages'],
+            'idle_seconds': sample['idle_replay_observation']['elapsed_seconds'],
+            'stack_peak_bytes': sample['stack_memory']['peak_observed_bytes'],
+            'max_stage_cgroup_peak_bytes': max(m['peak_bytes'] for m in sample['memory']),
+            'warehouse_payload_bytes': storage['total_payload_bytes'], 'versions': storage['versions'],
+            'groups': accounting['groups'], 'layout': storage['layout'],
+            'customer_query_id': history['query_id'], 'customer_query_stats': history['query_stats'],
+        })
+    checkpoint = json.loads((root / 'profile/checkpoint.json').read_bytes())
+    assert checkpoint['schema_version'] == 1
+    assert set(checkpoint['processed_batches']) == {m['batch_id'] for m in measurements}
+    for item in measurements:
+        assert checkpoint['processed_batches'][item['batch_id']]['manifest_sha256'] == (
+            item['manifest_sha256']
+        )
+    scd2 = [next(t for t in s['warehouse_storage']['reference_accounting']['references']
+                 if t['table'] == 'gold.dim_customers_scd2') for s in profile['samples']]
+    assert [len(t['snapshots']) for t in scd2] == [1, 2]
+    
+    result = {'status': 'verified', 'source_sha': outer['source_sha'],
+              'experiment_sha256': hashlib.sha256((root / 'experiment.json').read_bytes()).hexdigest(),
+              'profile_sha256': outer['profile_sha256'], 'project': outer['project'],
+              'measurements': measurements,
+              'limits': 'one round; payload not disk/billing; sampled memory; stage includes startup'}
+    return result
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--root', type=Path, required=True)
+    parser.add_argument('--output', type=Path, required=True)
+    args = parser.parse_args()
+    result = audit(args.root)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
+    print(json.dumps({'status': result['status'], 'source_sha': result['source_sha'],
+                      'snapshots': len(result['measurements']), 'output': str(args.output)}))

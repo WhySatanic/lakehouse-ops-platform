@@ -1,0 +1,39 @@
+from pathlib import Path
+import copy, hashlib, importlib.util, json
+from unittest.mock import patch
+root=Path('artifacts/customer-dimension-100k').resolve()
+spec=importlib.util.spec_from_file_location('audit_dimension', '../../work/verify_dimension100k.py')
+module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+original=Path.read_bytes
+outer=json.loads(original(root/'experiment.json'))
+profile=json.loads(original(root/'profile/profile.json'))
+before={str(p.relative_to(root)):hashlib.sha256(original(p)).hexdigest() for p in root.rglob('*') if p.is_file()}
+module.audit(root)
+mutations={
+'current_revenue':lambda p:p['samples'][1]['current_query']['rows'][0].update(revenue=1),
+'history_total':lambda p:p['samples'][1]['customer_history'].update(total_rows=100000),
+'history_boundary':lambda p:p['samples'][1]['customer_history']['rows'][0].update(valid_to=None),
+'history_matching_names':lambda p:p['samples'][1]['customer_history']['rows'][0].update(matching_customers=99999),
+'partial_profile':lambda p:p.update(status='failed'),
+'idle_starts_compute':lambda p:p['samples'][1]['idle_replay_observation'].update(completed_stages=['unexpected']),
+'warehouse_total':lambda p:p['samples'][1]['warehouse_storage'].update(total_payload_bytes=1),
+'missing_stage':lambda p:p['samples'][1]['run']['completed_stages'].pop(),
+}
+results={}
+for name,mutate in mutations.items():
+    candidate=copy.deepcopy(profile); mutate(candidate)
+    data=json.dumps(candidate).encode()
+    experiment=copy.deepcopy(outer); experiment['profile_sha256']=hashlib.sha256(data).hexdigest()
+    def read(path):
+        if path==root/'profile/profile.json': return data
+        if path==root/'experiment.json': return json.dumps(experiment).encode()
+        return original(path)
+    try:
+        with patch.object(Path,'read_bytes',read): module.audit(root)
+    except (AssertionError,ValueError,KeyError): results[name]='rejected'
+    else: raise AssertionError('accepted '+name)
+after={str(p.relative_to(root)):hashlib.sha256(original(p)).hexdigest() for p in root.rglob('*') if p.is_file()}
+assert before==after
+report={'baseline':'verified','corruptions':results,'raw_files_unchanged':len(before)}
+Path('artifacts/dimension100k-faults.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+print(json.dumps(report))
