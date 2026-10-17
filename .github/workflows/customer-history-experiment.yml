@@ -17,6 +17,9 @@ on:
       - .github/workflows/customer-history-experiment.yml
       - tests/integration/test_customer_history_experiment.py
       - tests/test_customer_history_experiment_exercise.py
+      - src/lakehouse_ops/commerce_history_process.py
+      - tests/test_history_profile_process.py
+      - tests/integration/exercise_history_profile_process.py
 
 permissions:
   contents: read

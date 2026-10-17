@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from lakehouse_ops.commerce_container_inspection import inspect_containers
+from lakehouse_ops.commerce_history_process import run_experiment_command
 from lakehouse_ops.commerce_linked_demo import SERVICES, free_ports, release_demo_network
 
 OBSERVER_SETUP = '''
@@ -62,7 +63,7 @@ def measurements(profile, *, batches=4):
     return result
 
 
-def experiment(root, output, run=subprocess.run, *, batches=4):
+def experiment(root, output, run=run_experiment_command, *, batches=4):
     revisions, profile_timeout = history_workload(batches)
     root, output = root.resolve(), output.resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -95,6 +96,10 @@ def experiment(root, output, run=subprocess.run, *, batches=4):
                 completed = run(command, cwd=root, env=dict(env), stdout=log,
                                 stderr=subprocess.STDOUT, check=True, timeout=timeout)
             step.update(status="ready", returncode=completed.returncode)
+        except subprocess.TimeoutExpired as error:
+            if hasattr(error, "profile_process_group"):
+                step["process_group"] = error.profile_process_group
+            raise
         finally:
             step["elapsed_seconds"] = time.perf_counter() - started
 

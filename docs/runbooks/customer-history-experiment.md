@@ -308,3 +308,28 @@ The 50/100-snapshot acceptance criteria remain open.
 The [SCD2 validation experiment](scd2-validation-experiment.md) compares a fused
 invariant check with the existing job in three matched replay pairs. Fewer Spark
 jobs did not meet the end-to-end adoption threshold; the production job is unchanged.
+
+
+## Profile controller deadline on POSIX
+
+The experiment starts its profile controller in a new POSIX session. On the
+existing profile deadline it sends SIGKILL to that owned process group before
+reaping its leader, with a separate maximum 10-second reap wait. Inherited CLI
+children cannot continue launching subsequent stages after a successful group
+signal. The failed profile step records `process_group`, including signal/reap
+errors, while preserving the original `TimeoutExpired` and cleanup path.
+
+This covers the controller and descendants that remain in its process group.
+Docker daemon tasks and deliberately detached processes are outside this boundary.
+A signal request and reaped leader do not prove every descendant has exited, a
+Docker stage has stopped, or whether its Iceberg commit succeeded. Inspect the
+owned stage journal/container evidence before deciding recovery. A hard workflow
+termination can prevent the wrapper's final report. Windows retains the previous
+subprocess timeout behavior without this process-tree guarantee.
+
+A [short Linux regression](../evidence/history-profile-process-group-2026-10-17.json)
+records a child continuing after the original parent-only timeout, then the same
+child being prevented from writing its continuation marker with group cancellation.
+Reproduce in Linux with `uv run --frozen pytest tests/test_history_profile_process.py`
+or run `python tests/integration/exercise_history_profile_process.py --output <new-directory>`.
+The regression performs no Spark job, Docker stage launch or catalog write.
