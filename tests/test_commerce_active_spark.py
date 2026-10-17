@@ -75,7 +75,7 @@ def test_name_reuse_after_spark_probe_refuses_kill(tmp_path, monkeypatch):
 def test_observer_and_failed_stage_both_required(monkeypatch, fails):
     observed = threading.Event()
 
-    def probe(*args):
+    def probe(*args, **kwargs):
         observed.set()
         return {"container_id": "d" * 64}
 
@@ -90,10 +90,12 @@ def test_observer_and_failed_stage_both_required(monkeypatch, fails):
     with pytest.raises(drill.ActiveInterruption if fails else ValueError):
         drill.interrupt_stage(stage, None, "project", evidence)
     assert evidence["container_id"] == "d" * 64
+    assert evidence["observer_diagnostics"]["attempts"] >= 1
+    assert evidence["observer_diagnostics"]["stage_failed"] is fails
 
 
 def test_post_stage_failure_without_observed_spark_is_not_accepted(monkeypatch):
-    monkeypatch.setattr(drill, "kill_if_active", lambda *a: None)
+    monkeypatch.setattr(drill, "kill_if_active", lambda *a, **kw: None)
 
     def stage():
         raise drill.CommercePipelineError("unrelated failure")
@@ -173,3 +175,56 @@ def test_driver_retains_evidence_and_never_reports_unverified_recovery(
         assert oracles == [0, 1, 2]
         assert report["checkpoint_before_sha256"] == report["checkpoint_after_failure_sha256"]
         assert report["interruption"]["run_id"] != report["samples"][1]["run_id"]
+
+
+def test_missed_boundary_keeps_probe_diagnostics(monkeypatch):
+    calls = threading.Event()
+
+    def probe(*args, probe_observation=None):
+        probe_observation.update(outcome="no_active_tasks", jobs=[{
+            "status": "RUNNING", "numActiveTasks": 0,
+        }])
+        calls.set()
+        return None
+
+    monkeypatch.setattr(drill, "kill_if_active", probe)
+    evidence = {}
+    with pytest.raises(TimeoutError, match="not observed"):
+        drill.interrupt_stage(lambda: calls.wait(5), None, "project", evidence)
+    observation = evidence["observer_diagnostics"]
+    assert observation["attempts"] >= 1
+    assert observation["outcomes"]["no_active_tasks"] == observation["attempts"]
+    assert observation["last_probe"]["jobs"][0]["numActiveTasks"] == 0
+    assert observation["elapsed_seconds"] >= 0
+    assert observation["stage_failed"] is False
+
+
+def test_probe_failure_retains_bounded_stderr_without_accepting_kill(tmp_path, monkeypatch):
+    journal, calls, _ = setup_probe(tmp_path, monkeypatch)
+
+    def failed(command, **kwargs):
+        calls.append(command)
+        return SimpleNamespace(returncode=1, stderr="x" * 2000)
+
+    observation = {}
+    assert drill.kill_if_active(journal, "project", run=failed,
+                                probe_observation=observation) is None
+    assert observation["outcome"] == "probe_failed"
+    assert observation["returncode"] == 1
+    assert observation["stderr_tail"] == "x" * 512
+    assert len(calls) == 1
+
+
+def test_inactive_probe_records_only_bounded_job_fields(tmp_path, monkeypatch):
+    jobs = [{"status": "RUNNING", "numActiveTasks": 0,
+             "application_id": "local-1", "unrelated": "omit"}] * 100
+    journal, calls, run = setup_probe(tmp_path, monkeypatch, jobs=jobs)
+    observation = {}
+    assert drill.kill_if_active(journal, "project", run=run,
+                                probe_observation=observation) is None
+    assert observation["outcome"] == "no_active_tasks"
+    assert observation["jobs_count"] == 100
+    assert len(observation["jobs"]) == 20
+    assert all(set(job) == {"status", "numActiveTasks", "application_id"}
+               for job in observation["jobs"])
+    assert len(calls) == 1

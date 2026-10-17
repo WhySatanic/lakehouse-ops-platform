@@ -49,8 +49,10 @@ class ActiveInterruption(RuntimeError):
     pass
 
 
-def kill_if_active(journal, project, *, run=subprocess.run):
+def kill_if_active(journal, project, *, run=subprocess.run, probe_observation=None):
     """Probe only this attempt's recorded SCD2 container, then kill its immutable ID."""
+    observation = {} if probe_observation is None else probe_observation
+    observation["outcome"] = "launch_pending"
     with sqlite3.connect(journal.path.resolve().as_uri() + "?mode=ro", uri=True) as db:
         launches = db.execute(
             "SELECT container_name FROM commerce_container_events "
@@ -71,6 +73,7 @@ def kill_if_active(journal, project, *, run=subprocess.run):
         return report["containers"][0]
 
     item = owned()
+    observation.update(outcome="container_observed", state=item["observation"])
     if item["observation"] in {"absent", "created"}:
         return None
     if item["observation"] != "running" or item["service"] != STAGE:
@@ -81,15 +84,22 @@ def kill_if_active(journal, project, *, run=subprocess.run):
     probe = run(["docker", "exec", identity, "python3", "-c", PROBE],
                 capture_output=True, text=True, timeout=5, check=False)
     if probe.returncode:
+        observation.update(outcome="probe_failed", returncode=probe.returncode,
+                           stderr_tail=probe.stderr[-512:])
         return None  # UI may not yet exist; a deadline bounds retries.
     jobs = json.loads(probe.stdout)
     if not isinstance(jobs, list):
         raise ValueError("invalid Spark job response")
+    observation.update(outcome="no_active_tasks", jobs_count=len(jobs), jobs=[
+        {key: job.get(key) for key in ("status", "numActiveTasks", "application_id")}
+        for job in jobs[:20]
+    ])
     active = [job for job in jobs if job.get("status") == "RUNNING"
               and type(job.get("numActiveTasks")) is int and job["numActiveTasks"] > 0
               and isinstance(job.get("application_id"), str) and job["application_id"]]
     if not active:
         return None
+    observation["outcome"] = "active_tasks_observed"
     confirmed = owned()
     if confirmed.get("container_id") != identity or confirmed["observation"] != "running":
         raise ValueError("stage changed after active Spark observation")
@@ -98,18 +108,33 @@ def kill_if_active(journal, project, *, run=subprocess.run):
                  capture_output=True, text=True, timeout=10, check=False)
     if killed.returncode:
         raise ValueError("active container termination failed")
+    observation["outcome"] = "kill_accepted"
     return {**evidence, "kill_accepted_at": datetime.now(UTC).isoformat()}
 
 
 def interrupt_stage(stage, journal, project, evidence, *, timeout=180):
     done = threading.Event()
     result = Future()
+    started = time.monotonic()
+    observation = {"attempts": 0, "outcomes": {}}
+    evidence["observer_diagnostics"] = observation
 
     def observe():
         try:
             deadline = time.monotonic() + timeout
             while not done.is_set() and time.monotonic() < deadline:
-                sample = kill_if_active(journal, project)
+                probe_observation = {"outcome": "probe_error"}
+                probe_started = time.monotonic()
+                try:
+                    sample = kill_if_active(journal, project,
+                                            probe_observation=probe_observation)
+                finally:
+                    probe_observation["elapsed_seconds"] = time.monotonic() - probe_started
+                    observation["attempts"] += 1
+                    outcome = probe_observation["outcome"]
+                    counts = observation["outcomes"]
+                    counts[outcome] = counts.get(outcome, 0) + 1
+                    observation["last_probe"] = probe_observation
                 if sample:
                     result.set_result(sample)
                     return
@@ -128,6 +153,8 @@ def interrupt_stage(stage, journal, project, evidence, *, timeout=180):
     finally:
         done.set()
         watcher.join(25)
+        observation.update(elapsed_seconds=time.monotonic() - started,
+                           stage_failed=failure is not None)
     if watcher.is_alive():
         raise RuntimeError("observer still active; no retry allowed")
     evidence.update(result.result())
