@@ -102,6 +102,37 @@ attempts scoped cleanup and re-raises the timeout. It never summarizes partial b
 as a successful 100-snapshot result. A hard workflow/runner termination may prevent
 finally/upload; the timeout hierarchy reduces that risk and is not a guarantee.
 
+### Container evidence before failed teardown
+
+On failure, the wrapper now reuses the existing read-only container inspector before
+service logs and Compose teardown. It writes `containers-at-failure.json` and embeds
+the same `failure_containers` object in `experiment.json`. The inspector reads
+`profile/checkpoint.json.runs.sqlite3` in read-only mode and examines at most three
+latest launch intents from this project, with five-second Docker inspections.
+It checks container name and run/batch/manifest/project/service labels before
+recording a Docker ID and observed state. Environment values are not persisted.
+
+This adds bounded observation, not active-stage cleanup. Check each observation and
+`has_more`: a truncated list, missing journal, daemon error or ownership mismatch
+cannot establish complete ownership or owner liveness. An `observed` summary is not
+permission to delete a container. The original exception and partial checkpoint /
+active intent remain intact even if inspection or diagnostic writing fails. Child
+and workflow budgets stay unchanged; a hard termination can still prevent finally
+or upload. The actual earlier 100-snapshot run has no such retrospective inspection.
+
+The [local compatibility evidence](../evidence/customer-history-timeout-observation-2026-10-17.json)
+uses a real owned Docker sleeper and an injected short Python child timeout. It
+verifies failure-report plumbing, immutable ID/label observation, unchanged state
+and original timeout preservation. It runs no Spark tasks, real commerce profile or
+Iceberg commit. Only the smoke driver subsequently removes its own rechecked IDs;
+the experiment wrapper continues to report the attached network as incomplete.
+Reproduce with the existing cached Spark image, from the repository root and using
+a new output directory:
+
+```powershell
+uv run --frozen python tests/integration/exercise_customer_history_timeout.py --output artifacts/history-timeout-smoke-new
+```
+
 After the workflow version has merged, dispatch a single attempt when no experiment
 is active on main:
 
