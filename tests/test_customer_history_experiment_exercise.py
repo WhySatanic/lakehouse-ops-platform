@@ -196,3 +196,35 @@ def test_ci_experiment_preserves_required_ci_and_uploads_failure_evidence():
     for job in ("quality", "serving-integration", "ranger-integration", "lakehouse-integration",
                 "release-readiness"):
         assert f"  {job}:" in Path(".github/workflows/ci.yml").read_text()
+
+
+def test_profile_group_timeout_evidence_survives_experiment_cleanup(tmp_path):
+    exercise = module()
+    output = tmp_path / "group-timeout"
+    error = subprocess.TimeoutExpired(["profile"], 1800)
+    error.profile_process_group = {
+        "process_group_id": 12345, "status": "kill_requested_leader_reaped",
+        "scope": "profile_controller_group_not_Docker_stages_or_commit_outcome",
+    }
+    calls = []
+
+    def run(command, **options):
+        calls.append(command)
+        if command[1:3] == ["-m", "lakehouse_ops.commerce_pipeline_profile"]:
+            raise error
+        if command[1:3] == ["network", "inspect"]:
+            return SimpleNamespace(returncode=0, stdout=json.dumps([{
+                "Name": command[-1], "Containers": {},
+                "Labels": {"com.docker.compose.project": options["env"]["COMPOSE_PROJECT_NAME"]},
+            }]))
+        return SimpleNamespace(returncode=0)
+
+    with pytest.raises(subprocess.TimeoutExpired) as caught:
+        exercise["experiment"](tmp_path, output, run=run)
+    assert caught.value is error
+    report = json.loads((output / "experiment.json").read_text())
+    profile = next(step for step in report["steps"] if step["name"] == "profile")
+    assert profile["status"] == "failed" and report["status"] == "failed"
+    assert profile["process_group"] == error.profile_process_group
+    assert "measurements" not in report
+    assert any("down" in command for command in calls)

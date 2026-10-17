@@ -1,0 +1,54 @@
+{
+  "scope": "short_POSIX_controller_tree_not_Docker_stage_or_commit_recovery",
+  "measured_base": "f87b3d7222ba18e95ce4fed0026a98ef84b83dce",
+  "provenance": "base plus working source digests below; not attributed to a later commit",
+  "image": "lakehouse-ops/spark-iceberg:3.5.9-1.11.0",
+  "image_id": "sha256:ee19f0f26f627da53f951179a3d21ec8c4320923c7f0c3a8c38a2efca93abeb8",
+  "raw_sha256": {
+    "artifacts/history-process-confirmed/red/process-tree.json": "a4f2caa1dfe88fcb404fa0f3f3d72679abc9d8932f74f30048a869bbfd757d1b",
+    "artifacts/history-process-confirmed/green/process-tree.json": "42645863b1e5af3dd1b72706aefad3619471e441f412909879f31c2dc57bfb74",
+    "artifacts/history-process-confirmed/ownership.json": "8a0a9b8371df127865a6d065142b0e90227542a77d08aaff9801b7642d81d923"
+  },
+  "source_lf_sha256": {
+    "src/lakehouse_ops/commerce_history_process.py": "aad21043b02bbde421820080fbf7bba25435127c68dcdbd6276f18f30bf24a65",
+    "tests/integration/exercise_history_profile_process.py": "aa8e874dca5a77096f2f31529716f514d016723fc6ac7bfdac9440018edd6a4b",
+    "tests/integration/test_customer_history_experiment.py": "6cd3b56739e7958aa40c2ef6bd11cc3c148e7cd6662c2c96b94a38188266bf36",
+    "tests/test_history_profile_process.py": "4537dc35730c7767ee61a8e2be87ea5ad94ebe4bf1c32eca4dfc2fcf4da428d0",
+    "tests/test_customer_history_experiment_exercise.py": "1bd58bf8f31a2aa27cc80fcfb018cc5de265c432459d6ef8a5e082838c6071c7"
+  },
+  "red": {
+    "status": "failed",
+    "scope": "short POSIX controller tree; no Docker stage or commit",
+    "timeout_preserved": true,
+    "profile_process_group": null,
+    "child_observed": true,
+    "descendant_continued": true,
+    "elapsed_seconds": 1.7052255790040363
+  },
+  "green": {
+    "status": "verified",
+    "scope": "short POSIX controller tree; no Docker stage or commit",
+    "timeout_preserved": true,
+    "profile_process_group": {
+      "process_group_id": 7,
+      "signal": "SIGKILL",
+      "status": "kill_requested_leader_reaped",
+      "scope": "profile_controller_group_not_Docker_stages_or_commit_outcome"
+    },
+    "child_observed": true,
+    "descendant_continued": false,
+    "elapsed_seconds": 1.7065761369958636
+  },
+  "ownership": {
+    "foreign_containers": 14,
+    "states_preserved": true,
+    "fixture_container_auto_removed": true
+  },
+  "limits": [
+    "No live Spark job, Docker stage, catalog write or recovery tested",
+    "Windows keeps parent-only subprocess behavior",
+    "Group request and reaped leader do not establish every descendant exit",
+    "Hard workflow cancellation may bypass report finalization"
+  ],
+  "red_control": "Same fixture and source; inject subprocess.run to reproduce original parent-only timeout"
+}
