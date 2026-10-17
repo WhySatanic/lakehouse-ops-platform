@@ -63,6 +63,19 @@ Spark job observation, UTC observation/kill times, checkpoint hashes, audits and
 literal oracle results for completed attempts. `status=ready` requires all phases.
 Stage errors and native Docker/Spark output are retained by the stderr redirection.
 
+The interruption report also retains bounded `observer_diagnostics` on success and
+failure: attempt count, outcome counts, elapsed observation time, whether the stage
+failed, and the last probe. A failed UI probe includes its return code and at most
+512 stderr characters. A successful UI response retains at most 20 job summaries
+(status, active task count and application ID), with the full job count separately.
+These observations distinguish UI startup/probe failures from responses with no
+active tasks; they do not make a missed interruption a successful recovery test.
+No unbounded polling history or job payloads are retained.
+
+The [diagnostic compatibility evidence](../evidence/active-spark-observer-diagnostics-2026-10-17.json)
+records the original main-CI miss and a separate local run with an observed active
+kill, three verified batches and idle replay. It does not claim sampling misses are fixed.
+
 The observer polls for up to 180 seconds, with five-second inspection/probe and
 ten-second kill calls. If no active task is observed, it refuses a verified retry;
 the normal stage timeout still bounds the executing Compose stage. The small
